@@ -1994,7 +1994,7 @@ En `db/queries.js`, justo antes del `return` de `roll`, cuando `fila` existe:
 
 - [ ] **Step 5: Correr toda la suite**
 
-Run: `node --test test/`
+Run: `npm test`
 Expected: PASS. Los tests de la Task 10 deben seguir verdes — `shown_count` no saca canciones del sorteo porque las exclusiones miran `status`, no `shown_count`.
 
 - [ ] **Step 6: Commit**
@@ -2257,7 +2257,7 @@ El test de estáticos lo necesita; la Task 13 lo reemplaza.
 
 - [ ] **Step 5: Correr los tests**
 
-Run: `node --test test/`
+Run: `npm test`
 Expected: PASS, toda la suite (10 tests en server.test.js).
 
 - [ ] **Step 6: Commit**
@@ -2570,7 +2570,7 @@ npm start
 
 - [ ] **Step 3: Correr toda la suite una última vez**
 
-Run: `node --test test/`
+Run: `npm test`
 Expected: PASS.
 
 - [ ] **Step 4: Commit**
