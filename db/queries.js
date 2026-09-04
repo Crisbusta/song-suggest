@@ -22,7 +22,8 @@ const MODE_SQL = {
 
 const COLUMNS = `
   s.song_id, s.artist, s.title, s.videos,
-  r.difficulty, r.instrument, r.name AS track_name, r.tuning
+  r.difficulty, r.instrument, r.name AS track_name, r.tuning,
+  COALESCE(st.liked, 0) AS liked
 `
 
 function contar(db, mode, min, max) {
@@ -44,6 +45,7 @@ function hidratar(db, fila) {
     tags,
     videos: JSON.parse(fila.videos ?? '[]'),
     url: `https://www.songsterr.com/a/wa/song?id=${fila.song_id}`,
+    liked: !!fila.liked,
   }
 }
 

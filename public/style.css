@@ -4,6 +4,8 @@ body { margin: 0; padding: 1.5rem; background: var(--fondo); color: var(--texto)
        font: 16px/1.5 system-ui, sans-serif; max-width: 46rem; margin-inline: auto; }
 h1 { font-size: 1.4rem; margin: 0; }
 header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.titulo { display: flex; align-items: baseline; gap: .6rem; }
+.stats { color: var(--tenue); font-size: .85rem; }
 nav button { background: none; border: 0; color: var(--tenue); cursor: pointer; font-size: 1rem; }
 nav button.activo { color: var(--acento); }
 
