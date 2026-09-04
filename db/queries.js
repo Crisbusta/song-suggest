@@ -1,4 +1,5 @@
 import { describeTuning } from '../lib/tuning.js'
+import { sugerirAjustes } from '../lib/ampli.js'
 
 export const MODES = ['surprise', 'riffs', 'acoustic', 'solos']
 
@@ -43,6 +44,7 @@ function hidratar(db, fila) {
   if (!fila) return null
   const tags = db.prepare('SELECT tag FROM tags WHERE song_id = ?')
     .all(fila.song_id).map(r => r.tag)
+  const tuning = describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null)
   return {
     songId: fila.song_id,
     artist: fila.artist,
@@ -50,7 +52,9 @@ function hidratar(db, fila) {
     difficulty: fila.difficulty,
     instrument: fila.instrument,
     trackName: fila.track_name,
-    tuning: describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null),
+    tuning,
+    // Punto de partida para el ampli, o null si los tags no dan senal util.
+    ampli: sugerirAjustes({ tags, instrument: fila.instrument, tuning }),
     tags,
     officialVideo: elegirVideo(fila.videos, null),
     backingVideo: elegirVideo(fila.videos, 'backing'),

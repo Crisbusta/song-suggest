@@ -63,6 +63,37 @@ function pintar({ song, matching, hint }) {
   const chips = song.tags.slice(0, 5)
     .map(t => `<span class="chip">${esc(t)}</span>`).join('')
 
+  // Ajustes del ampli. Cerrado por defecto: la tarjeta ya esta densa y esto
+  // solo importa una vez que decidiste intentar la cancion. La frase del pie
+  // no es decoracion: es lo que hace defendible mostrar estos numeros.
+  const perilla = (nombre, v) => `
+    <div class="perilla">
+      <span class="nombre">${nombre}</span>
+      <span class="barra" role="img" aria-label="${nombre} ${v} de 10">${
+        Array.from({ length: 10 }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')
+      }</span>
+      <span class="num">${v}</span>
+    </div>`
+
+  const a = song.ampli
+  const ampli = a
+    ? `<details class="ampli">
+         <summary>Ajustes para tu Mustang LT25</summary>
+         <div class="ampli-cuerpo">
+           <p class="modelo"><span>Modelo</span><strong>${esc(a.modelo)}</strong></p>
+           ${perilla('Gain', a.gain)}
+           ${perilla('Volume', a.volume)}
+           ${perilla('Treble', a.treble)}
+           ${perilla('Bass', a.bass)}
+           ${perilla('Reverb', a.reverb)}
+           <p class="descargo">
+             Punto de partida, no el tono del disco.
+             Deducido de: ${a.motivos.map(esc).join(', ')}.
+           </p>
+         </div>
+       </details>`
+    : ''
+
   // esc() para contextos HTML y encodeURIComponent() para los de URL: no son
   // intercambiables. esc() convierte & en &amp;, que el navegador decodifica de
   // vuelta a & al parsear el atributo, asi que un id con & o ? reestructuraria
@@ -86,6 +117,7 @@ function pintar({ song, matching, hint }) {
     ${dificultad}
     ${aviso}
     ${chips ? `<div class="meta">${chips}</div>` : ''}
+    ${ampli}
     ${preview}
     <p class="enlaces">
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>

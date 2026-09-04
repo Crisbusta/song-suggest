@@ -248,3 +248,31 @@ test('las listas tambien traen los videos elegidos', () => {
   assert.equal(fila.officialVideo, 'oficial4444')
   assert.equal(fila.backingVideo, 'karaoke1111')
 })
+
+// --- Ajustes de amplificador en el payload ----------------------------------
+
+test('roll incluye los ajustes de ampli cuando hay senal util', () => {
+  const db = base()
+  const id = agregar(db, { instrument: 'Distortion Guitar', tuning: '[64,59,55,50,45,38]' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
+  const s = roll(db, {}).song
+  assert.equal(s.ampli.modelo, 'METAL 2000')
+  assert.ok(s.ampli.gain >= 1 && s.ampli.gain <= 10)
+  assert.ok(s.ampli.motivos.includes('thrash metal'))
+  assert.ok(s.ampli.motivos.includes('Drop D'), 'debe usar la afinacion ya descrita')
+})
+
+test('roll deja ampli en null cuando los tags no dicen nada', () => {
+  const db = base()
+  const id = agregar(db)
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'rock')").run(id)
+  assert.equal(roll(db, {}).song.ampli, null)
+})
+
+test('las listas tambien traen los ajustes', () => {
+  const db = base()
+  const id = agregar(db, { instrument: 'Acoustic Guitar (steel)' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'folk')").run(id)
+  mark(db, { songId: id, status: 'queued' })
+  assert.equal(getList(db, 'queued')[0].ampli.modelo, 'CHAMP')
+})
