@@ -52,8 +52,8 @@ function hidratar(db, fila) {
     trackName: fila.track_name,
     tuning: describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null),
     tags,
-    videoOficial: elegirVideo(fila.videos, null),
-    videoPista: elegirVideo(fila.videos, 'backing'),
+    officialVideo: elegirVideo(fila.videos, null),
+    backingVideo: elegirVideo(fila.videos, 'backing'),
     url: `https://www.songsterr.com/a/wa/song?id=${fila.song_id}`,
     liked: !!fila.liked,
   }

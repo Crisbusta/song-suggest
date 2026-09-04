@@ -39,11 +39,15 @@ function pintar({ song, matching, hint }) {
     `<span class="chip">${matching} calzan con estos filtros</span>`,
   ].join('')
 
+  // esc() para contextos HTML y encodeURIComponent() para los de URL: no son
+  // intercambiables. esc() convierte & en &amp;, que el navegador decodifica de
+  // vuelta a & al parsear el atributo, asi que un id con & o ? reestructuraria
+  // la direccion en vez de viajar como valor opaco.
   // Miniatura con play encima: no cargamos el reproductor de YouTube (~1 MB de
   // scripts) en cada tirada, solo una imagen liviana. El iframe entra al pulsar.
-  const preview = song.videoOficial
-    ? `<div class="preview" data-escuchar="${esc(song.videoOficial)}">
-         <img src="https://i.ytimg.com/vi/${esc(song.videoOficial)}/hqdefault.jpg"
+  const preview = song.officialVideo
+    ? `<div class="preview" data-escuchar="${esc(song.officialVideo)}">
+         <img src="https://i.ytimg.com/vi/${encodeURIComponent(song.officialVideo)}/hqdefault.jpg"
               alt="Escuchar ${esc(song.artist)} - ${esc(song.title)}" loading="lazy">
          <button type="button" class="play" aria-label="Escuchar la canción">▶</button>
        </div>`
@@ -56,7 +60,7 @@ function pintar({ song, matching, hint }) {
     ${preview}
     <p>
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
-      ${song.videoPista ? ` · <a href="https://www.youtube.com/watch?v=${esc(song.videoPista)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
+      ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
 }
 
@@ -69,7 +73,7 @@ $('#tarjeta').addEventListener('click', e => {
   const id = bloque.dataset.escuchar
   bloque.outerHTML = `
     <div class="preview">
-      <iframe src="https://www.youtube-nocookie.com/embed/${esc(id)}?autoplay=1&rel=0"
+      <iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0"
               title="Reproductor de YouTube" allow="autoplay; encrypted-media"
               referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
     </div>`

@@ -202,35 +202,35 @@ const VIDEOS_REALES = JSON.stringify([
   { videoId: 'oficial4444', feature: null },
 ])
 
-test('videoOficial es el de feature null, no el primero del arreglo', () => {
+test('officialVideo es el de feature null, no el primero del arreglo', () => {
   const db = base()
   agregar(db, { videos: VIDEOS_REALES })
-  assert.equal(roll(db, {}).song.videoOficial, 'oficial4444')
+  assert.equal(roll(db, {}).song.officialVideo, 'oficial4444')
 })
 
-test('videoPista es el backing, no cualquier otro', () => {
+test('backingVideo es el backing, no cualquier otro', () => {
   const db = base()
   agregar(db, { videos: VIDEOS_REALES })
-  assert.equal(roll(db, {}).song.videoPista, 'karaoke1111')
+  assert.equal(roll(db, {}).song.backingVideo, 'karaoke1111')
 })
 
 test('sin videos, ambos quedan en null', () => {
   const db = base()
   agregar(db, { videos: '[]' })
   const s = roll(db, {}).song
-  assert.equal(s.videoOficial, null)
-  assert.equal(s.videoPista, null)
+  assert.equal(s.officialVideo, null)
+  assert.equal(s.backingVideo, null)
 })
 
-test('con videos pero sin oficial, videoOficial es null y videoPista sigue', () => {
+test('con videos pero sin oficial, officialVideo es null y backingVideo sigue', () => {
   const db = base()
   agregar(db, { videos: JSON.stringify([
     { videoId: 'karaoke1111', feature: 'backing' },
     { videoId: 'resubida222', feature: 'alternative' },
   ]) })
   const s = roll(db, {}).song
-  assert.equal(s.videoOficial, null, 'no debe caer en el alternative como si fuera oficial')
-  assert.equal(s.videoPista, 'karaoke1111')
+  assert.equal(s.officialVideo, null, 'no debe caer en el alternative como si fuera oficial')
+  assert.equal(s.backingVideo, 'karaoke1111')
 })
 
 test('el arreglo crudo de videos ya no viaja al front', () => {
@@ -245,6 +245,6 @@ test('las listas tambien traen los videos elegidos', () => {
   const id = agregar(db, { videos: VIDEOS_REALES })
   mark(db, { songId: id, status: 'queued' })
   const fila = getList(db, 'queued')[0]
-  assert.equal(fila.videoOficial, 'oficial4444')
-  assert.equal(fila.videoPista, 'karaoke1111')
+  assert.equal(fila.officialVideo, 'oficial4444')
+  assert.equal(fila.backingVideo, 'karaoke1111')
 })
