@@ -304,9 +304,15 @@ Explícitamente **no** se construye ahora:
 
 ## 11. Riesgos y cosas no verificadas
 
-- **Rate limiting de Songsterr: desconocido.** Solo se probaron decenas de requests, no
-  10.000. El diseño asume por precaución que existe. Si resulta más estricto, se ajusta la
-  concurrencia.
+- ~~**Rate limiting de Songsterr: desconocido.**~~ **RESUELTO el 2026-09-03**, corriendo el
+  ETL real durante la implementación: 50 páginas de catálogo más 50 enriquecimientos con la
+  concurrencia por defecto de 3, **cero 429 y cero errores HTTP de cualquier tipo**. El
+  servidor tolera el ritmo sin quejarse. La concurrencia 3 se mantiene: no hay motivo para
+  subirla y el margen no cuesta nada.
+- **Cifras reales del catálogo** (misma corrida): 9.999 canciones — confirmando la ventana de
+  paginación de 10.000 — con 64.551 tracks, de los cuales **9.776 canciones (97,8%) tienen
+  track de guitarra representativo con dificultad**. La premisa del proyecto se sostiene con
+  el catálogo completo, no solo con la muestra de 200 del sondeo. La base ocupa 7,1 MB.
 - **`difficulty` es el criterio del transcriptor**, no una medida objetiva. Sirve para
   ordenar, no como verdad absoluta.
 - **La ventana de 10.000** limita el catálogo al tramo más popular. Si se agota, la salida
