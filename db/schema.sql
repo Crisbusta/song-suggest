@@ -46,3 +46,24 @@ CREATE TABLE IF NOT EXISTS song_state (
 CREATE INDEX IF NOT EXISTS idx_tracks_song ON tracks(song_id);
 CREATE INDEX IF NOT EXISTS idx_tags_tag    ON tags(tag);
 CREATE INDEX IF NOT EXISTS idx_songs_todo  ON songs(enriched_at) WHERE enriched_at IS NULL;
+
+CREATE VIEW IF NOT EXISTS guitar_tracks AS
+SELECT * FROM tracks
+WHERE difficulty IS NOT NULL
+  AND instrument IN (
+    'Distortion Guitar', 'Overdriven Guitar',
+    'Electric Guitar (clean)', 'Electric Guitar (jazz)', 'Electric Guitar (muted)',
+    'Acoustic Guitar (steel)', 'Acoustic Guitar (nylon)', 'Guitar Harmonics'
+  );
+
+-- Una fila por cancion: el track de guitarra mas tocado, que es el que la
+-- gente efectivamente aprende. Desempate por track_index para ser determinista.
+CREATE VIEW IF NOT EXISTS representative_track AS
+SELECT song_id, track_index, instrument, name, difficulty, views, tuning
+FROM (
+  SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY song_id ORDER BY views DESC, track_index ASC
+  ) AS rn
+  FROM guitar_tracks
+)
+WHERE rn = 1;
