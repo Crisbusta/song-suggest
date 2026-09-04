@@ -80,3 +80,54 @@ $('#like').addEventListener('click', async () => {
 
 sincronizarRangos('min')
 sortear()
+
+const LISTAS = [
+  ['learned', 'Aprendidas'],
+  ['liked', 'Me gustaron'],
+  ['queued', 'Para después'],
+  ['skipped', 'Descartadas'],
+]
+
+async function pintarListas() {
+  const contenedor = $('#vista-listas')
+  contenedor.innerHTML = '<p class="vacio">Cargando...</p>'
+
+  const bloques = await Promise.all(LISTAS.map(async ([clave, titulo]) => {
+    const { songs } = await api(`/api/lists?list=${clave}`)
+    if (songs.length === 0) {
+      return `<section class="lista"><h3>${titulo}</h3><p class="vacio">Todavía nada.</p></section>`
+    }
+    const filas = songs.map(s => `
+      <li>
+        <a href="${s.url}" target="_blank" rel="noopener">${s.artist} — ${s.title}</a>
+        <span class="dif">dif ${s.difficulty}</span>
+        ${clave === 'liked' ? '' : `<button data-deshacer="${s.songId}">Deshacer</button>`}
+      </li>`).join('')
+    return `<section class="lista"><h3>${titulo} (${songs.length})</h3><ol>${filas}</ol></section>`
+  }))
+
+  contenedor.innerHTML = bloques.join('')
+}
+
+// Deshacer devuelve la cancion al sorteo.
+$('#vista-listas').addEventListener('click', async e => {
+  const songId = e.target.dataset?.deshacer
+  if (!songId) return
+  await api('/api/mark', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ songId: Number(songId), status: null }),
+  })
+  pintarListas()
+})
+
+function cambiarVista(aListas) {
+  $('#vista-sorteo').hidden = aListas
+  $('#vista-listas').hidden = !aListas
+  $('#ver-sorteo').classList.toggle('activo', !aListas)
+  $('#ver-listas').classList.toggle('activo', aListas)
+  if (aListas) pintarListas()
+}
+
+$('#ver-listas').addEventListener('click', () => cambiarVista(true))
+$('#ver-sorteo').addEventListener('click', () => cambiarVista(false))
