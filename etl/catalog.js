@@ -45,7 +45,9 @@ export async function fetchCatalog(db, opts) {
 
     paginas++
     total += songs.length
-    onProgress?.({ paginas, total, from })
+    // Las claves del callback van en ingles y espejan el valor de retorno:
+    // es superficie publica que consume el CLI de la Task 8.
+    onProgress?.({ pages: paginas, songs: total, from })
 
     if (page.length < pageSize) break
   }
