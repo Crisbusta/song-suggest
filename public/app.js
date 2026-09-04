@@ -19,6 +19,10 @@ let actual = null
 function pintar({ song, matching, hint }) {
   actual = song
   $('#hint').textContent = hint ?? ''
+  // matching describe el filtro, no la cancion: se muestra con los controles.
+  $('#calzan').textContent = matching === 1
+    ? '1 canción calza con estos filtros'
+    : `${matching.toLocaleString('es-CL')} canciones calzan con estos filtros`
 
   if (!song) {
     $('#tarjeta').innerHTML = '<p class="vacio">Nada que sortear con estos filtros.</p>'
@@ -31,13 +35,33 @@ function pintar({ song, matching, hint }) {
   $('#like').classList.toggle('marcado', marcado)
   $('#like').textContent = marcado ? '♥' : '♡'
 
-  const chips = [
-    `<span class="chip">dificultad ${song.difficulty}/10</span>`,
-    `<span class="chip">${esc(song.instrument)}</span>`,
-    song.tuning ? `<span class="chip afinacion">${esc(song.tuning)}</span>` : '',
-    ...song.tags.slice(0, 4).map(t => `<span class="chip">${esc(t)}</span>`),
-    `<span class="chip">${matching} calzan con estos filtros</span>`,
-  ].join('')
+  // La dificultad decide si intentas la cancion o no, asi que deja de ser un
+  // chip igual a "90s" y pasa a medidor. El numero va al lado porque el color
+  // solo no debe cargar el significado.
+  const medidor = Array.from({ length: 10 }, (_, i) =>
+    `<i class="${i < song.difficulty ? 'on' : ''}"></i>`).join('')
+
+  const dificultad = `
+    <div class="dificultad">
+      <span class="medidor" role="img" aria-label="Dificultad ${song.difficulty} de 10">${medidor}</span>
+      <span class="valor">${song.difficulty}<small>/10</small></span>
+      <span class="instrumento">${esc(song.instrument)}</span>
+    </div>`
+
+  // La afinacion es informacion accionable: te dice si hay que reafinar antes
+  // de empezar. Sale del monton de chips y se vuelve un aviso propio.
+  const aviso = song.tuning
+    ? `<p class="aviso-afinacion">
+         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+           <path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/>
+         </svg>
+         ${esc(song.tuning)}
+       </p>`
+    : ''
+
+  const chips = song.tags.slice(0, 5)
+    .map(t => `<span class="chip">${esc(t)}</span>`).join('')
 
   // esc() para contextos HTML y encodeURIComponent() para los de URL: no son
   // intercambiables. esc() convierte & en &amp;, que el navegador decodifica de
@@ -53,15 +77,22 @@ function pintar({ song, matching, hint }) {
        </div>`
     : ''
 
+  $('#tarjeta').className = 'tarjeta entra'
   $('#tarjeta').innerHTML = `
-    <h2>${esc(song.title)}</h2>
-    <p class="artista">${esc(song.artist)}</p>
-    <div class="meta">${chips}</div>
+    <div>
+      <h2>${esc(song.title)}</h2>
+      <p class="artista">${esc(song.artist)}</p>
+    </div>
+    ${dificultad}
+    ${aviso}
+    ${chips ? `<div class="meta">${chips}</div>` : ''}
     ${preview}
-    <p>
+    <p class="enlaces">
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
       ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
+  // Reinicia la animacion de entrada en cada tirada.
+  void $('#tarjeta').offsetWidth
 }
 
 // Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
@@ -82,7 +113,8 @@ $('#tarjeta').addEventListener('click', e => {
 async function pintarStats() {
   try {
     const s = await api('/api/stats')
-    $('#stats').textContent = `${s.available} disponibles de ${s.enriched} listas`
+    const n = v => v.toLocaleString('es-CL')
+    $('#stats').textContent = `${n(s.available)} disponibles de ${n(s.enriched)} listas`
   } catch { $('#stats').textContent = '' }
 }
 
