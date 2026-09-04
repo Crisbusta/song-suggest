@@ -1106,6 +1106,24 @@ test('respeta el limite', async () => {
   const r = await enrichPending(db, { fetchMeta: metaFalsa, limit: 4 })
   assert.equal(r.ok, 4)
 })
+
+test('un onProgress que lanza no aborta la corrida', async () => {
+  const db = conCatalogo(5)
+  const r = await enrichPending(db, {
+    fetchMeta: metaFalsa,
+    onProgress: () => { throw new Error('callback malo') },
+  })
+  assert.equal(r.ok, 5)
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM songs WHERE enriched_at IS NOT NULL').get().c, 5)
+})
+
+test('una transaccion ya abierta no aborta la corrida', async () => {
+  const db = conCatalogo(5)
+  db.exec('BEGIN')  // deja la conexion con una transaccion colgando
+  const r = await enrichPending(db, { fetchMeta: metaFalsa })
+  assert.equal(r.ok, 0, 'ninguna deberia lograr escribir')
+  assert.equal(r.failed, 5, 'las 5 se anotan como fallidas en vez de tumbar el batch')
+})
 ```
 
 - [ ] **Step 2: Correr el test para verificar que falla**
@@ -1138,48 +1156,68 @@ export async function enrichPending(db, opts) {
   const borrarTags = db.prepare('DELETE FROM tags WHERE song_id = ?')
   const insertTag = db.prepare('INSERT OR IGNORE INTO tags (song_id, tag) VALUES (?, ?)')
 
-  const failures = []
+  const failures = new Set()
   let ok = 0
 
+  // Un onProgress del llamador que lance no puede tumbar el ETL entero.
+  const notificar = () => {
+    try {
+      onProgress?.({ ok, failed: failures.size, total: pendientes.length })
+    } catch { /* callback roto: se ignora, no es asunto del ETL */ }
+  }
+
   await runPool(pendientes, concurrency, async songId => {
-    let m
+    // Red de seguridad: el worker no deja escapar NINGUNA excepcion. runPool
+    // propaga la primera que reciba y con eso se acaba la corrida, y la spec
+    // exige que una cancion que falla no detenga a las otras 9.999.
     try {
-      m = parseMeta(await fetchMeta(songId))
+      let m
+      try {
+        m = parseMeta(await fetchMeta(songId))
+      } catch {
+        failures.add(songId)
+        notificar()
+        return
+      }
+
+      try {
+        db.exec('BEGIN')
+        actualizar.run(
+          m.views, m.fingerstyle, m.hasChords, m.aiGenerated,
+          m.isJunk, m.isBlank, m.isPublished, m.videos,
+          new Date().toISOString(), songId
+        )
+        borrarTags.run(songId)
+        for (const tag of m.tags) insertTag.run(songId, tag)
+        db.exec('COMMIT')
+      } catch {
+        // Si el propio ROLLBACK falla ya no hay nada que hacer, pero dejar
+        // escapar esa excepcion si mataria la corrida completa.
+        try { db.exec('ROLLBACK') } catch { /* sin transaccion abierta */ }
+        failures.add(songId)
+        notificar()
+        return
+      }
+
+      ok++
+      notificar()
     } catch {
-      // Una que falla se anota y seguimos: no abortamos 10.000 por una.
-      failures.push(songId)
-      onProgress?.({ ok, failed: failures.length, total: pendientes.length })
-      return
+      failures.add(songId)
     }
-
-    db.exec('BEGIN')
-    try {
-      actualizar.run(
-        m.views, m.fingerstyle, m.hasChords, m.aiGenerated,
-        m.isJunk, m.isBlank, m.isPublished, m.videos,
-        new Date().toISOString(), songId
-      )
-      borrarTags.run(songId)
-      for (const tag of m.tags) insertTag.run(songId, tag)
-      db.exec('COMMIT')
-    } catch (err) {
-      db.exec('ROLLBACK')
-      failures.push(songId)
-      return
-    }
-
-    ok++
-    onProgress?.({ ok, failed: failures.length, total: pendientes.length })
   })
 
-  return { ok, failed: failures.length, failures: failures.sort((a, b) => a - b) }
+  return {
+    ok,
+    failed: failures.size,
+    failures: [...failures].sort((a, b) => a - b),
+  }
 }
 ```
 
 - [ ] **Step 4: Correr los tests**
 
 Run: `node --test test/meta.test.js`
-Expected: PASS, 6 tests.
+Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Commit**
 
