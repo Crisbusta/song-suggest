@@ -174,7 +174,10 @@ Reglas:
   en vez de insistir.
 - Una canción que falla definitivamente se registra y **el proceso sigue**. Nunca abortar
   10.000 por una.
-- Escrituras en transacciones por lote de 200: un Ctrl-C nunca deja la base a medias.
+- Escrituras en transacciones: la fase 1 por página, la **fase 2 por canción**. Un Ctrl-C
+  nunca deja la base a medias. (La versión original de esta spec pedía lotes de 200 también
+  en la fase 2; la granularidad por canción resultó mejor — reanudabilidad más fina, y es lo
+  que hizo posible contener las excepciones sin abortar la corrida. Corregido el 2026-09-03.)
 - Reanudable vía `enriched_at`: al arrancar retoma lo pendiente.
 
 ## 6. API del servidor
@@ -203,6 +206,12 @@ ampliar el rango de dificultad, indicando cuántas canciones se ganarían con el
 `available` en `/api/stats` es el total de canciones sorteables sin ningún filtro de modo ni
 dificultad, o sea el catálogo enriquecido menos las exclusiones permanentes. Es el número que
 baja a medida que uso la app, y el que avisa cuándo toca re-correr el ETL.
+
+**Dónde se ven estos dos números** (esta spec no lo decía, y esa omisión permitió construir
+el front sin ellos mientras cada revisión por tarea pasaba): `available` va en el encabezado
+de la página, visible siempre. `matching` va en la tarjeta, junto a la canción sorteada. Un
+número que la API calcula y la interfaz nunca muestra no cumple ninguna función: la spec
+tiene que nombrar al consumidor, no solo al productor.
 
 ### Modos
 
@@ -293,8 +302,14 @@ TDD con `node:test`.
   - exclusiones: una `skipped` no vuelve nunca; una con `liked` pero sin `status` sí puede salir;
   - el caso de cero resultados.
 - **Test de humo del servidor:** levantar, pedir `/api/roll`, verificar la forma de la respuesta.
-- **Fuera:** el front. Una pantalla con tres controles y cuatro botones no justifica montar
-  testing de browser; se verifica abriéndolo.
+- **Fuera:** el front, con una salvedad honesta. Cuando escribí esto era "una pantalla con
+  tres controles y cuatro botones". Terminó siendo ~140 líneas con una máquina de estados de
+  botones deshabilitados, sujeción de sliders, un toggle de corazón, dos vistas y delegación
+  de eventos — y los dos defectos que sobrevivieron a todas las revisiones por tarea vivían
+  ahí. La decisión se mantiene (no monto testing de browser para esto), pero se asume
+  explícitamente: **el front no tiene red de seguridad automatizada, y sus regresiones se
+  encuentran usándolo.** Si crece más, extraer el armado de la tarjeta a una función pura y
+  ponerle cuatro aserciones sería el primer paso.
 
 ## 10. Fuera de alcance
 
@@ -306,6 +321,25 @@ Explícitamente **no** se construye ahora:
 - Descarga o renderizado de tablaturas — se enlaza a Songsterr.
 - Integración con Spotify, Last.fm o MusicBrainz.
 - Descubrimiento más allá de las ~10.000 del catálogo paginable.
+
+## 10-bis. Respaldo y recuperación
+
+Este apartado faltaba, y era el hueco más grande de los documentos: toda la razón de ser de
+la §4 es no perder meses de historial, y no había ni una línea sobre cómo protegerlo.
+
+`songs.db` está en `.gitignore` y contiene dos cosas de naturaleza muy distinta:
+
+- El **catálogo** (`songs`, `tracks`, `tags`): reemplazable. Se vuelve a bajar en ~1 hora
+  corriendo el ETL.
+- **`song_state`**: irreemplazable. Es lo único del proyecto que no se puede reconstruir
+  desde ninguna fuente.
+
+De ahí dos requisitos:
+
+- Un `npm run backup` que copie la base con fecha en el nombre. Los `.db.bak` van al
+  `.gitignore` — son respaldos locales, no contenido del repo.
+- Un `README.md` que diga cómo se pone en marcha esto, qué hace cada bandera del ETL, y que
+  `song_state` es lo único irrecuperable. Sin él, el proyecto solo es operable de memoria.
 
 ## 11. Riesgos y cosas no verificadas
 
@@ -323,4 +357,8 @@ Explícitamente **no** se construye ahora:
 - **La ventana de 10.000** limita el catálogo al tramo más popular. Si se agota, la salida
   es consultar por `pattern=` de artista, no está en este alcance.
 - El catálogo cambia con el tiempo; re-correr el ETL es la forma de actualizar, y por diseño
-  no afecta `song_state`.
+  no afecta `song_state`. **Corrección del 2026-09-03:** eso era dos tercios cierto. Un
+  segundo `npm run etl` refresca artista, título y tracks, pero **no** tags, views ni las
+  banderas de calidad, porque la fase 2 solo mira las canciones con `enriched_at` en NULL.
+  Refrescar la metadata requiere la bandera `--re-enriquecer`, que pone `enriched_at` en NULL
+  antes de la fase 2 — y que sigue sin tocar `song_state`.
