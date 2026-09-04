@@ -2026,6 +2026,8 @@ Crear `test/server.test.js`:
 ```js
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { symlinkSync, unlinkSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { openDb } from '../db/open.js'
 import { createApp } from '../server.js'
 
@@ -2118,6 +2120,20 @@ test('sirve index.html en la raiz', () => conApp(async url => {
   assert.equal(res.status, 200)
   assert.match(res.headers.get('content-type'), /text\/html/)
 }))
+
+test('no sirve un symlink que apunta fuera de public/', async () => {
+  const enlace = fileURLToPath(new URL('../public/fuga.html', import.meta.url))
+  const afuera = fileURLToPath(new URL('../package.json', import.meta.url))
+  symlinkSync(afuera, enlace)
+  try {
+    await conApp(async url => {
+      const res = await fetch(`${url}/fuga.html`)
+      assert.equal(res.status, 404, 'el symlink no debe servir el archivo de afuera')
+    })
+  } finally {
+    unlinkSync(enlace)
+  }
+})
 ```
 
 - [ ] **Step 2: Correr el test para verificar que falla**
@@ -2130,13 +2146,14 @@ Expected: FAIL — `Cannot find module '../server.js'`
 ```js
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { extname, join, normalize } from 'node:path'
+import { existsSync, realpathSync } from 'node:fs'
+import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDb } from './db/open.js'
 import { roll, mark, getList, getStats } from './db/queries.js'
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url))
+const RAIZ = realpathSync(PUBLIC)   // sin barra final: realpath la quita
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' }
 
 const json = (res, code, body) => {
@@ -2191,6 +2208,14 @@ export function createApp(db) {
       if (!archivo.startsWith(PUBLIC) || !existsSync(archivo)) {
         res.writeHead(404); return res.end('no existe')
       }
+      // startsWith es lexico: un symlink dentro de public/ apuntando afuera lo
+      // pasaria igual. realpath resuelve el destino real antes de servir nada.
+      // Se compara contra RAIZ + sep para que un hermano llamado "publicfoo"
+      // tampoco cuele.
+      const real = realpathSync(archivo)
+      if (real !== RAIZ && !real.startsWith(RAIZ + sep)) {
+        res.writeHead(404); return res.end('no existe')
+      }
       res.writeHead(200, { 'content-type': TIPOS[extname(archivo)] ?? 'application/octet-stream' })
       return res.end(await readFile(archivo))
     } catch (err) {
@@ -2233,7 +2258,7 @@ El test de estáticos lo necesita; la Task 13 lo reemplaza.
 - [ ] **Step 5: Correr los tests**
 
 Run: `node --test test/`
-Expected: PASS, toda la suite.
+Expected: PASS, toda la suite (10 tests en server.test.js).
 
 - [ ] **Step 6: Commit**
 
