@@ -1,4 +1,46 @@
 <!doctype html>
+<html lang="es">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>song-suggest</title>
-<p>En construccion.</p>
+<link rel="stylesheet" href="/style.css">
+
+<header>
+  <h1>¿Qué aprendo hoy?</h1>
+  <nav>
+    <button id="ver-sorteo" class="activo">Sortear</button>
+    <button id="ver-listas">Mis listas</button>
+  </nav>
+</header>
+
+<main id="vista-sorteo">
+  <section class="controles">
+    <label>
+      Modo
+      <select id="modo">
+        <option value="surprise">Sorpréndeme</option>
+        <option value="riffs">Riffs eléctricos</option>
+        <option value="acoustic">Acústica / fingerpicking</option>
+        <option value="solos">Solos y técnica</option>
+      </select>
+    </label>
+    <label>Dificultad mínima <input id="min" type="range" min="1" max="10" value="1"><output id="min-val">1</output></label>
+    <label>Dificultad máxima <input id="max" type="range" min="1" max="10" value="10"><output id="max-val">10</output></label>
+  </section>
+
+  <section id="tarjeta" class="tarjeta"></section>
+  <p id="hint" class="hint"></p>
+
+  <section class="acciones">
+    <button id="aprendida">Ya la aprendí</button>
+    <button id="descartada">No me tinca</button>
+    <button id="despues">Después</button>
+    <button id="otra" class="principal">Otra</button>
+    <button id="like" class="like" title="Me gustó">♡</button>
+  </section>
+</main>
+
+<main id="vista-listas" hidden></main>
+
+<script type="module" src="/app.js"></script>
+</html>

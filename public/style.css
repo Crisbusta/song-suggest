@@ -1,0 +1,38 @@
+:root { --fondo: #14151a; --panel: #1e2029; --texto: #e8e8ea; --tenue: #9a9aa5; --acento: #d4a24a; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 1.5rem; background: var(--fondo); color: var(--texto);
+       font: 16px/1.5 system-ui, sans-serif; max-width: 46rem; margin-inline: auto; }
+h1 { font-size: 1.4rem; margin: 0; }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+nav button { background: none; border: 0; color: var(--tenue); cursor: pointer; font-size: 1rem; }
+nav button.activo { color: var(--acento); }
+
+.controles { display: grid; gap: .75rem; background: var(--panel); padding: 1rem; border-radius: .6rem; }
+.controles label { display: flex; align-items: center; gap: .6rem; color: var(--tenue); font-size: .9rem; }
+.controles select { margin-left: auto; }
+.controles input[type=range] { flex: 1; }
+
+.tarjeta { background: var(--panel); border-radius: .6rem; padding: 1.5rem; margin: 1rem 0; min-height: 9rem; }
+.tarjeta h2 { margin: 0 0 .2rem; font-size: 1.5rem; }
+.tarjeta .artista { color: var(--tenue); margin: 0 0 1rem; }
+.tarjeta .meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.tarjeta .chip { background: #2a2d38; border-radius: 1rem; padding: .15rem .7rem; font-size: .8rem; }
+.tarjeta .afinacion { background: var(--acento); color: #14151a; font-weight: 600; }
+.tarjeta a { color: var(--acento); }
+.vacio { color: var(--tenue); text-align: center; padding-top: 2rem; }
+.hint { color: var(--tenue); font-size: .9rem; min-height: 1.5rem; }
+
+.acciones { display: flex; flex-wrap: wrap; gap: .5rem; }
+.acciones button { background: #2a2d38; border: 0; color: var(--texto); padding: .6rem 1rem;
+                   border-radius: .4rem; cursor: pointer; font-size: .95rem; }
+.acciones button:hover:not(:disabled) { background: #363a48; }
+.acciones button:disabled { opacity: .4; cursor: default; }
+.acciones .principal { margin-left: auto; background: var(--acento); color: #14151a; font-weight: 600; }
+.acciones .like.marcado { color: #e2585b; }
+
+.lista { margin-bottom: 2rem; }
+.lista h3 { color: var(--acento); font-size: 1rem; }
+.lista ol { list-style: none; padding: 0; }
+.lista li { display: flex; align-items: center; gap: .6rem; padding: .5rem 0; border-bottom: 1px solid #2a2d38; }
+.lista li .dif { color: var(--tenue); font-size: .85rem; }
+.lista li button { margin-left: auto; background: none; border: 0; color: var(--tenue); cursor: pointer; }
