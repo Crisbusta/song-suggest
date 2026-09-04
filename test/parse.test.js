@@ -92,3 +92,21 @@ test('parseMeta tolera meta sin tags ni videos', () => {
   assert.equal(m.videos, '[]')
   assert.equal(m.isPublished, 1)
 })
+
+test('parseMeta distingue banderas ausentes de explícitamente falsas', () => {
+  // isPublished ausente debe ser 1 (default diferente)
+  const absent = parseMeta({ songId: 9 })
+  assert.equal(absent.isPublished, 1, 'isPublished ausente debe ser 1')
+
+  // isPublished explícitamente false debe ser 0
+  const explicit = parseMeta({ songId: 9, isPublished: false })
+  assert.equal(explicit.isPublished, 0, 'isPublished false debe ser 0')
+
+  // fingerstyle ausente debe ser 0 (default normal)
+  const fingerstyleAbsent = parseMeta({ songId: 9 })
+  assert.equal(fingerstyleAbsent.fingerstyle, 0, 'fingerstyle ausente debe ser 0')
+
+  // fingerstyle explícitamente false también debe ser 0
+  const fingerstyleExplicit = parseMeta({ songId: 9, fingerstyle: false })
+  assert.equal(fingerstyleExplicit.fingerstyle, 0, 'fingerstyle false debe ser 0')
+})
