@@ -83,3 +83,21 @@ test('respeta el limite', async () => {
   const r = await enrichPending(db, { fetchMeta: metaFalsa, limit: 4 })
   assert.equal(r.ok, 4)
 })
+
+test('un onProgress que lanza no aborta la corrida', async () => {
+  const db = conCatalogo(5)
+  const r = await enrichPending(db, {
+    fetchMeta: metaFalsa,
+    onProgress: () => { throw new Error('callback malo') },
+  })
+  assert.equal(r.ok, 5)
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM songs WHERE enriched_at IS NOT NULL').get().c, 5)
+})
+
+test('una transaccion ya abierta no aborta la corrida', async () => {
+  const db = conCatalogo(5)
+  db.exec('BEGIN')  // deja la conexion con una transaccion colgando
+  const r = await enrichPending(db, { fetchMeta: metaFalsa })
+  assert.equal(r.ok, 0, 'ninguna deberia lograr escribir')
+  assert.equal(r.failed, 5, 'las 5 se anotan como fallidas en vez de tumbar el batch')
+})
