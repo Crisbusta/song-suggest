@@ -31,7 +31,7 @@ function pintar({ song, hint }) {
     <div class="meta">${chips}</div>
     <p>
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
-      ${backing ? ` · <a href="https://www.youtube.com/watch?v=${backing.videoId}" target="_blank" rel="noopener">Backing track</a>` : ''}
+      ${backing ? ` · <a href="https://www.youtube.com/watch?v=${backing.videoId}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
 }
 
