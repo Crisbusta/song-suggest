@@ -96,3 +96,25 @@ test('runPool procesa todos los elementos', async () => {
   await runPool(['a', 'b', 'c'], 2, async x => { vistos.push(x) })
   assert.deepEqual(vistos.sort(), ['a', 'b', 'c'])
 })
+
+test('runPool no deja obreros corriendo despues de retornar', async () => {
+  const vistos = []
+  await assert.rejects(() => runPool([1, 2, 3, 4, 5, 6], 2, async x => {
+    if (x === 3) throw new Error('boom')
+    await new Promise(r => setTimeout(r, 5))
+    vistos.push(x)
+  }), /boom/)
+
+  const alRetornar = [...vistos]
+  await new Promise(r => setTimeout(r, 60))
+  assert.deepEqual(vistos, alRetornar, 'siguio procesando despues de que el await ya lanzo')
+})
+
+test('runPool termina los items restantes aunque uno falle', async () => {
+  const vistos = []
+  await assert.rejects(() => runPool([1, 2, 3, 4], 2, async x => {
+    if (x === 2) throw new Error('boom')
+    vistos.push(x)
+  }))
+  assert.deepEqual(vistos.sort(), [1, 3, 4])
+})

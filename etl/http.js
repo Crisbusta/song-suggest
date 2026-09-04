@@ -40,5 +40,16 @@ export async function runPool(items, concurrency, worker) {
       await worker(items[i], i)
     }
   })
-  await Promise.all(obreros)
+
+  // allSettled y no all: con `all`, el primer worker que lanza hace que este
+  // await retorne de inmediato mientras los otros obreros siguen corriendo en
+  // segundo plano, mutando estado despues de que el llamador ya creyo haber
+  // terminado. Drenamos todos los obreros y recien ahi propagamos el error.
+  //
+  // CONTRATO: runPool propaga el primer error del worker. Quien necesite
+  // tolerar fallos por item -- como enrichPending, que debe seguir pese a que
+  // una cancion falle -- captura dentro del propio worker.
+  const resultados = await Promise.allSettled(obreros)
+  const fallo = resultados.find(r => r.status === 'rejected')
+  if (fallo) throw fallo.reason
 }
