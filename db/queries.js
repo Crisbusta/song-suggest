@@ -1,0 +1,90 @@
+import { describeTuning } from '../lib/tuning.js'
+
+export const MODES = ['surprise', 'riffs', 'acoustic', 'solos']
+
+// Exclusiones permanentes: ya decidido, basura del catalogo, o sin enriquecer.
+const BASE_FROM = `
+  FROM songs s
+  JOIN representative_track r ON r.song_id = s.song_id
+  LEFT JOIN song_state st ON st.song_id = s.song_id
+  WHERE s.enriched_at IS NOT NULL
+    AND s.is_junk = 0 AND s.ai_generated = 0 AND s.is_blank = 0 AND s.is_published = 1
+    AND st.status IS NULL
+    AND r.difficulty BETWEEN ? AND ?
+`
+
+const MODE_SQL = {
+  surprise: '',
+  riffs: ` AND r.instrument IN ('Distortion Guitar','Overdriven Guitar') AND s.fingerstyle = 0`,
+  acoustic: ` AND (s.fingerstyle = 1 OR r.instrument IN ('Acoustic Guitar (nylon)','Acoustic Guitar (steel)'))`,
+  solos: ` AND (r.name LIKE '%Lead%' OR r.name LIKE '%Solo%')`,
+}
+
+const COLUMNS = `
+  s.song_id, s.artist, s.title, s.videos,
+  r.difficulty, r.instrument, r.name AS track_name, r.tuning
+`
+
+function contar(db, mode, min, max) {
+  return db.prepare(`SELECT COUNT(*) c ${BASE_FROM}${MODE_SQL[mode]}`).get(min, max).c
+}
+
+function hidratar(db, fila) {
+  if (!fila) return null
+  const tags = db.prepare('SELECT tag FROM tags WHERE song_id = ?')
+    .all(fila.song_id).map(r => r.tag)
+  return {
+    songId: fila.song_id,
+    artist: fila.artist,
+    title: fila.title,
+    difficulty: fila.difficulty,
+    instrument: fila.instrument,
+    trackName: fila.track_name,
+    tuning: describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null),
+    tags,
+    videos: JSON.parse(fila.videos ?? '[]'),
+    url: `https://www.songsterr.com/a/wa/song?id=${fila.song_id}`,
+  }
+}
+
+// Solo aparece cuando hay algo util que sugerir.
+function construirHint(db, mode, min, max, matching) {
+  if (matching >= 10) return null
+  const ampliado = contar(db, mode, 1, 10)
+  if (matching === 0) {
+    return ampliado > 0
+      ? `No queda ninguna con esos filtros. Ampliando la dificultad a 1-10 hay ${ampliado}.`
+      : 'No queda ninguna con este modo. Prueba otro.'
+  }
+  return ampliado > matching
+    ? `Quedan ${matching}. Ampliando la dificultad a 1-10 serian ${ampliado}.`
+    : `Quedan ${matching} con este modo.`
+}
+
+export function roll(db, opts = {}) {
+  const { mode = 'surprise', minDifficulty = 1, maxDifficulty = 10 } = opts
+  if (!MODES.includes(mode)) throw new Error(`modo desconocido: ${mode}`)
+
+  const matching = contar(db, mode, minDifficulty, maxDifficulty)
+  const hint = construirHint(db, mode, minDifficulty, maxDifficulty, matching)
+  if (matching === 0) return { song: null, matching: 0, hint }
+
+  let fila
+  if (mode === 'solos') {
+    // Sesgo al extremo alto: el tercio superior por dificultad, minimo 20,
+    // para que un rango angosto no deje el sorteo entre dos canciones.
+    const pool = Math.max(20, Math.ceil(matching / 3))
+    fila = db.prepare(`
+      SELECT * FROM (
+        SELECT ${COLUMNS} ${BASE_FROM}${MODE_SQL.solos}
+        ORDER BY r.difficulty DESC, s.song_id ASC LIMIT ?
+      ) ORDER BY RANDOM() LIMIT 1
+    `).get(minDifficulty, maxDifficulty, pool)
+  } else {
+    fila = db.prepare(`
+      SELECT ${COLUMNS} ${BASE_FROM}${MODE_SQL[mode]} ORDER BY RANDOM() LIMIT 1
+    `).get(minDifficulty, maxDifficulty)
+  }
+
+  return { song: hidratar(db, fila), matching, hint }
+}
