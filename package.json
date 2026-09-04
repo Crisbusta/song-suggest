@@ -1,0 +1,12 @@
+{
+  "name": "song-suggest",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test test/",
+    "etl": "node etl/index.js",
+    "start": "node server.js"
+  }
+}
