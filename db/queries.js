@@ -86,5 +86,63 @@ export function roll(db, opts = {}) {
     `).get(minDifficulty, maxDifficulty)
   }
 
+  if (fila) {
+    asegurarFila(db, fila.song_id)
+    db.prepare('UPDATE song_state SET shown_count = shown_count + 1 WHERE song_id = ?')
+      .run(fila.song_id)
+  }
+
   return { song: hidratar(db, fila), matching, hint }
+}
+
+export const LISTS = ['learned', 'skipped', 'queued', 'liked']
+
+function asegurarFila(db, songId) {
+  db.prepare(`
+    INSERT INTO song_state (song_id, updated_at) VALUES (?, ?)
+    ON CONFLICT(song_id) DO NOTHING
+  `).run(songId, new Date().toISOString())
+}
+
+export function mark(db, { songId, status, liked }) {
+  asegurarFila(db, songId)
+  // `undefined` significa "no tocar"; `null` en status borra la disposicion.
+  if (status !== undefined) {
+    db.prepare('UPDATE song_state SET status = ?, updated_at = ? WHERE song_id = ?')
+      .run(status, new Date().toISOString(), songId)
+  }
+  if (liked !== undefined) {
+    db.prepare('UPDATE song_state SET liked = ?, updated_at = ? WHERE song_id = ?')
+      .run(liked ? 1 : 0, new Date().toISOString(), songId)
+  }
+}
+
+export function getList(db, list) {
+  if (!LISTS.includes(list)) throw new Error(`lista desconocida: ${list}`)
+  const filtro = list === 'liked' ? 'st.liked = 1' : 'st.status = ?'
+  const params = list === 'liked' ? [] : [list]
+
+  const filas = db.prepare(`
+    SELECT ${COLUMNS}
+    FROM songs s
+    JOIN representative_track r ON r.song_id = s.song_id
+    JOIN song_state st ON st.song_id = s.song_id
+    WHERE ${filtro}
+    ORDER BY st.updated_at DESC
+  `).all(...params)
+
+  return filas.map(f => hidratar(db, f))
+}
+
+export function getStats(db) {
+  const s = db.prepare(`
+    SELECT COUNT(*) total, SUM(enriched_at IS NOT NULL) enriched FROM songs
+  `).get()
+  const available = db.prepare(`SELECT COUNT(*) c ${BASE_FROM}`).get(1, 10).c
+  return {
+    total: s.total,
+    enriched: s.enriched ?? 0,
+    pending: s.total - (s.enriched ?? 0),
+    available,
+  }
 }
