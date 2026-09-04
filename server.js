@@ -1,12 +1,13 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { extname, join, normalize } from 'node:path'
+import { existsSync, realpathSync } from 'node:fs'
+import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDb } from './db/open.js'
 import { roll, mark, getList, getStats } from './db/queries.js'
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url))
+const RAIZ = realpathSync(PUBLIC)   // sin barra final: realpath la quita
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' }
 
 const json = (res, code, body) => {
@@ -59,6 +60,14 @@ export function createApp(db) {
       const rel = normalize(ruta === '/' ? 'index.html' : ruta).replace(/^(\.\.[/\\])+/, '')
       const archivo = join(PUBLIC, rel)
       if (!archivo.startsWith(PUBLIC) || !existsSync(archivo)) {
+        res.writeHead(404); return res.end('no existe')
+      }
+      // startsWith es lexico: un symlink dentro de public/ apuntando afuera lo
+      // pasaria igual. realpath resuelve el destino real antes de servir nada.
+      // Se compara contra RAIZ + sep para que un hermano llamado "publicfoo"
+      // tampoco cuele.
+      const real = realpathSync(archivo)
+      if (real !== RAIZ && !real.startsWith(RAIZ + sep)) {
         res.writeHead(404); return res.end('no existe')
       }
       res.writeHead(200, { 'content-type': TIPOS[extname(archivo)] ?? 'application/octet-stream' })

@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { symlinkSync, unlinkSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { openDb } from '../db/open.js'
 import { createApp } from '../server.js'
 
@@ -92,3 +94,17 @@ test('sirve index.html en la raiz', () => conApp(async url => {
   assert.equal(res.status, 200)
   assert.match(res.headers.get('content-type'), /text\/html/)
 }))
+
+test('no sirve un symlink que apunta fuera de public/', async () => {
+  const enlace = fileURLToPath(new URL('../public/fuga.html', import.meta.url))
+  const afuera = fileURLToPath(new URL('../package.json', import.meta.url))
+  symlinkSync(afuera, enlace)
+  try {
+    await conApp(async url => {
+      const res = await fetch(`${url}/fuga.html`)
+      assert.equal(res.status, 404, 'el symlink no debe servir el archivo de afuera')
+    })
+  } finally {
+    unlinkSync(enlace)
+  }
+})
