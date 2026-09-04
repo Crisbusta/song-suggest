@@ -2317,11 +2317,15 @@ git commit -m "feat: servidor HTTP local con la API de sorteo"
   <p id="hint" class="hint"></p>
 
   <section class="acciones">
-    <button id="aprendida">Ya la aprendí</button>
-    <button id="descartada">No me tinca</button>
-    <button id="despues">Después</button>
+    <!-- Los tres de disposicion y el corazon arrancan deshabilitados: hasta que
+         cargue la primera cancion no hay nada que marcar, y pulsarlos reventaria
+         sobre un `actual` null. pintar() los habilita al dibujar. "Otra" no: esa
+         siempre se puede pulsar. -->
+    <button id="aprendida" disabled>Ya la aprendí</button>
+    <button id="descartada" disabled>No me tinca</button>
+    <button id="despues" disabled>Después</button>
     <button id="otra" class="principal">Otra</button>
-    <button id="like" class="like" title="Me gustó">♡</button>
+    <button id="like" class="like" title="Me gustó" disabled>♡</button>
   </section>
 </main>
 
@@ -2410,7 +2414,7 @@ function pintar({ song, hint }) {
     <div class="meta">${chips}</div>
     <p>
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
-      ${backing ? ` · <a href="https://www.youtube.com/watch?v=${backing.videoId}" target="_blank" rel="noopener">Backing track</a>` : ''}
+      ${backing ? ` · <a href="https://www.youtube.com/watch?v=${backing.videoId}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
 }
 
