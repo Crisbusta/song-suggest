@@ -329,7 +329,7 @@ la §4 es no perder meses de historial, y no había ni una línea sobre cómo pr
 
 `songs.db` está en `.gitignore` y contiene dos cosas de naturaleza muy distinta:
 
-- El **catálogo** (`songs`, `tracks`, `tags`): reemplazable. Se vuelve a bajar en ~1 hora
+- El **catálogo** (`songs`, `tracks`, `tags`): reemplazable. Se vuelve a bajar en 2-3 horas
   corriendo el ETL.
 - **`song_state`**: irreemplazable. Es lo único del proyecto que no se puede reconstruir
   desde ninguna fuente.
@@ -352,6 +352,14 @@ De ahí dos requisitos:
   paginación de 10.000 — con 64.551 tracks, de los cuales **9.776 canciones (97,8%) tienen
   track de guitarra representativo con dificultad**. La premisa del proyecto se sostiene con
   el catálogo completo, no solo con la muestra de 200 del sondeo. La base ocupa 7,1 MB.
+- **Duración real del enriquecimiento**: ~62 canciones/minuto medidas con concurrencia 3, o
+  sea **2 a 3 horas** para el catálogo completo, no la hora que estimé. La estimación
+  original venía de una medición temprana (25 canciones en 2,3 s) que casi con certeza pegó
+  en respuestas cacheadas. Nada de esto es problema porque la fase 2 es reanudable y la app
+  es usable desde las primeras cientos de canciones, pero conviene saberlo antes de arrancar.
+  Nota aparte: durante la implementación el ritmo cayó a ~10 canciones/minuto mientras dos
+  procesos escribían la misma base en modo `delete`; eso es exactamente lo que el
+  `journal_mode = WAL` resuelve.
 - **`difficulty` es el criterio del transcriptor**, no una medida objetiva. Sirve para
   ordenar, no como verdad absoluta.
 - **La ventana de 10.000** limita el catálogo al tramo más popular. Si se agota, la salida

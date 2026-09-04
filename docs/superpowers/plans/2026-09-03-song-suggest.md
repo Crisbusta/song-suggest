@@ -2588,7 +2588,7 @@ Antes de dar el proyecto por terminado:
 
 ```bash
 node --test test/       # toda la suite verde
-npm run etl             # catalogo completo, puede demorar ~1 hora
+npm run etl             # catalogo completo, 2-3 horas (medido: ~62 canciones/min)
 npm start
 ```
 

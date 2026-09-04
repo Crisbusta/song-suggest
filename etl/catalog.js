@@ -30,10 +30,11 @@ export async function fetchCatalog(db, opts) {
     const { songs, tracks } = parseCatalogPage(page, from)
 
     // Un lote por pagina: un Ctrl-C nunca deja la base a medias.
-    // BEGIN queda fuera del try que hace ROLLBACK: si BEGIN falla (ej. transaccion
-    // ya abierta), no hay transaccion que hacerle ROLLBACK, y llamarlo igual
-    // enmascara el error real con "cannot rollback - no transaction is active"
-    // (mismo caso que se protegio en etl/meta.js).
+    // BEGIN queda fuera del try que hace ROLLBACK: si BEGIN falla porque ya
+    // habia una transaccion abierta, ROLLBACK no lanza — revierte esa
+    // transaccion externa, que no era nuestra. Eso es peor que un error mal
+    // reportado: es tocar un estado que no nos pertenecia (mismo caso que se
+    // protegio en etl/meta.js).
     db.exec('BEGIN')
     try {
       for (const s of songs) {

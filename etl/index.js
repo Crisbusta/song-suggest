@@ -21,6 +21,12 @@ const valor = (n, porDefecto) => {
   return v
 }
 
+// Se resuelven AQUI, antes de abrir la base y antes de tocar la red: una
+// bandera mal escrita debe morir en el primer milisegundo, no despues de
+// bajar 50 paginas de catalogo. `valor` sale con exit(1) si el valor es malo.
+const limite = valor('limit', Infinity)
+const concurrencia = valor('concurrency', 3)
+
 // Relativo al archivo, no al cwd: correr `node etl/index.js` desde otra
 // carpeta no debe empezar una bajada nueva en un songs.db distinto.
 const db = openDb(fileURLToPath(new URL('../songs.db', import.meta.url)))
@@ -47,12 +53,11 @@ if (!flag('solo-meta')) {
 
 if (!flag('solo-catalogo')) {
   const pendientes = db.prepare('SELECT COUNT(*) c FROM songs WHERE enriched_at IS NULL').get().c
-  const limite = valor('limit', Infinity)
   console.log(`Fase 2: enriqueciendo (${pendientes} pendientes). Ctrl-C es seguro, se retoma.`)
 
   const r = await enrichPending(db, {
     fetchMeta: songId => fetchJson(`${BASE}/meta/${songId}`),
-    concurrency: valor('concurrency', 3),
+    concurrency: concurrencia,
     limit: limite,
     onProgress: p => process.stdout.write(`\r  ${p.ok}/${p.total} ok, ${p.failed} fallidas`),
   })

@@ -13,7 +13,7 @@ todos incluidos en Node. Requiere **Node ≥ 24**.
 ## Puesta en marcha
 
 ```
-npm run etl     # una vez, baja y enriquece el catalogo (~1 hora la primera vez)
+npm run etl     # una vez, baja y enriquece el catalogo (2-3 horas la primera vez)
 npm start       # levanta el servidor en http://localhost:3000
 ```
 

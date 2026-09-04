@@ -3,3 +3,5 @@ songs.db
 node_modules/
 .DS_Store
 .superpowers/
+songs.db-wal
+songs.db-shm
