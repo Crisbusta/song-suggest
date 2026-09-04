@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { symlinkSync, unlinkSync } from 'node:fs'
+import { symlinkSync, unlinkSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { openDb } from '../db/open.js'
 import { createApp } from '../server.js'
 
@@ -94,6 +95,29 @@ test('sirve index.html en la raiz', () => conApp(async url => {
   assert.equal(res.status, 200)
   assert.match(res.headers.get('content-type'), /text\/html/)
 }))
+
+test('rechaza intentos de salir de public/', () => conApp(async url => {
+  for (const ruta of ['/../package.json', '/../../etc/hosts', '/..%2fpackage.json', '/public/../server.js']) {
+    const res = await fetch(`${url}${ruta}`, { redirect: 'manual' })
+    assert.equal(res.status, 404, `${ruta} no debe servirse`)
+  }
+}))
+
+test('un directorio hermano con nombre parecido no cuela', async () => {
+  // RAIZ viene de realpath, que quita la barra final. Comparar con
+  // startsWith(RAIZ) a secas dejaria pasar "publicfoo": este test lo fija.
+  const hermano = fileURLToPath(new URL('../publicfoo', import.meta.url))
+  mkdirSync(hermano, { recursive: true })
+  writeFileSync(join(hermano, 'x.html'), 'secreto')
+  try {
+    await conApp(async url => {
+      const res = await fetch(`${url}/../publicfoo/x.html`, { redirect: 'manual' })
+      assert.equal(res.status, 404)
+    })
+  } finally {
+    rmSync(hermano, { recursive: true, force: true })
+  }
+})
 
 test('no sirve un symlink que apunta fuera de public/', async () => {
   const enlace = fileURLToPath(new URL('../public/fuga.html', import.meta.url))
