@@ -47,3 +47,18 @@ test('una guitarra de siete cuerdas no revienta', () => {
   const r = describeTuning([64, 59, 55, 50, 45, 40, 35])
   assert.equal(typeof r, 'string')
 })
+
+test('Drop C: bajado un tono y con la sexta suelta', () => {
+  // La afinacion mas comun del catalogo despues de Eb y Drop D: 396 canciones.
+  assert.equal(describeTuning([62, 57, 53, 48, 43, 36]), 'Drop C')
+})
+
+test('Drop B y Drop A, con la base bajada mas todavia', () => {
+  assert.equal(describeTuning([61, 56, 52, 47, 42, 35]), 'Drop B')
+  assert.equal(describeTuning([59, 54, 50, 45, 40, 33]), 'Drop A')
+})
+
+test('bajar todo parejo sigue sin ser un Drop', () => {
+  // La sexta debe quedar MAS grave que el resto; si baja lo mismo, es traslado.
+  assert.equal(describeTuning([62, 57, 53, 48, 43, 38]), 'Un tono abajo (D)')
+})
