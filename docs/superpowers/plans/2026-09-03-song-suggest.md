@@ -15,7 +15,7 @@
 - **Node >= 24.** `node:sqlite` no es estable antes. Declarar en `package.json` → `engines.node: ">=24"`.
 - **Cero dependencias npm.** No agregar `dependencies` ni `devDependencies` a `package.json` en ninguna tarea. Si una tarea parece necesitar un paquete, es señal de que el enfoque está mal.
 - **ESM.** `package.json` lleva `"type": "module"`. Usar `import`, nunca `require`.
-- **Tests con `node:test`**, corridos con `node --test test/`. Aserciones con `node:assert/strict`.
+- **Tests con `node:test`**, corridos con `node --test test/*.test.js`. Aserciones con `node:assert/strict`. (Ojo: `node --test test/` con el directorio suelto **no funciona** en Node 25 — resuelve el directorio como módulo de entrada y revienta con `MODULE_NOT_FOUND`. El glob explícito sí funciona.)
 - **Ningún test toca la red.** El ETL se prueba contra fixtures y contra servidores locales levantados con `node:http`.
 - **Idioma.** Texto de interfaz, mensajes de consola, comentarios y nombres de tests, en español. En el código: la **API pública en inglés** — todo lo exportado (`openDb`, `parseCatalogPage`, `parseMeta`, `fetchCatalog`, `enrichPending`, `fetchJson`, `runPool`, `describeTuning`, `roll`, `mark`, `getList`, `getStats`, `createApp`, `MODES`, `LISTS`), los nombres de tabla y columna, y los nombres de archivo. Las variables locales y los helpers privados de un módulo **pueden ir en español**, y de hecho el plan los escribe así (`hidratar`, `contar`, `asegurarFila`, `obreros`, `ultimoError`). No es descuido: es la convención del proyecto, y no debe reportarse como defecto.
 - **`song_state` no tiene foreign key hacia `songs`, y el ETL nunca la escribe.** Es invariante del diseño: permite rebajar el catálogo sin perder historial.
@@ -45,7 +45,7 @@
   "private": true,
   "engines": { "node": ">=24" },
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "etl": "node etl/index.js",
     "start": "node server.js"
   }
