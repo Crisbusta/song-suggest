@@ -248,7 +248,12 @@ tags, link a Songsterr, y el backing track de YouTube si existe.
 para saber antes de agarrar la guitarra si esto implica reafinar. Detección:
 
 - Todas las cuerdas con el mismo offset *n* → "n semitonos abajo/arriba" (Eb, D estándar…).
-- Solo la 6ª distinta → "Drop X" según la nota resultante.
+- Las cinco primeras con el mismo offset y la 6ª más grave todavía → **"Drop X"** según la
+  nota de la 6ª. Nótese que *n no tiene que ser cero*: Drop C es la quinta afinación más
+  común del catálogo (396 canciones) y consiste en bajar todo un tono **y además** soltar la
+  sexta. Detectar solo el caso *n = 0* dejaría fuera a Drop C, C#, B, A# y A — 938 canciones,
+  casi el 10% de las que tienen guitarra, que recibirían una lista de notas en vez del nombre
+  que cualquier guitarrista reconoce. Medido contra el catálogo real el 2026-09-03.
 - Cualquier otro caso → mostrar los nombres de las notas tal cual.
 
 **Botones**, siguiendo los dos ejes del estado: una fila de disposición

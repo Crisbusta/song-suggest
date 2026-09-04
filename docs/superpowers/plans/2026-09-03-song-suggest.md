@@ -1366,6 +1366,21 @@ test('Drop C#', () => {
   assert.equal(describeTuning([64, 59, 55, 50, 45, 37]), 'Drop C#')
 })
 
+test('Drop C: bajado un tono y con la sexta suelta', () => {
+  // La afinacion mas comun del catalogo despues de Eb y Drop D: 396 canciones.
+  assert.equal(describeTuning([62, 57, 53, 48, 43, 36]), 'Drop C')
+})
+
+test('Drop B y Drop A, con la base bajada mas todavia', () => {
+  assert.equal(describeTuning([61, 56, 52, 47, 42, 35]), 'Drop B')
+  assert.equal(describeTuning([59, 54, 50, 45, 40, 33]), 'Drop A')
+})
+
+test('bajar todo parejo sigue sin ser un Drop', () => {
+  // La sexta debe quedar MAS grave que el resto; si baja lo mismo, es traslado.
+  assert.equal(describeTuning([62, 57, 53, 48, 43, 38]), 'Un tono abajo (D)')
+})
+
 test('una afinacion rara muestra las notas', () => {
   // Afinacion abierta cualquiera: ni trasladada ni de la familia Drop.
   assert.equal(describeTuning([50, 45, 43, 38, 33, 26]), 'Afinacion abierta: D-A-G-D-A-D')
@@ -1410,8 +1425,12 @@ export function describeTuning(notas) {
     return `${semis} semitonos ${abajo ? 'abajo' : 'arriba'}`
   }
 
-  // Solo la sexta (la ultima del arreglo) movida hacia abajo: familia Drop.
-  const sextaSuelta = offsets.slice(0, 5).every(o => o === 0) && offsets[5] < 0
+  // Familia Drop: las cinco primeras cuerdas movidas todas lo mismo (no
+  // necesariamente cero) y la sexta mas grave todavia. El caso n != 0 no es
+  // exotico: Drop C (bajar un tono Y soltar la sexta) es la quinta afinacion
+  // mas comun del catalogo. Exigir n == 0 dejaria fuera Drop C, C#, B, A# y A.
+  const arriba = offsets.slice(0, 5)
+  const sextaSuelta = arriba.every(o => o === arriba[0]) && offsets[5] < arriba[0]
   if (sextaSuelta) return `Drop ${nombre(notas[5])}`
 
   return `Afinacion abierta: ${notas.map(nombre).join('-')}`
@@ -1421,7 +1440,7 @@ export function describeTuning(notas) {
 - [ ] **Step 4: Correr los tests**
 
 Run: `node --test test/tuning.test.js`
-Expected: PASS, 10 tests.
+Expected: PASS, 13 tests.
 
 - [ ] **Step 5: Commit**
 
