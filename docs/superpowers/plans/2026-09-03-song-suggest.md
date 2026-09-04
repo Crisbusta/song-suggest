@@ -980,7 +980,9 @@ export async function fetchCatalog(db, opts) {
 
     paginas++
     total += songs.length
-    onProgress?.({ paginas, total, from })
+    // Las claves del callback van en ingles y espejan el valor de retorno:
+    // es superficie publica que consume el CLI de la Task 8.
+    onProgress?.({ pages: paginas, songs: total, from })
 
     if (page.length < pageSize) break
   }
@@ -1220,7 +1222,7 @@ if (!flag('solo-meta')) {
   console.log('Fase 1: bajando el catalogo...')
   const r = await fetchCatalog(db, {
     fetchPage: (from, size) => fetchJson(`${BASE}/songs?pattern=&size=${size}&from=${from}`),
-    onProgress: p => process.stdout.write(`\r  ${p.total} canciones (${p.paginas} paginas)`),
+    onProgress: p => process.stdout.write(`\r  ${p.songs} canciones (${p.pages} paginas)`),
   })
   console.log(`\n  Listo: ${r.songs} canciones.`)
 }
