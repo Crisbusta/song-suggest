@@ -28,3 +28,24 @@ export function parseCatalogPage(page, fromOffset) {
 
   return { songs, tracks }
 }
+
+const flag = (v, porDefecto = 0) => (v === undefined || v === null ? porDefecto : v ? 1 : 0)
+
+export function parseMeta(meta) {
+  return {
+    songId: meta.songId,
+    views: meta.views ?? null,
+    fingerstyle: flag(meta.fingerstyle),
+    hasChords: flag(meta.hasChords),
+    aiGenerated: flag(meta.aiGenerated),
+    isJunk: flag(meta.isJunk),
+    isBlank: flag(meta.isBlank),
+    isPublished: flag(meta.isPublished, 1),
+    tags: Array.isArray(meta.tags) ? meta.tags.filter(t => typeof t === 'string') : [],
+    videos: JSON.stringify(
+      (Array.isArray(meta.videos) ? meta.videos : [])
+        .filter(v => v && v.videoId)
+        .map(v => ({ videoId: v.videoId, feature: v.feature ?? null }))
+    ),
+  }
+}

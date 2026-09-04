@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { parseCatalogPage } from '../etl/parse.js'
+import { parseCatalogPage, parseMeta } from '../etl/parse.js'
 
 const page = JSON.parse(
   readFileSync(fileURLToPath(new URL('../etl/fixtures/catalog-page.json', import.meta.url)), 'utf8')
@@ -55,4 +55,40 @@ test('un track sin difficulty queda en null, no en undefined', () => {
   const { tracks } = parseCatalogPage(entrada, 0)
   assert.equal(tracks[0].difficulty, null)
   assert.equal(tracks[0].tuning, null)
+})
+
+const meta = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../etl/fixtures/meta-455118.json', import.meta.url)), 'utf8')
+)
+
+test('parseMeta extrae las banderas como enteros 0/1', () => {
+  const m = parseMeta(meta)
+  assert.equal(m.songId, 455118)
+  for (const k of ['fingerstyle', 'hasChords', 'aiGenerated', 'isJunk', 'isBlank', 'isPublished']) {
+    assert.ok(m[k] === 0 || m[k] === 1, `${k} deberia ser 0 o 1, es ${m[k]}`)
+  }
+  assert.equal(typeof m.views, 'number')
+})
+
+test('parseMeta trae los tags como arreglo de strings', () => {
+  const m = parseMeta(meta)
+  assert.ok(Array.isArray(m.tags))
+  assert.ok(m.tags.includes('thrash metal'))
+  assert.ok(m.tags.every(t => typeof t === 'string'))
+})
+
+test('parseMeta guarda solo videoId y feature de cada video', () => {
+  const m = parseMeta(meta)
+  const videos = JSON.parse(m.videos)
+  assert.ok(videos.length > 0)
+  for (const v of videos) {
+    assert.deepEqual(Object.keys(v).sort(), ['feature', 'videoId'])
+  }
+})
+
+test('parseMeta tolera meta sin tags ni videos', () => {
+  const m = parseMeta({ songId: 9, views: 0 })
+  assert.deepEqual(m.tags, [])
+  assert.equal(m.videos, '[]')
+  assert.equal(m.isPublished, 1)
 })
