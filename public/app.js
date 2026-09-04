@@ -39,17 +39,41 @@ function pintar({ song, matching, hint }) {
     `<span class="chip">${matching} calzan con estos filtros</span>`,
   ].join('')
 
-  const backing = song.videos.find(v => v.feature === 'backing') ?? song.videos[0]
+  // Miniatura con play encima: no cargamos el reproductor de YouTube (~1 MB de
+  // scripts) en cada tirada, solo una imagen liviana. El iframe entra al pulsar.
+  const preview = song.videoOficial
+    ? `<div class="preview" data-escuchar="${esc(song.videoOficial)}">
+         <img src="https://i.ytimg.com/vi/${esc(song.videoOficial)}/hqdefault.jpg"
+              alt="Escuchar ${esc(song.artist)} - ${esc(song.title)}" loading="lazy">
+         <button type="button" class="play" aria-label="Escuchar la canción">▶</button>
+       </div>`
+    : ''
 
   $('#tarjeta').innerHTML = `
     <h2>${esc(song.title)}</h2>
     <p class="artista">${esc(song.artist)}</p>
     <div class="meta">${chips}</div>
+    ${preview}
     <p>
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
-      ${backing ? ` · <a href="https://www.youtube.com/watch?v=${esc(backing.videoId)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
+      ${song.videoPista ? ` · <a href="https://www.youtube.com/watch?v=${esc(song.videoPista)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
 }
+
+// Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
+// tarjeta porque el bloque se redibuja completo en cada tirada; y como se
+// redibuja, el iframe anterior muere solo y la canción anterior deja de sonar.
+$('#tarjeta').addEventListener('click', e => {
+  const bloque = e.target.closest('[data-escuchar]')
+  if (!bloque) return
+  const id = bloque.dataset.escuchar
+  bloque.outerHTML = `
+    <div class="preview">
+      <iframe src="https://www.youtube-nocookie.com/embed/${esc(id)}?autoplay=1&rel=0"
+              title="Reproductor de YouTube" allow="autoplay; encrypted-media"
+              referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    </div>`
+})
 
 async function pintarStats() {
   try {

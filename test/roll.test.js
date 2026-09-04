@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { openDb } from '../db/open.js'
-import { roll } from '../db/queries.js'
+import { roll, mark, getList } from '../db/queries.js'
 
 let siguienteId = 1
 
@@ -11,10 +11,11 @@ function agregar(db, o = {}) {
   db.prepare(`
     INSERT INTO songs (song_id, artist_id, artist, title, views, catalog_rank,
                        fingerstyle, is_junk, ai_generated, is_blank, is_published, videos, enriched_at)
-    VALUES (?, 1, ?, ?, 100, ?, ?, ?, ?, ?, ?, '[]', '2026-09-03')
+    VALUES (?, 1, ?, ?, 100, ?, ?, ?, ?, ?, ?, ?, '2026-09-03')
   `).run(
     songId, o.artist ?? 'Artista', o.title ?? `Cancion ${songId}`, songId,
-    o.fingerstyle ?? 0, o.isJunk ?? 0, o.aiGenerated ?? 0, o.isBlank ?? 0, o.isPublished ?? 1
+    o.fingerstyle ?? 0, o.isJunk ?? 0, o.aiGenerated ?? 0, o.isBlank ?? 0, o.isPublished ?? 1,
+    o.videos ?? '[]'
   )
   db.prepare(`
     INSERT INTO tracks (song_id, track_index, instrument, name, difficulty, views, tuning)
@@ -185,4 +186,65 @@ test('un modo desconocido es rechazado', () => {
   const db = base()
   agregar(db)
   assert.throws(() => roll(db, { mode: 'inventado' }), /modo/i)
+})
+
+// --- Seleccion de videos para el preview -------------------------------------
+// Los 'feature' salen del catalogo real: null es el video oficial (canal
+// "Artista - Topic"), backing es un karaoke, y alternative/solo/playthrough son
+// re-subidas y pistas aisladas.
+
+// El oficial va DELIBERADAMENTE al final: un videos[0] ingenuo no debe pasar.
+const VIDEOS_REALES = JSON.stringify([
+  { videoId: 'karaoke1111', feature: 'backing' },
+  { videoId: 'resubida222', feature: 'alternative' },
+  { videoId: 'soloaislado', feature: 'solo' },
+  { videoId: 'basssolo333', feature: 'playthrough' },
+  { videoId: 'oficial4444', feature: null },
+])
+
+test('videoOficial es el de feature null, no el primero del arreglo', () => {
+  const db = base()
+  agregar(db, { videos: VIDEOS_REALES })
+  assert.equal(roll(db, {}).song.videoOficial, 'oficial4444')
+})
+
+test('videoPista es el backing, no cualquier otro', () => {
+  const db = base()
+  agregar(db, { videos: VIDEOS_REALES })
+  assert.equal(roll(db, {}).song.videoPista, 'karaoke1111')
+})
+
+test('sin videos, ambos quedan en null', () => {
+  const db = base()
+  agregar(db, { videos: '[]' })
+  const s = roll(db, {}).song
+  assert.equal(s.videoOficial, null)
+  assert.equal(s.videoPista, null)
+})
+
+test('con videos pero sin oficial, videoOficial es null y videoPista sigue', () => {
+  const db = base()
+  agregar(db, { videos: JSON.stringify([
+    { videoId: 'karaoke1111', feature: 'backing' },
+    { videoId: 'resubida222', feature: 'alternative' },
+  ]) })
+  const s = roll(db, {}).song
+  assert.equal(s.videoOficial, null, 'no debe caer en el alternative como si fuera oficial')
+  assert.equal(s.videoPista, 'karaoke1111')
+})
+
+test('el arreglo crudo de videos ya no viaja al front', () => {
+  const db = base()
+  agregar(db, { videos: VIDEOS_REALES })
+  const s = roll(db, {}).song
+  assert.equal(s.videos, undefined, 'hasta 5,3 KB por cancion que no hacen falta')
+})
+
+test('las listas tambien traen los videos elegidos', () => {
+  const db = base()
+  const id = agregar(db, { videos: VIDEOS_REALES })
+  mark(db, { songId: id, status: 'queued' })
+  const fila = getList(db, 'queued')[0]
+  assert.equal(fila.videoOficial, 'oficial4444')
+  assert.equal(fila.videoPista, 'karaoke1111')
 })
