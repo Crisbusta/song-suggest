@@ -705,6 +705,28 @@ test('runPool procesa todos los elementos', async () => {
   await runPool(['a', 'b', 'c'], 2, async x => { vistos.push(x) })
   assert.deepEqual(vistos.sort(), ['a', 'b', 'c'])
 })
+
+test('runPool no deja obreros corriendo despues de retornar', async () => {
+  const vistos = []
+  await assert.rejects(() => runPool([1, 2, 3, 4, 5, 6], 2, async x => {
+    if (x === 3) throw new Error('boom')
+    await new Promise(r => setTimeout(r, 5))
+    vistos.push(x)
+  }), /boom/)
+
+  const alRetornar = [...vistos]
+  await new Promise(r => setTimeout(r, 60))
+  assert.deepEqual(vistos, alRetornar, 'siguio procesando despues de que el await ya lanzo')
+})
+
+test('runPool termina los items restantes aunque uno falle', async () => {
+  const vistos = []
+  await assert.rejects(() => runPool([1, 2, 3, 4], 2, async x => {
+    if (x === 2) throw new Error('boom')
+    vistos.push(x)
+  }))
+  assert.deepEqual(vistos.sort(), [1, 3, 4])
+})
 ```
 
 - [ ] **Step 2: Correr el test para verificar que falla**
@@ -757,14 +779,25 @@ export async function runPool(items, concurrency, worker) {
       await worker(items[i], i)
     }
   })
-  await Promise.all(obreros)
+
+  // allSettled y no all: con `all`, el primer worker que lanza hace que este
+  // await retorne de inmediato mientras los otros obreros siguen corriendo en
+  // segundo plano, mutando estado despues de que el llamador ya creyo haber
+  // terminado. Drenamos todos los obreros y recien ahi propagamos el error.
+  //
+  // CONTRATO: runPool propaga el primer error del worker. Quien necesite
+  // tolerar fallos por item -- como enrichPending, que debe seguir pese a que
+  // una cancion falle -- captura dentro del propio worker.
+  const resultados = await Promise.allSettled(obreros)
+  const fallo = resultados.find(r => r.status === 'rejected')
+  if (fallo) throw fallo.reason
 }
 ```
 
 - [ ] **Step 4: Correr los tests**
 
 Run: `node --test test/http.test.js`
-Expected: PASS, 8 tests.
+Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
