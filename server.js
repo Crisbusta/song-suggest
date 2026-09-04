@@ -82,11 +82,14 @@ export function createApp(db) {
 
 // Arranque solo cuando se ejecuta directo, no cuando lo importa un test.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (!existsSync('songs.db')) {
+  // Relativo al archivo, no al cwd: correr `node server.js` desde otra
+  // carpeta no debe apuntar a un songs.db distinto del real.
+  const SONGS_DB = new URL('./songs.db', import.meta.url)
+  if (!existsSync(SONGS_DB)) {
     console.error('No existe songs.db. Corre primero:  npm run etl')
     process.exit(1)
   }
-  const db = openDb('songs.db')
+  const db = openDb(SONGS_DB)
   const { enriched, available } = getStats(db)
   if (enriched === 0) {
     console.error('La base esta vacia. Corre primero:  npm run etl')

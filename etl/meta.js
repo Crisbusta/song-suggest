@@ -21,6 +21,11 @@ export async function enrichPending(db, opts) {
   const insertTag = db.prepare('INSERT OR IGNORE INTO tags (song_id, tag) VALUES (?, ?)')
 
   const failures = new Set()
+  const motivos = new Map()   // songId -> mensaje, para poder diagnosticar despues
+  const registrar = (songId, err) => {
+    failures.add(songId)
+    motivos.set(songId, err?.message ?? String(err))
+  }
   let ok = 0
 
   // Un onProgress del llamador que lance no puede tumbar el ETL entero.
@@ -38,18 +43,18 @@ export async function enrichPending(db, opts) {
       let m
       try {
         m = parseMeta(await fetchMeta(songId))
-      } catch {
-        failures.add(songId)
+      } catch (err) {
+        registrar(songId, err)
         notificar()
         return
       }
 
       try {
         db.exec('BEGIN')
-      } catch {
+      } catch (err) {
         // Si BEGIN falla (ej: transaccion ya abierta), no hay transaccion que rollback.
         // No llamamos ROLLBACK para evitar cerrar una transaccion externa.
-        failures.add(songId)
+        registrar(songId, err)
         notificar()
         return
       }
@@ -63,19 +68,19 @@ export async function enrichPending(db, opts) {
         borrarTags.run(songId)
         for (const tag of m.tags) insertTag.run(songId, tag)
         db.exec('COMMIT')
-      } catch {
+      } catch (err) {
         // Si los updates fallan, si hay transaccion que rollback. Si el propio ROLLBACK
         // falla (ej: sin transaccion abierta tras un error previo), se ignora.
         try { db.exec('ROLLBACK') } catch { /* sin transaccion abierta */ }
-        failures.add(songId)
+        registrar(songId, err)
         notificar()
         return
       }
 
       ok++
       notificar()
-    } catch {
-      failures.add(songId)
+    } catch (err) {
+      registrar(songId, err)
     }
   })
 
@@ -83,5 +88,7 @@ export async function enrichPending(db, opts) {
     ok,
     failed: failures.size,
     failures: [...failures].sort((a, b) => a - b),
+    // Motivos agrupados: "HTTP 429" x312 dice algo que una lista de ids no dice.
+    motivos: [...motivos.values()].reduce((acc, m) => acc.set(m, (acc.get(m) ?? 0) + 1), new Map()),
   }
 }
