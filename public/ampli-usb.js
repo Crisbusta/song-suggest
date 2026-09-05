@@ -291,6 +291,18 @@ export const ampli = {
      unico punto que llama a esta funcion -- pero eso esta documentado solo
      alla. Un control futuro que mande la perilla mientras el usuario la
      arrastra (sin esperar el ACK anterior) rompe justamente esta garantia. */
+  /* Cierra el modo sync. Cada escritura lo abre con SYNC_BEGIN, y mientras
+     este abierto el amplificador muestra en su pantalla "sync with Fender
+     Tone" en vez del preset. Se cierra al terminar la tanda para que el equipo
+     vuelva a su pantalla normal; la siguiente tanda lo reabre sola, que es lo
+     que ponerParametro ya hace por cada perilla.
+     No lanza: que la pantalla quede en sync es un detalle cosmetico y no
+     tiene por que hacer fracasar un envio que si funciono. */
+  async cerrarSync() {
+    if (!dispositivo) return
+    try { await dispositivo.sendReport(0, empaquetar(SYNC_END)) } catch { /* se fue el equipo */ }
+  },
+
   async ponerParametro(nodo, parametro, valor) {
     if (!dispositivo) throw new Error('El amplificador no está conectado.')
     /* Medido contra el equipo: cada SYNC_BEGIN habilita UNA sola escritura; la

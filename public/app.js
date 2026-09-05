@@ -339,6 +339,11 @@ $('#tarjeta').addEventListener('click', async e => {
     // reabilitado con ese texto contradictorio.
     pintarBotonEnviar()
   } finally {
+    // Sin esto el ampli se queda mostrando "sync with Fender Tone" en vez del
+    // preset: cada perilla abre el modo sync y nadie lo cerraba. Va en el
+    // finally para que tambien se cierre cuando el envio se abandona por una
+    // tirada nueva o revienta a mitad.
+    await ampli.cerrarSync()
     enviando = false
   }
 })
