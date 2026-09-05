@@ -47,19 +47,25 @@ export function empaquetar(carga) {
    el sondeo y no producía ninguna excepción: descartaba todas las respuestas.  */
 export function crearReensamblador() {
   let partes = []
+  let abierta = false   // ¿hubo un 0x33 que abriera esta secuencia?
   return {
     recibir(bytes) {
       const tag = bytes[1], largo = bytes[2]
       const carga = bytes.slice(3, 3 + largo)
-      if (tag === TAG_INICIO) { partes = [carga]; return null }
-      if (tag === TAG_CONTINUA) { partes.push(carga); return null }
+      if (tag === TAG_INICIO) { partes = [carga]; abierta = true; return null }
+      if (tag === TAG_CONTINUA) {
+        // Una continuación sin inicio es basura: acumularla corrompería el
+        // mensaje siguiente, que se entregaría como si fuera válido.
+        if (!abierta) return null
+        partes.push(carga); return null
+      }
       if (tag !== TAG_UNICO) return null   // tag desconocido: se descarta
-      if (!partes.length) return carga
+      if (!abierta) return carga           // paquete único
       partes.push(carga)
       const total = new Uint8Array(partes.reduce((a, p) => a + p.length, 0))
       let o = 0
       for (const p of partes) { total.set(p, o); o += p.length }
-      partes = []
+      partes = []; abierta = false
       return total
     },
   }
@@ -107,14 +113,26 @@ export function interpretar(mensaje) {
   if (!sub) return { tipo: 'desconocido' }
   const dentro = sub.bytes ? leerCampos(sub.bytes) : []
   switch (sub.num) {
-    case 35: return {
-      tipo: 'ackParametro',
-      nodo: dentro[0]?.bytes ? texto(dentro[0].bytes) : null,
-      parametro: dentro[1]?.bytes ? texto(dentro[1].bytes) : null,
-      valor: dentro[2]?.f,
+    case 35: {
+      // Por número de campo, no por posición: el orden en el cable no está
+      // garantizado, y equivocarse aquí asignaría mal nodo/parámetro/valor
+      // sin lanzar nada.
+      const busca = n => dentro.find(c => c.num === n)
+      return {
+        tipo: 'ackParametro',
+        nodo: busca(1)?.bytes ? texto(busca(1).bytes) : null,
+        parametro: busca(2)?.bytes ? texto(busca(2).bytes) : null,
+        valor: busca(3)?.f,
+      }
     }
-    case 100: return { tipo: 'identificacion', texto: dentro[0]?.bytes ? texto(dentro[0].bytes) : '' }
-    case 103: return { tipo: 'firmware', texto: dentro[0]?.bytes ? texto(dentro[0].bytes) : '' }
+    case 100: {
+      const busca = n => dentro.find(c => c.num === n)
+      return { tipo: 'identificacion', texto: busca(1)?.bytes ? texto(busca(1).bytes) : '' }
+    }
+    case 103: {
+      const busca = n => dentro.find(c => c.num === n)
+      return { tipo: 'firmware', texto: busca(1)?.bytes ? texto(busca(1).bytes) : '' }
+    }
     case 113: return { tipo: 'sync' }
     default: return { tipo: 'desconocido' }
   }

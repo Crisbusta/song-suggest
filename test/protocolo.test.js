@@ -33,14 +33,17 @@ test('parsea la respuesta REAL del amplificador al sync', () => {
   assert.ok(campos.find(c => c.num === 113), 'el submensaje modalStatus')
 })
 
-test('leer el tag en la posicion equivocada no debe entregar nada', () => {
-  // Este es el error real que se cometió durante el sondeo: leer el tag en d[0]
-  // (que es el nulo) descarta TODAS las respuestas en silencio, y se ve igual
-  // que "el amplificador no contesta". Si este test pasa con un reensamblador
-  // que lee mal, no sirve de nada.
+test('el tag se lee en el byte 1, no en el 0', () => {
+  // El error real: leer el tag en d[0] (que es el nulo del protocolo) hace que
+  // el reensamblador descarte TODAS las respuestas sin lanzar nada, y el
+  // síntoma es idéntico a "el amplificador no contesta".
   const crudo = desdeHex('00 35 09 08 02 8a 07 04 08 00 10 00')
   assert.equal(crudo[0], 0x00, 'el byte 0 es el nulo del protocolo')
   assert.equal(crudo[1], 0x35, 'el tag vive en el byte 1')
+  // Y esto es lo que el test anterior no hacía: comprobar el comportamiento.
+  const mensaje = crearReensamblador().recibir(crudo)
+  assert.ok(mensaje, 'con el offset correcto, el mensaje sale')
+  assert.deepEqual([...mensaje.slice(0, 2)], [0x08, 0x02], 'la carga empieza donde debe')
 })
 
 test('reensambla un mensaje partido en tres paquetes', () => {
@@ -56,6 +59,14 @@ test('un paquete único se entrega sin acumular', () => {
   const r = crearReensamblador()
   const b = new Uint8Array(64); b[1] = 0x35; b[2] = 2; b[3] = 9; b[4] = 9
   assert.deepEqual([...r.recibir(b)], [9, 9])
+})
+
+test('una continuación sin inicio no contamina el mensaje siguiente', () => {
+  const r = crearReensamblador()
+  const paq = (tag, bytes) => { const b = new Uint8Array(64); b[1] = tag; b[2] = bytes.length; b.set(bytes, 3); return b }
+  assert.equal(r.recibir(paq(0x34, [66, 66])), null, 'la continuación huérfana se descarta')
+  // El siguiente paquete único debe entregarse limpio, sin el fragmento anterior.
+  assert.deepEqual([...r.recibir(paq(0x35, [7, 7]))], [7, 7])
 })
 
 test('un tag desconocido se descarta sin lanzar', () => {
@@ -80,6 +91,17 @@ test('interpretar reconoce el ACK de una escritura', () => {
   const ack = codificarMensaje(35, [...campoTexto(1, 'amp'), ...campoTexto(2, 'gain'), ...campoFloat(3, 0.5)])
   const r = interpretar(ack)
   assert.equal(r.tipo, 'ackParametro')
+  assert.equal(r.nodo, 'amp')
+  assert.equal(r.parametro, 'gain')
+  assert.ok(Math.abs(r.valor - 0.5) < 1e-6)
+})
+
+test('interpretar no depende del orden de los campos', () => {
+  // Mismo ACK, con los campos escritos en orden 3, 1, 2.
+  const alReves = codificarMensaje(35, [
+    ...campoFloat(3, 0.5), ...campoTexto(1, 'amp'), ...campoTexto(2, 'gain'),
+  ])
+  const r = interpretar(alReves)
   assert.equal(r.nodo, 'amp')
   assert.equal(r.parametro, 'gain')
   assert.ok(Math.abs(r.valor - 0.5) < 1e-6)
