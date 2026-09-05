@@ -146,7 +146,11 @@ export const ampli = {
       const previos = await navigator.hid.getDevices()
       const dev = previos.find(d => d.vendorId === VENDOR && d.productId === PRODUCT)
       if (!dev) return false
-      try { await abrir(dev); return true } catch { return false }
+      /* `abrir()` puede volver sin lanzar y sin haber conectado: si un
+         desconectar() corrio durante el handshake, sale por la salida limpia.
+         Devolver `true` a ciegas ahi haria que quien reconecta al cargar la
+         pagina pinte "conectado" sobre una conexion que ya no existe. */
+      try { await abrir(dev); return !!dispositivo } catch { return false }
     } finally {
       conectando = false
     }
