@@ -276,3 +276,13 @@ test('las listas tambien traen los ajustes', () => {
   mark(db, { songId: id, status: 'queued' })
   assert.equal(getList(db, 'queued')[0].ampli.modelo, 'CHAMPION')
 })
+
+test('el payload trae los valores ya convertidos para el amplificador', () => {
+  const db = base()
+  const id = agregar(db, { instrument: 'Distortion Guitar' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
+  const a = roll(db, {}).song.ampli
+  assert.ok(a.paraElAmpli, 'deberia venir listo para mandar')
+  assert.ok(a.paraElAmpli.gain > 0 && a.paraElAmpli.gain <= 1)
+  assert.equal(a.paraElAmpli.volume, undefined, 'el volumen no se manda')
+})

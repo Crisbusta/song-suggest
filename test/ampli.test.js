@@ -124,3 +124,38 @@ test('un tag de epoca no altera lo que ya era de esa epoca', () => {
   const r = sugerirAjustes({ tags: ['blues', '60s'], instrument: 'Overdriven Guitar', tuning: null })
   assert.equal(r.modelo, 'BASSMAN')
 })
+
+// --- Conversión de escala para el amplificador ----------------------------------
+
+import { paraElAmpli } from '../lib/ampli.js'
+
+test('la escala 1-10 se convierte a los flotantes 0-1 del amplificador', () => {
+  assert.deepEqual(paraElAmpli({ gain: 1, treble: 1, bass: 1 }), { gain: 0, treb: 0, bass: 0 })
+  assert.deepEqual(paraElAmpli({ gain: 10, treble: 10, bass: 10 }), { gain: 1, treb: 1, bass: 1 })
+})
+
+test('un valor intermedio cae donde corresponde', () => {
+  const r = paraElAmpli({ gain: 8, treble: 5, bass: 4 })
+  assert.ok(Math.abs(r.gain - 7 / 9) < 1e-9, `gain 8/10 -> ${r.gain}`)
+  assert.ok(Math.abs(r.treb - 4 / 9) < 1e-9)
+  assert.ok(Math.abs(r.bass - 3 / 9) < 1e-9)
+})
+
+test('NO manda volumen, medios ni reverb', () => {
+  // volume esta en decibeles con rango desconocido: mandarlo como 0-1 puede
+  // ser un salto de volumen brutal. mid no lo produce la tabla. reverb vive
+  // en otro nodo. Los tres estan fuera por decision de diseno, no por olvido.
+  const r = paraElAmpli({ gain: 5, volume: 9, treble: 5, bass: 5, reverb: 9 })
+  assert.deepEqual(Object.keys(r).sort(), ['bass', 'gain', 'treb'])
+})
+
+test('sin sugerencia no hay nada que convertir', () => {
+  assert.equal(paraElAmpli(null), null)
+  assert.equal(paraElAmpli(undefined), null)
+})
+
+test('los valores quedan acotados aunque entre basura', () => {
+  const r = paraElAmpli({ gain: 99, treble: -5, bass: 5 })
+  assert.ok(r.gain <= 1 && r.gain >= 0, `gain ${r.gain}`)
+  assert.ok(r.treb <= 1 && r.treb >= 0, `treb ${r.treb}`)
+})
