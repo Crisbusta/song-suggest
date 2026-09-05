@@ -49,8 +49,31 @@ const avisar = () => { for (const fn of oyentes) fn(!!dispositivo) }
    ese "sin confirmar" repetido es una decision, no un bug. Y no queda
    envenenado para siempre -- las deudas caducan a 2 * ESPERA_ACK, asi que
    esperar unos segundos antes de reintentar deja la perilla funcionando
-   normal. */
+   normal.
+
+   Ojo con la premisa de arriba, "como mucho UN ACK todavia en el aire" por
+   escritura abandonada: eso es una suposicion sobre el equipo, no un hecho
+   medido. Vale porque asumimos que el amplificador solo emite un
+   `ackParametro` como respuesta a una escritura nuestra. Si en algun momento
+   emitiera uno que ninguna escritura nuestra provoco -- girar una perilla
+   fisica, recargar un preset, mandar dos status por cada set -- ese ACK
+   entraria por el lado del equipo en vez del lado del reintento: se comeria
+   una deuda ajena, o resolveria de una una entrada pendiente que el equipo
+   todavia no confirmo. Es el mismo problema de fondo (falta un identificador
+   de correlacion) y este mecanismo no lo cierra para ese caso. Si alguna vez
+   aparece una confirmacion falsa inexplicable, es aca donde hay que mirar
+   primero. */
 const descartar = new Map()    // clave -> ms de caducidad de cada deuda, en orden creciente
+/* Por que 2 * ESPERA_ACK y no mas: agrandar la ventana aleja el escape (un ACK
+   que llega mas tarde que eso, con una entrada viva de la misma clave justo en
+   ese instante), pero lo mide contra lo que se observo -- todo responde en
+   ~1,4 s y el modo de falla conocido del equipo es el silencio total, no la
+   lentitud -- asi que ese escape ya es remoto con el doble. Y agrandarla tiene
+   un costo en el camino comun: reintentar es la reaccion natural a leer "sin
+   confirmar", y una ventana mas ancha reporta ese reintento -- que suele
+   funcionar -- como no confirmado durante toda esa ventana. A 2x, la molestia
+   dura menos que la paciencia de quien reintenta, y el escape sigue exigiendo
+   un ACK mas de 3x fuera de plazo (>6s cuando ESPERA_ACK son 2s). */
 const VENTANA_DESCARTE = 2 * ESPERA_ACK
 const clave = (nodo, parametro) => `${nodo}\u0000${parametro}`
 
@@ -161,8 +184,13 @@ async function desconectar() {
   // reportar como no confirmadas escrituras nuevas que si funcionaron.
   descartar.clear()
   if (dev) {
-    try { await dev.sendReport(0, empaquetar(SYNC_END)) } catch { /* ya se fue */ }
+    // El listener se saca ANTES del SYNC_END: mientras ese await esta en
+    // vuelo el listener seguiria atado, y un ACK que llegara justo en esa
+    // ventana se procesaria con `pendientes` y `descartar` ya limpios de
+    // arriba. Practicamente inalcanzable -- cerrar el dispositivo descarta
+    // los reportes encolados --, pero el orden correcto no cuesta nada.
     dev.removeEventListener('inputreport', alRecibir)
+    try { await dev.sendReport(0, empaquetar(SYNC_END)) } catch { /* ya se fue */ }
     try { await dev.close() } catch { /* ya se fue */ }
   }
   avisar()
@@ -252,7 +280,17 @@ export const ampli = {
   /* Escribe un parametro y espera la confirmacion del equipo.
      El amplificador ignora en silencio lo que no entiende, asi que sin ACK no
      hay ninguna garantia de que algo haya cambiado: esta funcion rechaza en vez
-     de mentir. */
+     de mentir.
+
+     Precondicion: no puede haber dos llamadas vivas a la vez para la misma
+     (nodo, parametro). alRecibir() busca el ACK con findIndex por esa clave y
+     se queda con la primera coincidencia, asi que una segunda escritura sobre
+     la misma perilla mientras la primera todavia espera su ACK puede resolver
+     la entrada equivocada. Hoy se cumple porque public/app.js serializa con
+     `enviando` y espera cada parametro antes de mandar el siguiente, y es el
+     unico punto que llama a esta funcion -- pero eso esta documentado solo
+     alla. Un control futuro que mande la perilla mientras el usuario la
+     arrastra (sin esperar el ACK anterior) rompe justamente esta garantia. */
   async ponerParametro(nodo, parametro, valor) {
     if (!dispositivo) throw new Error('El amplificador no está conectado.')
     /* Medido contra el equipo: cada SYNC_BEGIN habilita UNA sola escritura; la
@@ -261,6 +299,15 @@ export const ampli = {
        SYNC_END: basta con volver a abrir el sync. */
     reensamblador.reiniciar()
     await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+    /* Entre la guarda de arriba y este punto hay un await: el equipo se puede
+       desenchufar justo ahi. Si eso pasa, desconectar() corre entero mientras
+       seguimos esperando -- incluido su descartar.clear() -- y `dispositivo`
+       queda en null antes de que retomemos. Sin este segundo chequeo,
+       seguiriamos de largo y creariamos una entrada y una deuda para una
+       sesion que ya termino: al reconectar, esa deuda huerfana se comeria el
+       primer ACK legitimo de la sesion nueva, reportando "sin confirmar" una
+       perilla que el ampli si aplico. */
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
     let entrada
     const promesa = new Promise((resolver, rechazar) => {
       const temporizador = setTimeout(() => {
