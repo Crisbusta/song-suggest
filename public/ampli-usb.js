@@ -23,27 +23,59 @@ const oyentes = []
 
 const avisar = () => { for (const fn of oyentes) fn(!!dispositivo) }
 
-/* Claves (nodo, parametro) cuya escritura ya expiro y cuyo ACK, si llega
-   tarde, hay que tragarse. Sin esto el protocolo no da forma de atar un ACK a
-   la escritura que lo provoco -- no lleva identificador de correlacion, y
-   comparar el valor no sirve porque el reintento suele mandar el mismo -- asi
-   que un ACK atrasado de la escritura A calza contra la entrada pendiente del
-   reintento B y lo resuelve. El usuario leeria "confirmado" sobre un valor que
-   el ampli ignoro en silencio, que es exactamente la mentira contra la que
-   existe todo este diseño.
-   El error se inclina a proposito hacia el lado honesto: si por esta lista un
-   reintento legitimo queda reportado como "sin confirmar" cuando en realidad
-   funciono, es aceptable. Lo inaceptable es lo contrario. */
-const descartar = new Map()    // clave -> ms en que la entrada caduca
+/* Deuda de ACKs rezagados, por clave (nodo, parametro).
+
+   El protocolo no lleva identificador de correlacion y el reintento suele
+   mandar el mismo valor, asi que un ACK no se puede atar a la escritura que lo
+   provoco: comparar valores no distingue nada. Sin esto, el ACK atrasado de la
+   escritura A calza contra la entrada pendiente del reintento B y lo resuelve.
+   El usuario leeria "confirmado" sobre un valor que el ampli ignoro en
+   silencio, que es exactamente la mentira contra la que existe todo este
+   diseño.
+
+   Por eso se CUENTA, no se marca. Cada escritura abandonada deja como mucho UN
+   ACK todavia en el aire, asi que la deuda de una clave es un numero: la lista
+   de instantes en que caduca cada uno de esos ACK posibles. Un booleano por
+   entrada no alcanza -- con tres escrituras seguidas sobre la misma perilla, la
+   segunda se traga el ACK de la primera y da su propia deuda por saldada, y
+   entonces el ACK propio de la segunda queda suelto y confirma falsamente a la
+   tercera, que el ampli nunca aplico.
+
+   El costo esta puesto a proposito y hay que asumirlo: contra un amplificador
+   que responde sistematicamente cerca del limite de los 2 s, reintentar rapido
+   hace que TODAS las escrituras se reporten "sin confirmar" aunque el equipo
+   las este aplicando, porque cada ACK que llega es el de la escritura anterior
+   y se lo come la deuda. Entre reportar de menos y mentir, se reporta de menos:
+   ese "sin confirmar" repetido es una decision, no un bug. Y no queda
+   envenenado para siempre -- las deudas caducan a 2 * ESPERA_ACK, asi que
+   esperar unos segundos antes de reintentar deja la perilla funcionando
+   normal. */
+const descartar = new Map()    // clave -> ms de caducidad de cada deuda, en orden creciente
 const VENTANA_DESCARTE = 2 * ESPERA_ACK
 const clave = (nodo, parametro) => `${nodo}\u0000${parametro}`
 
-/* La lista tiene que caducar sola: un ACK que no llega nunca dejaria esa clave
+/* Una escritura abandonada, una deuda. Se anota SIEMPRE, sin mirar si mientras
+   tanto se consumio algun ACK de la misma clave: ese ACK consumido era de otra
+   escritura anterior, y esta puede producir el suyo igual. */
+function anotarDeuda(nodo, parametro) {
+  const k = clave(nodo, parametro)
+  const lista = descartar.get(k)
+  const vence = Date.now() + VENTANA_DESCARTE
+  if (lista) lista.push(vence)
+  else descartar.set(k, [vence])
+}
+
+/* Las deudas caducan solas: un ACK que no llega nunca dejaria esa clave
    envenenada para siempre, y todo reintento posterior sobre esa perilla se
-   reportaria como no confirmado. Se purga con cada mensaje que entra. */
+   reportaria como no confirmado. Se purga con cada mensaje que entra. Como
+   VENTANA_DESCARTE es igual para todas, la lista queda ordenada por caducidad
+   y basta sacar del frente. */
 function purgarDescartes() {
   const ahora = Date.now()
-  for (const [k, vence] of descartar) if (vence <= ahora) descartar.delete(k)
+  for (const [k, lista] of descartar) {
+    while (lista.length && lista[0] <= ahora) lista.shift()
+    if (!lista.length) descartar.delete(k)
+  }
 }
 
 function alRecibir(e) {
@@ -53,21 +85,16 @@ function alRecibir(e) {
   const r = interpretar(mensaje)
   if (r.tipo !== 'ackParametro') return
   const k = clave(r.nodo, r.parametro)
-  // Este ACK es el rezagado de una escritura que ya expiro: se consume aqui
-  // para que no lo cobre el reintento del usuario.
-  if (descartar.has(k)) {
-    descartar.delete(k)
-    /* Y la deuda se salda aca, no se duplica. Cada escritura vencida deja como
-       mucho UN ACK en el aire, asi que tragarse uno paga esa deuda entera. Si
-       ademas hay una escritura viva de la misma clave, lo que acabamos de
-       comer pudo ser su ACK o el de la anterior -- no hay forma de saberlo --,
-       pero en los dos casos ya no queda ningun ACK viejo suelto que pueda
-       confirmar de mas. Marcarla evita que al vencer registre un descarte
-       nuevo: sin esto, cada reintento rapido se come el ACK del siguiente y
-       vuelve a envenenar la clave, y la perilla queda reportando
-       "sin confirmar" para siempre mientras el usuario insista. */
-    const viva = pendientes.find(p => p.nodo === r.nodo && p.parametro === r.parametro)
-    if (viva) viva.ackConsumido = true
+  /* Si a esta clave le queda alguna deuda vigente -- las caducadas ya se
+     purgaron arriba --, este ACK puede ser el rezagado de cualquiera de las
+     escrituras abandonadas y no hay como distinguirlo del propio de la
+     escritura viva. Se lo traga la deuda mas antigua y no llega a resolver
+     nada. Solo con la deuda en cero un ACK puede confirmar una entrada
+     pendiente. */
+  const deudas = descartar.get(k)
+  if (deudas) {
+    deudas.shift()
+    if (!deudas.length) descartar.delete(k)
     return
   }
   const i = pendientes.findIndex(p => p.nodo === r.nodo && p.parametro === r.parametro)
@@ -130,7 +157,7 @@ async function desconectar() {
   dispositivo = null
   for (const p of pendientes.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
   // La sesion siguiente empieza limpia: ningun ACK de la anterior puede
-  // sobrevivir al cierre, asi que arrastrar claves marcadas solo lograria
+  // sobrevivir al cierre, asi que arrastrar deudas viejas solo lograria
   // reportar como no confirmadas escrituras nuevas que si funcionaron.
   descartar.clear()
   if (dev) {
@@ -242,12 +269,11 @@ export const ampli = {
         /* Damos esta escritura por perdida, pero su ACK todavia puede llegar
            tarde. Si llega, no puede quedar disponible para el reintento que el
            usuario esta por hacer -- que es la reaccion natural a leer
-           "sin confirmar" -- porque lo confirmaria con la respuesta de la
-           escritura anterior. Se marca la clave para tragarselo, salvo que ya
-           nos hayamos comido un ACK de esta misma escritura (ver alRecibir):
-           en ese caso la deuda ya esta pagada y volver a marcarla solo lograria
-           envenenar la clave a perpetuidad. */
-        if (!entrada.ackConsumido) descartar.set(clave(nodo, parametro), Date.now() + VENTANA_DESCARTE)
+           "sin confirmar" --, porque lo confirmaria con la respuesta de una
+           escritura anterior. La deuda se anota sin excepciones: esta escritura
+           puede producir su propio ACK tardio, y esa posibilidad es exactamente
+           lo que la deuda representa. */
+        anotarDeuda(nodo, parametro)
         rechazar(new Error(`El amplificador no confirmó ${parametro}`))
       }, ESPERA_ACK)
       entrada = { nodo, parametro, resolver, rechazar, temporizador }
@@ -275,6 +301,15 @@ export const ampli = {
       const i = pendientes.indexOf(entrada)
       if (i >= 0) pendientes.splice(i, 1)
       clearTimeout(entrada.temporizador)
+      /* Y se le anota su deuda, igual que a una escritura vencida. Que
+         sendReport rechace no prueba que el equipo no haya recibido nada: dice
+         que la transferencia no se pudo confirmar, no que no haya salido. Bajo
+         la regla de la casa -- sin confirmacion no se afirma nada -- esta
+         escritura queda abandonada con un ACK tardio posible, que sin la deuda
+         confirmaria falsamente al reintento. Cuesta casi nada: un sendReport
+         que falla suele ser el equipo yendose, y desconectar() limpia el mapa
+         entero. */
+      anotarDeuda(nodo, parametro)
       throw err
     }
     return promesa
