@@ -271,30 +271,59 @@ if (ampli.soportado()) {
 // Envia los ajustes de la tarjeta actual al ampli. Delegado en #tarjeta, que
 // ya tiene el listener del preview de YouTube: conviven porque cada uno
 // filtra por su propio objetivo.
+let enviando = false
 $('#tarjeta').addEventListener('click', async e => {
   if (e.target.id !== 'enviar-ampli') return
   const valores = actual?.ampli?.paraElAmpli
   if (!valores) return
+  // Evita un segundo envio mientras el primero sigue vivo: los dos
+  // compartirian el reensamblador y la lista de pendientes de ampli-usb.js.
+  // Se marca en forma sincrona, antes del primer await, para no dejar una
+  // ventana en la que un segundo click alcance a colarse.
+  if (enviando) return
+  enviando = true
+  // La cancion de este envio queda fijada aqui: si el usuario sortea otra
+  // mientras el bucle corre (hasta 6 s, tres timeouts de 2 s), `actual`
+  // cambia y `#tarjeta` se reemplaza por completo, pero este envio sigue
+  // corriendo sobre los nodos y valores de la cancion original.
+  const cancion = actual
   const b = $('#enviar-ampli'), estado = $('#envio-estado')
   b.disabled = true
   estado.className = 'envio-estado'
   estado.textContent = 'enviando…'
 
-  // Se informa lo que el amplificador CONFIRMO, no lo que se intento: el
-  // equipo ignora en silencio lo que no entiende.
-  const confirmados = [], fallidos = []
-  for (const [parametro, valor] of Object.entries(valores)) {
-    try { await ampli.ponerParametro('amp', parametro, valor); confirmados.push(parametro) }
-    catch { fallidos.push(parametro) }
+  try {
+    // Se informa lo que el amplificador CONFIRMO, no lo que se intento: el
+    // equipo ignora en silencio lo que no entiende.
+    const confirmados = [], fallidos = []
+    for (const [parametro, valor] of Object.entries(valores)) {
+      // Si ya sorteamos otra cancion, `b` y `estado` son nodos desprendidos:
+      // escribirles es un no-op legal que no avisa de nada, asi que hay que
+      // cortar aqui y no seguir escribiendole al ampli valores de una
+      // cancion que ya no esta en pantalla.
+      if (actual !== cancion) return
+      try { await ampli.ponerParametro('amp', parametro, valor); confirmados.push(parametro) }
+      catch { fallidos.push(parametro) }
+    }
+    if (actual !== cancion) return
+    if (!fallidos.length) {
+      estado.className = 'envio-estado ok'
+      estado.textContent = `${confirmados.join(', ')} confirmados por el ampli`
+    } else if (!confirmados.length) {
+      estado.className = 'envio-estado mal'
+      estado.textContent = `sin confirmar: ${fallidos.join(', ')}`
+    } else {
+      estado.className = 'envio-estado mal'
+      estado.textContent = `${confirmados.join(', ')} confirmados; sin confirmar: ${fallidos.join(', ')}`
+    }
+    // pintarBotonEnviar recalcula segun ampli.conectado() y actual, en vez de
+    // rehabilitar a ciegas: si el ampli se desconecto a mitad del envio, el
+    // boton debe quedar deshabilitado con "Conecta el ampli primero", no
+    // reabilitado con ese texto contradictorio.
+    pintarBotonEnviar()
+  } finally {
+    enviando = false
   }
-  if (!fallidos.length) {
-    estado.className = 'envio-estado ok'
-    estado.textContent = `${confirmados.join(', ')} confirmados por el ampli`
-  } else {
-    estado.className = 'envio-estado mal'
-    estado.textContent = `sin confirmar: ${fallidos.join(', ')}`
-  }
-  b.disabled = false
 })
 
 sincronizarRangos('min')
