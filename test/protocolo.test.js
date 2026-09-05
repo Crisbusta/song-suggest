@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  campoVarint, campoTexto, campoFloat, codificarMensaje, empaquetar,
+  campoVarint, campoBytes, campoTexto, campoFloat, codificarMensaje, empaquetar,
   leerCampos, crearReensamblador, SYNC_BEGIN, mensajePonerParametro, interpretar,
 } from '../public/fender-protocolo.js'
 
@@ -124,4 +124,35 @@ test('reiniciar descarta una secuencia abierta que nunca se cerro', () => {
   r.reiniciar()
   // El siguiente paquete unico debe salir limpio, sin el fragmento anterior.
   assert.deepEqual([...r.recibir(paq(0x35, [9]))], [9])
+})
+
+test('un campo fixed32 truncado no hace lanzar a leerCampos', () => {
+  // Campo 1 completo y, detrás, un fixed32 al que le faltan dos bytes: el
+  // parser tiene que devolver lo que alcanzó a leer en vez de reventar.
+  const buf = new Uint8Array([...campoVarint(1, 7), (2 << 3) | 5, 0x00, 0x00])
+  assert.deepEqual(leerCampos(buf), [{ num: 1, v: 7 }])
+})
+
+test('interpretar no lanza con un ACK cuyo flotante viene cortado', () => {
+  // Lo que promete el docblock de interpretar: lo que no se entiende se
+  // descarta, no se lanza. Un paquete cortado en el cable llegaba aquí como
+  // RangeError y tumbaba el manejador de 'inputreport'.
+  const ack = new Uint8Array([
+    ...campoVarint(1, 0),
+    ...campoBytes(35, [...campoTexto(1, 'amp'), ...campoTexto(2, 'gain'), (3 << 3) | 5, 0x00]),
+  ])
+  const r = interpretar(ack)
+  assert.equal(r.tipo, 'ackParametro')
+  assert.equal(r.nodo, 'amp')
+  assert.equal(r.parametro, 'gain')
+  assert.equal(r.valor, undefined, 'sin flotante completo, no hay valor')
+})
+
+test('empaquetar acepta los 62 bytes que caben y rechaza el 63', () => {
+  // La carga arranca en b[2] de un reporte de 64: caben 62, no 61.
+  const p = empaquetar(new Uint8Array(62).fill(0xab))
+  assert.equal(p.length, 64)
+  assert.equal(p[1], 62, 'el largo declarado')
+  assert.equal(p[63], 0xab, 'el último byte de la carga cae en el último del reporte')
+  assert.throws(() => empaquetar(new Uint8Array(63)), /no cabe/)
 })

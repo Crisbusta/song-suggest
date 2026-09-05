@@ -4,8 +4,9 @@
 
    Este archivo es PURO a propósito: no toca WebHID ni el DOM. Vive en public/
    porque el navegador lo carga como módulo servido, pero `test/` lo importa
-   directo desde disco. El front no tiene tests automatizados por decisión de
-   diseño, y este es justo el código donde un desfase de un byte no revienta:
+   directo desde disco. El resto del front no tiene tests automatizados por
+   decisión de diseño; este módulo es la excepción, y por algo: es justo el
+   código donde un desfase de un byte no revienta:
    descarta todo en silencio y se ve igual que "el amplificador no contesta".
    --------------------------------------------------------------------------- */
 
@@ -32,9 +33,11 @@ export const TAG_INICIO = 0x33, TAG_CONTINUA = 0x34, TAG_UNICO = 0x35
 
 /* Envío: 64 bytes limpios. WebHID recibe el reportId por separado, así que
    aquí NO va el byte de reportId. Medido: 63 y 64 funcionan, 65 lo rechaza
-   Chrome por exceder el tamaño del reporte. */
+   Chrome por exceder el tamaño del reporte.
+   El tope son 62 y no 61: la carga arranca en b[2] (tag y largo ocupan los dos
+   primeros), así que 62 bytes llegan justo hasta b[63]. */
 export function empaquetar(carga) {
-  if (carga.length > 61) throw new Error(`la carga no cabe en un paquete: ${carga.length} bytes`)
+  if (carga.length > 62) throw new Error(`la carga no cabe en un paquete: ${carga.length} bytes`)
   const b = new Uint8Array(64)
   b[0] = TAG_UNICO
   b[1] = carga.length
@@ -95,6 +98,11 @@ export function leerCampos(buf) {
       while (i < buf.length) { const b = buf[i++]; l |= (b & 0x7f) << s2; s2 += 7; if (!(b & 0x80)) break }
       salida.push({ num, bytes: buf.slice(i, i + l) }); i += l
     } else if (tipo === 5) {
+      // Un fixed32 al que le faltan bytes -- paquete cortado en el cable --
+      // hacía lanzar RangeError al DataView, y eso subía hasta el manejador
+      // de 'inputreport'. Se corta y se devuelve lo leído hasta aquí, como
+      // hace el resto del parser.
+      if (i + 4 > buf.length) break
       salida.push({ num, f: new DataView(buf.buffer, buf.byteOffset + i, 4).getFloat32(0, true) }); i += 4
     } else break
   }
@@ -111,7 +119,7 @@ export const mensajePonerParametro = (nodo, parametro, valor) =>
 
 const texto = b => new TextDecoder().decode(b)
 
-/* Traduce un mensaje crudo a algo con nombre. Solo reconoce lo que está
+/* Traduce un mensaje crudo a algo con nombre. Solo reconoce lo que esta
    función necesita hoy; el resto cae en 'desconocido' sin lanzar. */
 export function interpretar(mensaje) {
   const campos = leerCampos(mensaje)

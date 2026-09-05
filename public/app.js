@@ -94,7 +94,7 @@ function pintar({ song, matching, hint }) {
            <p class="descargo">
              Punto de partida, no el tono del disco.
              Deducido de: ${a.motivos.map(esc).join(', ')}.<br>
-             Al ampli se mandan solo <strong>gain, treble y bass</strong>: el volumen
+             Al ampli se mandan solo <strong>gain, treb y bass</strong>: el volumen
              depende de tu pieza y el modelo hay que ponerlo a mano.
            </p>
            ${ampli.soportado()
@@ -265,7 +265,12 @@ if (ampli.soportado()) {
     }
   })
   // El permiso queda recordado por origen: si ya se dio, reconecta sin selector.
-  ampli.reconectarSiSePuede()
+  // El silencio del catch es a proposito: esto corre solo al cargar la pagina,
+  // sin que nadie lo haya pedido. Si no se puede reconectar (getDevices()
+  // rechaza, el equipo esta tomado, no esta enchufado), el usuario todavia
+  // tiene el boton; molestarlo con un error que no provoco no aporta nada. Sin
+  // el catch, ademas, ese rechazo saldria como unhandled rejection.
+  ampli.reconectarSiSePuede().catch(() => {})
 }
 
 // Envia los ajustes de la tarjeta actual al ampli. Delegado en #tarjeta, que
@@ -280,7 +285,19 @@ $('#tarjeta').addEventListener('click', async e => {
   // compartirian el reensamblador y la lista de pendientes de ampli-usb.js.
   // Se marca en forma sincrona, antes del primer await, para no dejar una
   // ventana en la que un segundo click alcance a colarse.
-  if (enviando) return
+  if (enviando) {
+    /* La guarda no cambia; solo deja de ser muda. El envio anterior puede
+       durar hasta 6 s (tres timeouts de 2 s) y sobrevive a sortear otra
+       cancion: el boton de la tarjeta nueva esta habilitado, asi que este clic
+       es legitimo y quedarse callado se ve igual que un boton roto. El de la
+       tarjeta en curso no llega aca: se deshabilita mientras dura el envio. */
+    const ocupado = $('#envio-estado')
+    if (ocupado) {
+      ocupado.className = 'envio-estado'
+      ocupado.textContent = 'hay un envío en curso…'
+    }
+    return
+  }
   enviando = true
   // La cancion de este envio queda fijada aqui: si el usuario sortea otra
   // mientras el bucle corre (hasta 6 s, tres timeouts de 2 s), `actual`
