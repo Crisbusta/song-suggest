@@ -236,10 +236,16 @@ if (ampli.soportado()) {
     pintarBotonEnviar()
   })
   $botonAmpli.addEventListener('click', async () => {
-    if (ampli.conectado()) return ampli.desconectar()
+    /* El boton se deshabilita antes de cualquier await, en las dos ramas. Sin
+       eso, desconectar tenia una ventana real: pone `dispositivo` en null de
+       forma sincrona y recien despues manda SYNC_END y cierra el equipo, asi
+       que un segundo clic durante esa cola veia `conectado()` en false, se iba
+       por la rama de conectar y le abria al usuario el selector de Chrome en
+       medio de una desconexion a medio terminar. */
     $botonAmpli.disabled = true
     try {
-      await ampli.conectar()
+      if (ampli.conectado()) await ampli.desconectar()
+      else await ampli.conectar()
     } catch (err) {
       $('#hint').textContent = err.message
     } finally {
