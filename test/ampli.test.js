@@ -155,7 +155,16 @@ test('sin sugerencia no hay nada que convertir', () => {
 })
 
 test('los valores quedan acotados aunque entre basura', () => {
-  const r = paraElAmpli({ gain: 99, treble: -5, bass: 5 })
-  assert.ok(r.gain <= 1 && r.gain >= 0, `gain ${r.gain}`)
-  assert.ok(r.treb <= 1 && r.treb >= 0, `treb ${r.treb}`)
+  // Fuera de rango: se acota.
+  const fuera = paraElAmpli({ gain: 99, treble: -5, bass: 5 })
+  assert.ok(fuera.gain <= 1 && fuera.gain >= 0, `gain ${fuera.gain}`)
+  assert.ok(fuera.treb <= 1 && fuera.treb >= 0, `treb ${fuera.treb}`)
+
+  // Clave ausente y valor no numerico: Math.min/max propagan NaN, asi que
+  // esto no se acota solo. NaN sobreviviria como null tras JSON.stringify.
+  const raro = paraElAmpli({ gain: 'abc', bass: 5 })   // treble ausente
+  for (const [k, v] of Object.entries(raro)) {
+    assert.ok(Number.isFinite(v), `${k} no es finito: ${v}`)
+    assert.ok(v >= 0 && v <= 1, `${k} fuera de rango: ${v}`)
+  }
 })
