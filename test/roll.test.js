@@ -274,5 +274,5 @@ test('las listas tambien traen los ajustes', () => {
   const id = agregar(db, { instrument: 'Acoustic Guitar (steel)' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'folk')").run(id)
   mark(db, { songId: id, status: 'queued' })
-  assert.equal(getList(db, 'queued')[0].ampli.modelo, 'CHAMP')
+  assert.equal(getList(db, 'queued')[0].ampli.modelo, 'CHAMPION')
 })

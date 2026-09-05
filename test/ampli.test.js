@@ -2,6 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sugerirAjustes, MODELOS_LT25 } from '../lib/ampli.js'
 
+// Los nombres de modelo de estos tests salen del catalogo de unidades DSP del
+// amplificador, no del manual. La primera version usaba nombres extraidos de
+// un PDF mal parseado ('80s METAL, CHAMP) que el equipo no reconoce.
+
 const PERILLAS = ['gain', 'volume', 'treble', 'bass', 'reverb']
 
 test('un tag especifico le gana a uno generico', () => {
@@ -25,7 +29,7 @@ test('un instrumento acustico manda sobre el genero', () => {
   // Da igual que este etiquetada como thrash: si el track es acustico, el
   // ajuste tiene que servir para lo que vas a tocar de verdad.
   const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Acoustic Guitar (steel)', tuning: null })
-  assert.equal(r.modelo, 'CHAMP')
+  assert.equal(r.modelo, 'CHAMPION')
   assert.ok(r.gain <= 2, `un acustico no lleva ganancia, dio ${r.gain}`)
   assert.ok(r.motivos.some(m => m.toLowerCase().includes('acust')))
 })
@@ -100,13 +104,13 @@ test('una cancion de los 60 o 70 no recibe un Marshall de los 80', () => {
     tags: ['hard rock', '60s', 'acid rock', 'classic rock', 'progressive rock'],
     instrument: 'Overdriven Guitar', tuning: null,
   })
-  assert.notEqual(sesentas.modelo, "'80s METAL")
+  assert.notEqual(sesentas.modelo, '80S ROCK')
   assert.ok(sesentas.motivos.some(m => m === '60s' || m === '70s'),
     'el motivo debe declarar que la epoca influyo')
 
   // Y la misma cancion sin tag de epoca sigue en el modelo de los 80.
   const sinEpoca = sugerirAjustes({ tags: ['hard rock'], instrument: 'Overdriven Guitar', tuning: null })
-  assert.equal(sinEpoca.modelo, "'80s METAL")
+  assert.equal(sinEpoca.modelo, '80S ROCK')
 })
 
 test('la epoca baja la ganancia respecto al equivalente moderno', () => {
