@@ -112,11 +112,28 @@ brutal de volumen. La causa real era no conocer la escala. El catálogo la
 declara: en el cable va de **−60 a 0 dB** y se muestra como 1–10. Con el mapeo
 del catálogo, mandarlo es tan seguro como el gain.
 
-**La conversión actual está bajo sospecha.** `paraElAmpli` en `lib/ampli.js`
-convierte "7 de 10" a `0.667` linealmente. El catálogo declara `taper: "t50"` en
-todos los controles continuos. Hay que determinar qué curva es —midiendo contra
-el equipo, no suponiendo— y usarla. Si resulta lineal, no cambia nada y lo
-sabremos; si no, lo que mandamos hoy está corrido.
+**La conversión actual está bajo sospecha, y más de lo que parecía.**
+`paraElAmpli` en `lib/ampli.js` convierte "7 de 10" a `0.667` linealmente. El
+catálogo declara una curva (`taper`) por parámetro, y **no son todas iguales**:
+`t50` en 128, `t20r` en 20, `t30` en 6, `t10` en 4, `t30r` y `t10r` en uno cada
+una, y 32 parámetros sin curva declarada.
+
+Peor: en 122 de los controles continuos la curva del valor en el cable y la de
+la escala de pantalla coinciden —y entonces la relación entre ambos es lineal—,
+pero en **34 no coinciden**, y el patrón es sistemático: `t20r` en el cable
+contra `t20ri` en pantalla, `t30` contra `t30i`, `t10` contra `t10i`. Ahí la
+relación valor ↔ pantalla **no es lineal**.
+
+Los 34 incluyen **el `volume` de los veinte amplificadores**, que es justamente
+el parámetro cuya escala nos importaba por seguridad. También el `level` y el
+`rate` de varios moduladores, y el `gain` del OVERDRIVE.
+
+Determinar estas curvas es la primera tarea del plan y bloquea al resto, porque
+un mapeo equivocado manda un número plausible y errado sin que nada avise —la
+falla característica de este proyecto—. Si no se logra determinarlas con el
+equipo delante, **el editor muestra el valor crudo del cable en vez de una
+escala 1–10 inventada**. Un número honesto y feo es preferible a uno bonito y
+falso.
 
 ---
 
@@ -277,8 +294,10 @@ Heredadas de la spec anterior y del proyecto:
 
 Ninguna bloquea el plan; todas se resuelven dentro de él, con el equipo delante.
 
-1. **Qué curva es `taper: "t50"`** (§3.3). Afecta la exactitud de lo que se
-   manda, incluida la función que ya existe.
+1. **Qué son las curvas `t50`, `t20r`, `t30`, `t10` y sus variantes `i`**
+   (§3.3). Es la única incógnita que bloquea: afecta la exactitud de todo lo
+   que se manda, incluida la función que ya está en producción. Tiene salida
+   definida si no se resuelve: mostrar el valor crudo.
 2. **Si el equipo anuncia los cambios de preset** (§5.3).
 3. **Cómo indexa las ranuras de preset** (§7), a confirmar antes del primer
    guardado.
