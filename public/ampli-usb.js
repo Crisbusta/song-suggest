@@ -56,6 +56,20 @@ async function abrir(dev) {
     try { await dev.close() } catch { /* nunca llego a abrirse, o ya se fue */ }
     throw err
   }
+  // Mientras esperabamos los awaits de arriba (open() y el SYNC_BEGIN) pudo
+  // correr un desconectar() -- por ejemplo, el navegador emitio 'disconnect'
+  // porque desenchufaron el equipo a mitad del handshake. Ese desconectar()
+  // ya puso dispositivo en null, saco el listener y cerro dev. Si seguimos
+  // de largo igual, armariamos un setInterval nuevo contra un dispositivo
+  // que ya nadie referencia: el latido llamaria a dispositivo?.sendReport,
+  // que no hace nada porque dispositivo es null, y el intervalo quedaria
+  // vivo para siempre sin que nada lo cancele. No es un error del usuario,
+  // es una desconexion que ya se atendio: salimos sin avisar() ni latido.
+  if (dispositivo !== dev) {
+    dev.removeEventListener('inputreport', alRecibir)
+    try { await dev.close() } catch { /* ya lo cerro el otro desconectar() */ }
+    return
+  }
   // El equipo cierra la conexion si deja de recibir latidos.
   latido = setInterval(() => {
     dispositivo?.sendReport(0, empaquetar(HEARTBEAT)).catch(() => desconectar())
@@ -152,15 +166,40 @@ export const ampli = {
        SYNC_END: basta con volver a abrir el sync. */
     reensamblador.reiniciar()
     await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+    let entrada
     const promesa = new Promise((resolver, rechazar) => {
       const temporizador = setTimeout(() => {
         const i = pendientes.findIndex(p => p.resolver === resolver)
         if (i >= 0) pendientes.splice(i, 1)
         rechazar(new Error(`El amplificador no confirmó ${parametro}`))
       }, ESPERA_ACK)
-      pendientes.push({ nodo, parametro, resolver, rechazar, temporizador })
+      entrada = { nodo, parametro, resolver, rechazar, temporizador }
+      pendientes.push(entrada)
     })
-    await dispositivo.sendReport(0, empaquetar(mensajePonerParametro(nodo, parametro, valor)))
+    try {
+      await dispositivo.sendReport(0, empaquetar(mensajePonerParametro(nodo, parametro, valor)))
+    } catch (err) {
+      // Este sendReport fallo despues de haber empujado la entrada a
+      // pendientes. Si la dejamos ahi, sigue viva hasta que su propio
+      // setTimeout la rechace a los 2s (un unhandled rejection, porque
+      // `promesa` no se devuelve y nadie la sostiene), y mientras tanto un
+      // reintento del usuario para el mismo (nodo, parametro) -- interaccion
+      // perfectamente normal -- puede hacer que alRecibir encuentre esta
+      // entrada vieja primero (busca por findIndex, se queda con la primera
+      // coincidencia) y le entregue el ACK del reintento, dejando al
+      // reintento real esperando un ACK que ya se gasto. Por eso se saca la
+      // entrada por referencia -- no por (nodo, parametro): buscar por esa
+      // clave tiene el mismo problema de "primera coincidencia" y podria
+      // sacar la entrada de otro pedido igual que si este en curso -- y se
+      // le cancela el timeout antes de relanzar. No rechazamos `promesa` a
+      // mano: como nadie la sostiene, rechazarla produciria el mismo
+      // unhandled rejection que estamos evitando; queda pendiente y sin
+      // referencias, que es justamente lo que buscamos.
+      const i = pendientes.indexOf(entrada)
+      if (i >= 0) pendientes.splice(i, 1)
+      clearTimeout(entrada.temporizador)
+      throw err
+    }
     return promesa
   },
 }
