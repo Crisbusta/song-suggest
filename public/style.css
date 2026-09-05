@@ -245,3 +245,13 @@ nav button.activo { color: var(--acento); font-weight: 600; }
   margin: var(--e2) 0 0; padding-top: var(--e2); border-top: 1px solid var(--borde);
   font-size: var(--t-micro); color: var(--tenue); line-height: 1.5;
 }
+
+/* --- Conexion con el amplificador --------------------------------------- */
+.ampli-conectar {
+  background: none; border: 1px solid var(--borde); color: var(--tenue);
+  padding: var(--e1) var(--e2); border-radius: var(--radio);
+  font: inherit; font-size: var(--t-micro); cursor: pointer;
+  transition: color .15s var(--curva), border-color .15s var(--curva);
+}
+.ampli-conectar:hover { color: var(--texto); border-color: var(--tenue); }
+.ampli-conectar.conectado { color: var(--acento); border-color: var(--acento); }

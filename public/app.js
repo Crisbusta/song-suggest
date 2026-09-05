@@ -1,3 +1,5 @@
+import { ampli } from './ampli-usb.js'
+
 const $ = s => document.querySelector(s)
 
 const esc = s => String(s).replace(/[&<>"']/g, c =>
@@ -209,6 +211,44 @@ $('#like').addEventListener('click', async () => {
   $('#like').textContent = marcado ? '♥' : '♡'
   await marcar({ liked: marcado })
 })
+
+// --- Conexion con el amplificador -------------------------------------------
+const $botonAmpli = $('#ampli-conectar')
+
+// Refleja en el boton de envio si hay conexion. Vive aqui porque el callback
+// de estado la llama; tolera que el boton aun no exista (lo crea la tarea
+// siguiente) y que la cancion no traiga sugerencia.
+function pintarBotonEnviar() {
+  const b = $('#enviar-ampli')
+  if (!b) return
+  b.disabled = !(ampli.conectado() && actual?.ampli?.paraElAmpli)
+  b.textContent = ampli.conectado() ? 'Enviar al ampli' : 'Conecta el ampli primero'
+}
+
+// Si el navegador no soporta WebHID el boton no aparece: un control inerte es
+// peor que ninguno.
+if (ampli.soportado()) {
+  $botonAmpli.hidden = false
+  ampli.alCambiarEstado(conectado => {
+    $botonAmpli.textContent = conectado ? 'Ampli conectado' : 'Conectar ampli'
+    $botonAmpli.classList.toggle('conectado', conectado)
+    $botonAmpli.title = conectado ? 'Pulsa para desconectar' : 'Conectar el Mustang LT25 por USB'
+    pintarBotonEnviar()
+  })
+  $botonAmpli.addEventListener('click', async () => {
+    if (ampli.conectado()) return ampli.desconectar()
+    $botonAmpli.disabled = true
+    try {
+      await ampli.conectar()
+    } catch (err) {
+      $('#hint').textContent = err.message
+    } finally {
+      $botonAmpli.disabled = false
+    }
+  })
+  // El permiso queda recordado por origen: si ya se dio, reconecta sin selector.
+  ampli.reconectarSiSePuede()
+}
 
 sincronizarRangos('min')
 sortear()
