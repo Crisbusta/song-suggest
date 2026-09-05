@@ -116,3 +116,12 @@ test('interpretar no revienta con un mensaje que no conoce', () => {
   const m = codificarMensaje(999, campoVarint(1, 1))
   assert.equal(interpretar(m).tipo, 'desconocido')
 })
+
+test('reiniciar descarta una secuencia abierta que nunca se cerro', () => {
+  const r = crearReensamblador()
+  const paq = (tag, bytes) => { const b = new Uint8Array(64); b[1] = tag; b[2] = bytes.length; b.set(bytes, 3); return b }
+  r.recibir(paq(0x33, [1, 2]))   // se abre una secuencia y queda a medias
+  r.reiniciar()
+  // El siguiente paquete unico debe salir limpio, sin el fragmento anterior.
+  assert.deepEqual([...r.recibir(paq(0x35, [9]))], [9])
+})

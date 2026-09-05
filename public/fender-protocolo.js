@@ -68,6 +68,12 @@ export function crearReensamblador() {
       partes = []; abierta = false
       return total
     },
+
+    /* Descarta cualquier secuencia multi-paquete a medio armar. El protocolo no
+       lleva identificador de correlacion, asi que un 0x33 que nunca recibio su
+       cierre contaminaria el siguiente mensaje. Se llama al empezar cada
+       operacion, donde sabemos que no hay nada legitimo a medias. */
+    reiniciar() { partes = []; abierta = false },
   }
 }
 
