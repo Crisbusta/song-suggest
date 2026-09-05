@@ -78,7 +78,10 @@ function pintar({ song, matching, hint }) {
     </div>`
 
   const a = song.ampli
-  const ampli = a
+  // Nombrada distinto del modulo `ampli` importado arriba: un `const ampli`
+  // aqui lo taparia dentro de su propio inicializador (TDZ) justo donde el
+  // Step 1 necesita llamar a `ampli.soportado()`.
+  const bloqueAmpli = a
     ? `<details class="ampli">
          <summary>Ajustes para tu Mustang LT25</summary>
          <div class="ampli-cuerpo">
@@ -90,8 +93,16 @@ function pintar({ song, matching, hint }) {
            ${perilla('Reverb', a.reverb)}
            <p class="descargo">
              Punto de partida, no el tono del disco.
-             Deducido de: ${a.motivos.map(esc).join(', ')}.
+             Deducido de: ${a.motivos.map(esc).join(', ')}.<br>
+             Al ampli se mandan solo <strong>gain, treble y bass</strong>: el volumen
+             depende de tu pieza y el modelo hay que ponerlo a mano.
            </p>
+           ${ampli.soportado()
+             ? `<p class="envio">
+                  <button type="button" id="enviar-ampli" class="enviar-ampli">Enviar al ampli</button>
+                  <span id="envio-estado" class="envio-estado"></span>
+                </p>`
+             : `<p class="envio-estado">Enviar los ajustes al ampli requiere Chrome o Edge.</p>`}
          </div>
        </details>`
     : ''
@@ -119,7 +130,7 @@ function pintar({ song, matching, hint }) {
     ${dificultad}
     ${aviso}
     ${chips ? `<div class="meta">${chips}</div>` : ''}
-    ${ampli}
+    ${bloqueAmpli}
     ${preview}
     <p class="enlaces">
       <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
@@ -127,6 +138,7 @@ function pintar({ song, matching, hint }) {
     </p>`
   // Reinicia la animacion de entrada en cada tirada.
   void $('#tarjeta').offsetWidth
+  pintarBotonEnviar()
 }
 
 // Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
@@ -255,6 +267,35 @@ if (ampli.soportado()) {
   // El permiso queda recordado por origen: si ya se dio, reconecta sin selector.
   ampli.reconectarSiSePuede()
 }
+
+// Envia los ajustes de la tarjeta actual al ampli. Delegado en #tarjeta, que
+// ya tiene el listener del preview de YouTube: conviven porque cada uno
+// filtra por su propio objetivo.
+$('#tarjeta').addEventListener('click', async e => {
+  if (e.target.id !== 'enviar-ampli') return
+  const valores = actual?.ampli?.paraElAmpli
+  if (!valores) return
+  const b = $('#enviar-ampli'), estado = $('#envio-estado')
+  b.disabled = true
+  estado.className = 'envio-estado'
+  estado.textContent = 'enviando…'
+
+  // Se informa lo que el amplificador CONFIRMO, no lo que se intento: el
+  // equipo ignora en silencio lo que no entiende.
+  const confirmados = [], fallidos = []
+  for (const [parametro, valor] of Object.entries(valores)) {
+    try { await ampli.ponerParametro('amp', parametro, valor); confirmados.push(parametro) }
+    catch { fallidos.push(parametro) }
+  }
+  if (!fallidos.length) {
+    estado.className = 'envio-estado ok'
+    estado.textContent = `${confirmados.join(', ')} confirmados por el ampli`
+  } else {
+    estado.className = 'envio-estado mal'
+    estado.textContent = `sin confirmar: ${fallidos.join(', ')}`
+  }
+  b.disabled = false
+})
 
 sincronizarRangos('min')
 sortear()

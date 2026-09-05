@@ -255,3 +255,16 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 }
 .ampli-conectar:hover { color: var(--texto); border-color: var(--tenue); }
 .ampli-conectar.conectado { color: var(--acento); border-color: var(--acento); }
+
+.envio { margin: var(--e2) 0 0; display: flex; align-items: center; gap: var(--e2); }
+.enviar-ampli {
+  background: var(--relieve); border: 0; color: var(--texto);
+  padding: var(--e1) var(--e3); border-radius: var(--radio);
+  font: inherit; font-size: var(--t-chico); cursor: pointer;
+  transition: background .15s var(--curva);
+}
+.enviar-ampli:hover:not(:disabled) { background: var(--borde); }
+.enviar-ampli:disabled { opacity: .5; cursor: default; }
+.envio-estado { font-size: var(--t-micro); color: var(--tenue); }
+.envio-estado.ok { color: var(--acento); }
+.envio-estado.mal { color: #e2585b; }
