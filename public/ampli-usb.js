@@ -15,6 +15,7 @@ const ESPERA_ACK = 2000        // ms antes de dar por perdida una escritura
 const LATIDO = 1000            // el equipo cierra la conexion sin heartbeat
 
 let dispositivo = null
+let conectando = false        // hay un conectar()/reconectarSiSePuede() en curso
 let latido = null
 let reensamblador = null
 const pendientes = []          // { nodo, parametro, resolver, rechazar, temporizador }
@@ -42,9 +43,19 @@ async function abrir(dev) {
   dispositivo = dev
   reensamblador = crearReensamblador()
   dev.addEventListener('inputreport', alRecibir)
-  await dev.open()
-  reensamblador.reiniciar()
-  await dev.sendReport(0, empaquetar(SYNC_BEGIN))
+  try {
+    await dev.open()
+    reensamblador.reiniciar()
+    await dev.sendReport(0, empaquetar(SYNC_BEGIN))
+  } catch (err) {
+    // Si open() o el SYNC_BEGIN fallan, no dejamos un dispositivo "conectado"
+    // a medias: sin esto, dispositivo quedaba asignado y el heartbeat nunca
+    // arrancaba, y conectado() mentia diciendo que si hay conexion.
+    dev.removeEventListener('inputreport', alRecibir)
+    dispositivo = null
+    try { await dev.close() } catch { /* nunca llego a abrirse, o ya se fue */ }
+    throw err
+  }
   // El equipo cierra la conexion si deja de recibir latidos.
   latido = setInterval(() => {
     dispositivo?.sendReport(0, empaquetar(HEARTBEAT)).catch(() => desconectar())
@@ -79,32 +90,52 @@ export const ampli = {
 
   async conectar() {
     if (!this.soportado()) throw new Error('Este navegador no soporta WebHID. Necesitas Chrome o Edge.')
-    let dev
+    /* Una segunda llamada con la conexion ya abierta dejaria el setInterval
+       anterior latiendo contra un dispositivo que nadie referencia. Pero
+       `dispositivo` solo se asigna dentro de abrir(), asi que ese chequeo
+       solo no alcanza: dos clics seguidos SIEMPRE pasan la guarda mientras el
+       primero todavia esta esperando el selector de Chrome (que tarda lo que
+       tarde el usuario), porque ninguno de los dos vio `dispositivo` puesto
+       todavia. Verificado con un dispositivo simulado: sin `conectando`, dos
+       llamadas concurrentes efectivamente abren dos dispositivos y una gana
+       la carrera por `latido`, dejando la otra huerfana para siempre. */
+    if (dispositivo || conectando) return
+    conectando = true
     try {
-      ;[dev] = await navigator.hid.requestDevice({ filters: [{ vendorId: VENDOR, productId: PRODUCT }] })
-    } catch (err) {
-      throw new Error(`No pude pedir el dispositivo: ${err.message}`)
-    }
-    if (!dev) throw new Error('No elegiste ningún amplificador.')
-    try {
-      await abrir(dev)
-    } catch (err) {
-      // El caso mas probable con diferencia: el equipo acepta un solo cliente.
-      const exclusivo = /exclusive|already open|in use/i.test(err.message)
-      throw new Error(exclusivo
-        ? 'El amplificador ya está en uso. Cierra Fender Tone LT Desktop y vuelve a intentar.'
-        : `No pude abrir el amplificador: ${err.message}`)
+      let dev
+      try {
+        ;[dev] = await navigator.hid.requestDevice({ filters: [{ vendorId: VENDOR, productId: PRODUCT }] })
+      } catch (err) {
+        throw new Error(`No pude pedir el dispositivo: ${err.message}`)
+      }
+      if (!dev) throw new Error('No elegiste ningún amplificador.')
+      try {
+        await abrir(dev)
+      } catch (err) {
+        // El caso mas probable con diferencia: el equipo acepta un solo cliente.
+        const exclusivo = /exclusive|already open|in use/i.test(err.message)
+        throw new Error(exclusivo
+          ? 'El amplificador ya está en uso. Cierra Fender Tone LT Desktop y vuelve a intentar.'
+          : `No pude abrir el amplificador: ${err.message}`)
+      }
+    } finally {
+      conectando = false
     }
   },
 
   // WebHID recuerda los permisos por origen: si ya se autorizo antes, se
   // reconecta sin mostrarle el selector al usuario otra vez.
   async reconectarSiSePuede() {
-    if (!this.soportado() || dispositivo) return !!dispositivo
-    const previos = await navigator.hid.getDevices()
-    const dev = previos.find(d => d.vendorId === VENDOR && d.productId === PRODUCT)
-    if (!dev) return false
-    try { await abrir(dev); return true } catch { return false }
+    if (!this.soportado() || dispositivo || conectando) return !!dispositivo
+    conectando = true
+    try {
+      const previos = await navigator.hid.getDevices()
+      const dev = previos.find(d => d.vendorId === VENDOR && d.productId === PRODUCT)
+      if (!dev) return false
+      try { await abrir(dev); return true } catch { return false }
+    } finally {
+      conectando = false
+    }
   },
 
   desconectar,
