@@ -296,3 +296,41 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 .perilla-editor output { font-size: var(--t-micro); font-variant-numeric: tabular-nums; min-width: 4rem; text-align: right; }
 .perilla-editor .aviso { grid-column: 2 / -1; font-size: var(--t-micro); color: #e2585b; }
 .vacio-ranura { color: var(--tenue); font-size: var(--t-micro); margin: 0; }
+
+/* --- Dialogo "Guardar en el ampli" --------------------------------------- */
+/* Es la unica operacion irreversible del proyecto: el boton que la abre se
+   separa a proposito del resto de la cabecera (que no arriesga nada), para
+   que no se confunda con "Releer del ampli". */
+#abrir-guardar { border-color: #e2585b; color: #e2585b; }
+#abrir-guardar:hover:not(:disabled) { background: color-mix(in srgb, #e2585b 15%, transparent); }
+
+#dialogo-guardar {
+  background: var(--panel); color: var(--texto);
+  border: 1px solid var(--borde); border-radius: var(--radio);
+  padding: var(--e4); max-width: 26rem; width: calc(100% - var(--e4));
+}
+#dialogo-guardar::backdrop { background: rgba(0, 0, 0, .6); }
+#dialogo-guardar h3 { margin: 0 0 var(--e2); font-size: var(--t-medio); }
+#dialogo-guardar form { display: grid; gap: var(--e3); }
+#dialogo-guardar label {
+  display: flex; flex-direction: column; gap: var(--e1);
+  font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .06em; color: var(--tenue);
+}
+#dialogo-guardar input[type=number] {
+  background: var(--relieve); color: var(--texto); border: 1px solid var(--borde);
+  border-radius: var(--radio); padding: var(--e2); font: inherit; font-size: var(--t-base);
+  text-transform: none; letter-spacing: normal;
+}
+.dialogo-riesgo { margin: 0; font-size: var(--t-chico); color: #e2585b; }
+#aviso-guardar { margin: 0; min-height: 1.5rem; font-size: var(--t-chico); color: var(--tenue); }
+#dialogo-guardar menu { display: flex; justify-content: flex-end; gap: var(--e2); margin: 0; padding: 0; }
+#dialogo-guardar menu button {
+  background: var(--relieve); border: 1px solid transparent; color: var(--texto);
+  padding: var(--e2) var(--e3); border-radius: var(--radio);
+  font: inherit; font-size: var(--t-chico); cursor: pointer;
+  transition: background .15s var(--curva), opacity .15s var(--curva);
+}
+#dialogo-guardar menu button:hover:not(:disabled) { background: var(--borde); }
+#dialogo-guardar menu button:disabled { opacity: .35; cursor: default; }
+#guardar-confirmar { background: #e2585b; color: var(--texto); font-weight: 600; }
+#guardar-confirmar:hover:not(:disabled) { background: color-mix(in srgb, #e2585b 85%, white); }

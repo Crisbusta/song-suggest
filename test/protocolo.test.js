@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   campoVarint, campoBytes, campoTexto, campoFloat, codificarMensaje, empaquetar,
   leerCampos, crearReensamblador, SYNC_BEGIN, mensajePonerParametro, interpretar,
-  mensajePedirPreset, mensajeReemplazarNodo,
+  mensajePedirPreset, mensajeReemplazarNodo, mensajePedirRanura, mensajeGuardarEn,
 } from '../public/fender-protocolo.js'
 
 const hex = u8 => [...u8].map(b => b.toString(16).padStart(2, '0')).join(' ')
@@ -244,4 +244,46 @@ test('interpretar reconoce el ACK de un parametro booleano (campo 6)', () => {
     ...campoTexto(1, 'amp'), ...campoTexto(2, 'bright'), ...campoVarint(6, 0),
   ])
   assert.deepEqual(interpretar(ackFalso), { tipo: 'ackParametro', nodo: 'amp', parametro: 'bright', valor: false })
+})
+
+test('pedir una ranura codifica el indice como varint', () => {
+  assert.equal(hex(mensajePedirRanura(60)), '08 00 ca 06 02 08 3c')
+})
+
+test('guardar lleva el nombre y la ranura de destino', () => {
+  assert.equal(hex(mensajeGuardarEn(60, 'SONG SUGGEST')),
+    '08 00 b2 03 10 0a 0c 53 4f 4e 47 20 53 55 47 47 45 53 54 10 3c')
+})
+
+test('interpreta el preset de una ranura leida, sin estado editado', () => {
+  // presetJSONMessage (31), la respuesta a retrievePreset (105) -- no
+  // currentPresetStatus (32), que es la de currentPresetRequest (104). Son
+  // mensajes distintos en la definicion de LtAmp: esta no tiene campo de
+  // "editado sin guardar", porque no aplica a una ranura guardada.
+  const json = JSON.stringify({ info: { displayName: 'FABRICA 60' } })
+  const respuesta = codificarMensaje(31, [...campoTexto(1, json), ...campoVarint(2, 60)])
+  const r = interpretar(respuesta)
+  assert.equal(r.tipo, 'presetDeRanura')
+  assert.equal(r.preset.info.displayName, 'FABRICA 60')
+  assert.equal(r.ranura, 60)
+  assert.ok(!('editado' in r), 'presetJSONMessage no trae estado editado')
+})
+
+test('la ranura leida sin campo de ranura no inventa la 0', () => {
+  const json = JSON.stringify({ info: { displayName: 'X' } })
+  const respuesta = codificarMensaje(31, campoTexto(1, json))
+  const r = interpretar(respuesta)
+  assert.equal(r.tipo, 'presetDeRanura')
+  assert.equal(r.ranura, null)
+})
+
+test('una ranura con JSON invalido no lanza', () => {
+  const respuesta = codificarMensaje(31, campoTexto(1, '{esto no es json'))
+  assert.deepEqual(interpretar(respuesta), { tipo: 'desconocido' })
+})
+
+test('interpretar reconoce la confirmacion de guardado (presetSavedStatus)', () => {
+  const ack = codificarMensaje(50, [...campoTexto(1, 'SONG SUGGEST'), ...campoVarint(2, 60)])
+  const r = interpretar(ack)
+  assert.deepEqual(r, { tipo: 'ackGuardado', nombre: 'SONG SUGGEST', ranura: 60 })
 })

@@ -133,6 +133,22 @@ export const mensajePonerParametro = (nodo, parametro, valor) => {
 
 export const mensajePedirPreset = () => codificarMensaje(104, campoVarint(1, 1))
 
+/* Pide el preset guardado en una ranura del equipo (retrievePreset, 105). No es
+   destructivo: solo consulta. Responde con presetJSONMessage (31), no con el
+   mismo mensaje que currentPresetRequest (currentPresetStatus, 32) -- son
+   estructuras distintas en la definicion de LtAmp: la de una ranura guardada
+   no trae "editado sin guardar" porque ese estado solo tiene sentido para el
+   preset activo en memoria, no para uno guardado en el equipo. */
+export const mensajePedirRanura = indice => codificarMensaje(105, campoVarint(1, indice))
+
+/* Guarda el tono actual en una ranura del equipo (saveCurrentPresetTo, 54). Es
+   la unica operacion destructiva de este modulo: pisa lo que haya en esa
+   ranura y no se deshace. El orden de los campos es el de la definicion:
+   primero el nombre, despues la ranura de destino. Responde con
+   presetSavedStatus (50), que confirma nombre y ranura. */
+export const mensajeGuardarEn = (indice, nombre) =>
+  codificarMensaje(54, [...campoTexto(1, nombre), ...campoVarint(2, indice)])
+
 /* Cambia qué unidad ocupa una ranura. Verificado contra el equipo: la ranura
    cambia de verdad y responde con replaceNodeStatus (40), que devuelve la
    ranura y el FenderId que quedó puesto. `amp` también es una ranura: así se
@@ -180,6 +196,38 @@ export function interpretar(mensaje) {
       return { tipo: 'firmware', texto: busca(1)?.bytes ? texto(busca(1).bytes) : '' }
     }
     case 113: return { tipo: 'sync' }
+    case 31: {
+      // Respuesta a retrievePreset (105): presetJSONMessage. Mismo par
+      // (JSON, ranura) que el campo 1/2 del caso 32, pero SIN el campo de
+      // "editado" -- esta estructura no lo define, porque describe una
+      // ranura guardada en el equipo, no el preset activo en memoria.
+      const busca = n => dentro.find(c => c.num === n)
+      const crudo = busca(1)
+      if (!crudo?.bytes) return { tipo: 'desconocido' }
+      try {
+        const preset = JSON.parse(texto(crudo.bytes))
+        // Misma razon que en el caso 32: una ranura truncada que omita este
+        // campo no puede inventarse la 0, porque esto alimenta la operacion
+        // de guardado (se usa para mostrarle al usuario que va a pisar).
+        const ranura = busca(2)?.v ?? null
+        return { tipo: 'presetDeRanura', preset, ranura }
+      } catch {
+        // Mismo motivo que el caso 32: este parseo corre en 'inputreport' y
+        // un JSON cortado no puede subir como excepcion desde ahi.
+        return { tipo: 'desconocido' }
+      }
+    }
+    case 50: {
+      // Respuesta a saveCurrentPresetTo (54): presetSavedStatus. Confirma
+      // que ranura quedo pisada y con que nombre -- es la unica confirmacion
+      // real de la unica operacion irreversible del proyecto.
+      const busca = n => dentro.find(c => c.num === n)
+      return {
+        tipo: 'ackGuardado',
+        nombre: busca(1)?.bytes ? texto(busca(1).bytes) : null,
+        ranura: busca(2)?.v ?? null,
+      }
+    }
     case 32: {
       // Por número de campo, no por posición: mismo criterio que el caso 35.
       const busca = n => dentro.find(c => c.num === n)

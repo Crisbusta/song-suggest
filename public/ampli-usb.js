@@ -8,7 +8,7 @@
 import {
   empaquetar, crearReensamblador, interpretar,
   SYNC_BEGIN, SYNC_END, HEARTBEAT, mensajePonerParametro,
-  mensajePedirPreset, mensajeReemplazarNodo,
+  mensajePedirPreset, mensajeReemplazarNodo, mensajePedirRanura, mensajeGuardarEn,
 } from './fender-protocolo.js'
 
 const VENDOR = 0x1ed8, PRODUCT = 0x0037
@@ -25,6 +25,26 @@ const ESPERA_PRESET = 4000     // el preset viaja en varios paquetes; tarda mas 
    dentro de 1,8s, pero una muestra no alcanza para confiar en el margen
    angosto de ESPERA_ACK. */
 const ESPERA_REEMPLAZO = 4000
+/* Leer una ranura guardada (retrievePreset, 105) es, por definicion, la misma
+   familia de mensaje que leer el preset activo (currentPresetRequest, 104):
+   una consulta que devuelve el preset completo en varios paquetes. No hay
+   ninguna medicion propia contra el equipo -- el Step 4 de esta tarea que la
+   mide quedo fuera de alcance a proposito, sin hardware -- asi que se reusa
+   el mismo margen que ya se midio para la consulta hermana en vez de
+   inventar uno. */
+const ESPERA_RANURA = ESPERA_PRESET
+/* Guardar (saveCurrentPresetTo, 54) escribe en almacenamiento persistente de
+   la ranura, no en un nodo en memoria: es plausible que tarde mas que
+   reemplazarUnidad (ESPERA_REEMPLAZO), que solo mide una escritura en RAM. No
+   hay ninguna muestra contra el equipo real -- esta operacion nunca se
+   probo, a proposito (ver el docblock de guardarEn) -- asi que el margen es
+   una decision, no una medicion: al doble de ESPERA_REEMPLAZO, siguiendo la
+   misma logica que ya justifica VENTANA_DESCARTE mas abajo. Reportar de
+   menos ("no confirmó" sobre un guardado que sí ocurrió) es tolerable;
+   reportar de mas sobre la unica operacion irreversible del proyecto no lo
+   es, asi que el margen generoso importa aca mas que en cualquier otro lado.
+   Debe recalibrarse con una medicion real en el Step 6 de esta tarea. */
+const ESPERA_GUARDAR = 8000
 const LATIDO = 1000            // el equipo cierra la conexion sin heartbeat
 
 let dispositivo = null
@@ -47,6 +67,21 @@ const pendientesNodo = []      // { nodo, resolver, rechazar, temporizador }
    llegue el preset de un pedido abandonado en vez del propio, lo cual solo
    pasa si el preset cambio en el medio. */
 const pendientesPreset = []    // { resolver, rechazar, temporizador }
+/* Espera de presetJSONMessage (respuesta a retrievePreset, 105). Misma
+   justificacion que pendientesPreset -- un solo cable, el equipo responde en
+   el orden en que le llegan los pedidos, y esto es una consulta, no la
+   confirmacion de una escritura -- asi que un FIFO simple alcanza y no hace
+   falta deuda. La precondicion de leerRanura() prohibe dos lecturas de
+   ranura vivas a la vez, que es el unico caso donde el orden importaria. */
+const pendientesRanura = []    // { resolver, rechazar, temporizador }
+/* Espera de presetSavedStatus (respuesta a saveCurrentPresetTo, 54). A
+   diferencia de las lecturas de arriba, esto SI confirma una escritura -- la
+   unica irreversible del proyecto -- asi que se correlaciona por ranura
+   (el unico dato que el equipo devuelve) igual que pendientesNodo se
+   correlaciona por nodo, y lleva la misma deuda (anotarDeudaGuardar, mas
+   abajo) para que el ACK atrasado de un intento abandonado no confirme
+   falsamente un reintento sobre la misma ranura. */
+const pendientesGuardado = []  // { ranura, resolver, rechazar, temporizador }
 const oyentes = []
 
 const avisar = () => { for (const fn of oyentes) fn(!!dispositivo) }
@@ -131,15 +166,32 @@ function anotarDeudaNodo(nodo) {
   else descartarNodo.set(nodo, [vence])
 }
 
+/* Misma deuda otra vez, ahora para presetSavedStatus: guardarEn tiene el
+   mismo problema de fondo que reemplazarUnidad -- sin identificador de
+   correlacion propio, solo la ranura que el equipo devuelve -- asi que un
+   reintento (la reaccion natural a un "no confirmó") puede recibir el ACK
+   atrasado del intento anterior sobre la misma ranura. Se cuenta por ranura,
+   igual que descartarNodo cuenta por nodo. Esta es la unica operacion
+   irreversible del proyecto: la deuda importa aca mas que en cualquier otro
+   lado, porque la alternativa -- confirmar de mas -- no se puede deshacer. */
+const descartarGuardar = new Map()   // ranura -> ms de caducidad de cada deuda, en orden creciente
+function anotarDeudaGuardar(ranura) {
+  const lista = descartarGuardar.get(ranura)
+  const vence = Date.now() + VENTANA_DESCARTE
+  if (lista) lista.push(vence)
+  else descartarGuardar.set(ranura, [vence])
+}
+
 /* Las deudas caducan solas: un ACK que no llega nunca dejaria esa clave
    envenenada para siempre, y todo reintento posterior sobre esa perilla se
    reportaria como no confirmado. Se purga con cada mensaje que entra. Como
    VENTANA_DESCARTE es igual para todas, cada lista queda ordenada por
-   caducidad y basta sacar del frente. Purga los dos mapas -- `descartar` y
-   `descartarNodo` -- por la misma razon: ninguno de los dos se limpia solo. */
+   caducidad y basta sacar del frente. Purga los tres mapas -- `descartar`,
+   `descartarNodo` y `descartarGuardar` -- por la misma razon: ninguno se
+   limpia solo. */
 function purgarDescartes() {
   const ahora = Date.now()
-  for (const mapa of [descartar, descartarNodo]) {
+  for (const mapa of [descartar, descartarNodo, descartarGuardar]) {
     for (const [k, lista] of mapa) {
       while (lista.length && lista[0] <= ahora) lista.shift()
       if (!lista.length) mapa.delete(k)
@@ -180,6 +232,41 @@ function alRecibir(e) {
        por omision. */
     if (r.fenderId == null) p.rechazar(new Error(`El amplificador confirmó el cambio de ${r.nodo} sin decir qué unidad quedó puesta`))
     else p.resolver(r.fenderId)
+    return
+  }
+  if (r.tipo === 'presetDeRanura') {
+    // FIFO, sin clave: misma razon que 'presetActivo' arriba -- es una
+    // consulta, no la confirmacion de una escritura.
+    const p = pendientesRanura.shift()
+    if (!p) return
+    clearTimeout(p.temporizador)
+    p.resolver({ preset: r.preset, ranura: r.ranura })
+    return
+  }
+  if (r.tipo === 'ackGuardado') {
+    /* Misma logica que la deuda de ackNodo, arriba: si a esta ranura le
+       queda una deuda vigente, este ACK puede ser el rezagado de un intento
+       de guardado abandonado y no hay como distinguirlo del de la escritura
+       viva. Con la unica operacion irreversible del proyecto de por medio,
+       tragarselo es la unica opcion honesta. */
+    const deudasGuardar = descartarGuardar.get(r.ranura)
+    if (deudasGuardar) {
+      deudasGuardar.shift()
+      if (!deudasGuardar.length) descartarGuardar.delete(r.ranura)
+      return
+    }
+    const i = pendientesGuardado.findIndex(p => p.ranura === r.ranura)
+    if (i < 0) return
+    const [p] = pendientesGuardado.splice(i, 1)
+    clearTimeout(p.temporizador)
+    /* Un presetSavedStatus truncado deja ranura en null (ver interpretar()
+       en fender-protocolo.js) -- y sin ranura no hay con que correlacionar,
+       asi que esta rama nunca se alcanzaria para esa entrada por el
+       findIndex de arriba. Se deja documentado igual, por si el equipo
+       alguna vez manda una ranura que no es la pedida: en ese caso el
+       nombre puede no ser el que se guardo, pero se resuelve con lo que el
+       equipo dijo, no con lo que se pidio -- misma regla que reemplazarUnidad. */
+    p.resolver({ nombre: r.nombre, ranura: r.ranura })
     return
   }
   if (r.tipo !== 'ackParametro') return
@@ -259,11 +346,14 @@ async function desconectar() {
   for (const p of pendientes.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
   for (const p of pendientesNodo.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
   for (const p of pendientesPreset.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
+  for (const p of pendientesRanura.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
+  for (const p of pendientesGuardado.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
   // La sesion siguiente empieza limpia: ningun ACK de la anterior puede
   // sobrevivir al cierre, asi que arrastrar deudas viejas solo lograria
   // reportar como no confirmadas escrituras nuevas que si funcionaron.
   descartar.clear()
   descartarNodo.clear()
+  descartarGuardar.clear()
   if (dev) {
     // El listener se saca ANTES del SYNC_END: mientras ese await esta en
     // vuelo el listener seguiria atado, y un ACK que llegara justo en esa
@@ -528,6 +618,65 @@ export const ampli = {
     }
   },
 
+  /* Lee el preset GUARDADO en una ranura del equipo (retrievePreset, 105) --
+     no el activo en memoria. No es destructiva: solo consulta, igual que
+     leerPreset(). Es la lectura que el flujo de guardado necesita para
+     mostrarle al usuario que preset va a pisar antes de que confirme, y la
+     unica lectura de ranura que existe en este modulo (navegar o cargar
+     otros presets guardados esta fuera de alcance, ver la spec).
+
+     Misma forma que leerPreset(), a proposito -- ver el docblock de arriba
+     -- incluido el `finally` que reenvia SYNC_BEGIN: se asume que pedir una
+     ranura traba la sesion igual que pedir el preset activo, porque las dos
+     son la misma familia de mensaje (una consulta que devuelve el preset
+     completo, multi-paquete). Esto NO esta medido contra el equipo -- el
+     Step 4 de esta tarea, que lo mide, quedo fuera de alcance sin hardware
+     -- asi que es la asuncion mas conservadora, no un hecho verificado.
+
+     A diferencia de leerPreset(), lo que devuelve no trae `editado`: la
+     respuesta a retrievePreset (presetJSONMessage, 31) no tiene ese campo en
+     su definicion -- el estado "editado sin guardar" solo tiene sentido para
+     el preset activo en memoria, no para uno guardado en una ranura.
+
+     Precondicion: la misma que leerPreset() y reemplazarUnidad() -- ninguna
+     llamada viva a las tres al mismo tiempo que esta. Comparten
+     `reensamblador`. */
+  async leerRanura(indice) {
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    reensamblador.reiniciar()
+    try {
+      await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+      // Mismo motivo que en leerPreset(): el equipo se puede desenchufar
+      // durante el await de arriba.
+      if (!dispositivo) throw new Error('El amplificador no está conectado.')
+      let entrada
+      const promesa = new Promise((resolver, rechazar) => {
+        const temporizador = setTimeout(() => {
+          const i = pendientesRanura.indexOf(entrada)
+          if (i >= 0) pendientesRanura.splice(i, 1)
+          rechazar(new Error(`El amplificador no mandó la ranura ${indice}`))
+        }, ESPERA_RANURA)
+        entrada = { resolver, rechazar, temporizador }
+        pendientesRanura.push(entrada)
+      })
+      try {
+        await dispositivo.sendReport(0, empaquetar(mensajePedirRanura(indice)))
+      } catch (err) {
+        // Mismo motivo que en leerPreset(): se saca por referencia para no
+        // dejar una entrada huerfana que se coma la respuesta de una
+        // lectura de ranura posterior.
+        const i = pendientesRanura.indexOf(entrada)
+        if (i >= 0) pendientesRanura.splice(i, 1)
+        clearTimeout(entrada.temporizador)
+        throw err
+      }
+      return await promesa
+    } finally {
+      // Destraba, pase lo que pase -- mismo motivo que en leerPreset().
+      try { await dispositivo?.sendReport(0, empaquetar(SYNC_BEGIN)) } catch { /* se fue el equipo */ }
+    }
+  },
+
   /* Cambia la unidad de una ranura -- incluido `amp`, que es como se cambia
      el modelo de amplificador. Espera la confirmacion del equipo y devuelve
      el FenderId que el equipo dice que quedo puesto, no el que se pidio: son
@@ -576,6 +725,77 @@ export const ampli = {
       if (i >= 0) pendientesNodo.splice(i, 1)
       clearTimeout(entrada.temporizador)
       anotarDeudaNodo(nodo)
+      throw err
+    }
+    return promesa
+  },
+
+  /* Guarda el tono actual en una ranura del equipo (saveCurrentPresetTo, 54).
+
+     ES LA UNICA OPERACION IRREVERSIBLE DE TODO EL PROYECTO: pisa lo que haya
+     en esa ranura sin posibilidad de deshacer, y este mensaje NUNCA se probo
+     contra el equipo real -- la prueba (Step 6 de la tarea que agrega esta
+     funcion) requiere al usuario y al amplificador delante, y quedo fuera de
+     alcance a proposito. Todo lo de aca abajo sigue la regla de la casa --
+     nunca declarar exito sin confirmacion -- pero esa regla protege contra
+     mentir sobre si el equipo confirmo, no contra que el mensaje mismo este
+     mal armado; eso solo lo cierra la prueba real.
+
+     Esta funcion NO decide que ranura pisar ni lee la que hay ahi: quien la
+     llama es responsable de mostrarle al usuario, con leerRanura(), que va a
+     pisar antes de invocar esto. guardarEn() en si mismo no mira antes de
+     escribir.
+
+     Espera la confirmacion del equipo (presetSavedStatus, 50) con la misma
+     estructura que reemplazarUnidad(): mismo problema de fondo -- sin
+     identificador de correlacion propio, solo la ranura que el equipo
+     devuelve --, misma defensa de deuda (anotarDeudaGuardar) para que el ACK
+     atrasado de un intento abandonado no confirme falsamente un reintento
+     sobre la misma ranura. Con la unica operacion irreversible del proyecto
+     de por medio, esta defensa importa mas aca que en cualquier otro lado.
+
+     Usa ESPERA_GUARDAR, no ESPERA_REEMPLAZO -- ver el comentario de la
+     constante: no hay ninguna medicion real de cuanto tarda escribir en
+     almacenamiento persistente, asi que el margen es una decision
+     deliberadamente generosa, no un dato medido.
+
+     A diferencia de leerPreset()/leerRanura(), no reenvia SYNC_BEGIN en un
+     `finally`: ese trabamiento esta medido solo para las consultas que piden
+     un preset completo (currentPresetRequest, retrievePreset), y guardar es,
+     como reemplazarUnidad, una escritura -- no hay ninguna razon para
+     esperar que trabe la sesion igual. Sigue siendo una suposicion sin
+     medir: si el Step 6 de esta tarea encuentra que si traba, hay que
+     agregar el mismo `finally` que tiene leerRanura().
+
+     Precondicion: la misma que reemplazarUnidad() y leerPreset()/leerRanura()
+     -- ninguna llamada viva a las cuatro al mismo tiempo que esta. */
+  async guardarEn(indice, nombre) {
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    reensamblador.reiniciar()
+    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+    // Mismo motivo que en reemplazarUnidad: el equipo se puede desenchufar
+    // durante el await de arriba.
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    let entrada
+    const promesa = new Promise((resolver, rechazar) => {
+      const temporizador = setTimeout(() => {
+        const i = pendientesGuardado.indexOf(entrada)
+        if (i >= 0) pendientesGuardado.splice(i, 1)
+        anotarDeudaGuardar(indice)
+        rechazar(new Error(`El amplificador no confirmó el guardado en la ranura ${indice}`))
+      }, ESPERA_GUARDAR)
+      entrada = { ranura: indice, resolver, rechazar, temporizador }
+      pendientesGuardado.push(entrada)
+    })
+    try {
+      await dispositivo.sendReport(0, empaquetar(mensajeGuardarEn(indice, nombre)))
+    } catch (err) {
+      // Mismo motivo que en reemplazarUnidad: se saca por referencia y se
+      // le anota la deuda antes de relanzar.
+      const i = pendientesGuardado.indexOf(entrada)
+      if (i >= 0) pendientesGuardado.splice(i, 1)
+      clearTimeout(entrada.temporizador)
+      anotarDeudaGuardar(indice)
       throw err
     }
     return promesa
