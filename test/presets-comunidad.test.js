@@ -11,6 +11,20 @@ import { parsearCsv, numeroCsv } from '../lib/csv.js'
 const BLOQUES_BANDA = { amp: [3, 4, 7], stomp: [11, 12, 5], mod: [17, 18, 5], delay: [23, 24, 4], reverb: [28, 29, 3] }
 const BLOQUES_TONO  = { amp: [1, 2, 5], stomp: [7, 8, 5], mod: [13, 14, 5], delay: [19, 20, 4], reverb: [24, 25, 3] }
 
+/* El rango que el catalogo del equipo declara para una perilla, recalculado
+   aqui a proposito y no importado: si la implementacion se equivocara de
+   escala, este test tiene que notarlo con su propia lectura del catalogo.
+   Cada perilla trae la escala del DSP (min/max) y la de pantalla (remap), y la
+   planilla escribe en una u otra, asi que el rango aceptable es la union. */
+const CATALOGO = JSON.parse(readFileSync(new URL('../public/lt25-unidades.json', import.meta.url), 'utf8'))
+function rangoDelCatalogo(nombreUnidad, controlId) {
+  const fenderId = resolverUnidad(nombreUnidad)?.fenderId
+  const d = CATALOGO.find(u => u.FenderId === fenderId)?.ui?.uiParameters?.find(p => p.controlId === controlId)
+  const escalas = [d?.remap, d].filter(e => typeof e?.min === 'number' && typeof e?.max === 'number')
+  if (!escalas.length) return null
+  return { min: Math.min(...escalas.map(e => e.min)), max: Math.max(...escalas.map(e => e.max)) }
+}
+
 test('se leen las 77 filas de bandas y las 10 de tonos', () => {
   const a = auditoria()
   assert.equal(a.leidas.bandas, 77)
@@ -112,9 +126,17 @@ test('un guion (o cualquier celda no numerica) NO se convierte en cero: falta la
           const crudo = fila[iValor + k]
           const numero = numeroCsv(crudo)
           const esNumeroConSufijo = numero === null && /^-?\d+(?:[.,]\d+)?\s*[a-zA-Z%]+$/.test(String(crudo ?? '').trim())
+          const rango = rangoDelCatalogo(u.nombre, clave)
+          const enRango = numero !== null && (!rango || (numero >= rango.min && numero <= rango.max))
           if (numero === null && !esNumeroConSufijo) {
             assert.ok(!(clave in u.valores),
               `${p.clave}: ${ranura}.${clave} deberia estar AUSENTE (celda "${crudo}" no numerica) pero vale ${u.valores[clave]}`)
+          } else if (numero !== null && !enRango) {
+            // Un numero fuera del rango declarado se descarta igual que una
+            // celda no numerica: no es un ajuste, es un dedazo de la planilla,
+            // y dejarlo pasar le mandaria esa perilla al tope al amplificador.
+            assert.ok(!(clave in u.valores),
+              `${p.clave}: ${ranura}.${clave} deberia estar AUSENTE (${numero} esta fuera de ${rango.min}..${rango.max}) pero vale ${u.valores[clave]}`)
           } else if (numero !== null) {
             assert.equal(u.valores[clave], numero, `${p.clave}: ${ranura}.${clave} deberia ser ${numero}`)
           }

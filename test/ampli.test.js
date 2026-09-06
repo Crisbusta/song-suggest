@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sugerirAjustes, MODELOS_LT25, fenderIdDeModelo, TAGS_CON_REGLA } from '../lib/ampli.js'
-import { PRESETS_BANDA } from '../lib/presets-comunidad.js'
+import { PRESETS_BANDA, auditoria } from '../lib/presets-comunidad.js'
 import { readFileSync } from 'node:fs'
 
 // Los nombres de modelo de estos tests salen del catalogo de unidades DSP del
@@ -409,22 +409,68 @@ test('todo preset alcanzable llega con un modelo y un identificador que el equip
   }
 })
 
-test('la unica perilla de la planilla fuera de la escala 1-10 sigue siendo esa', () => {
-  /* "Custom User - Horse N Buggy" (bandas.csv linea 18) declara bass 44,2 en un
-     DELUXE CLN. Casi seguro es un 4,2 con un dedo de mas, pero corregirlo seria
-     inventar un valor sobre el dato de otro, asi que se deja como esta y se
-     deja ANOTADO aqui: si aparece una segunda fila fuera de rango, es mucho mas
-     probable que sea un error de importacion (una columna corrida) que otro
-     dedazo, y este test lo caza en vez de dejarlo pasar. paraElAmpli lo acota,
-     asi que al amplificador no le llega un 44. */
+test('ninguna perilla llega fuera del rango que el equipo declara', () => {
+  /* "Custom User - Horse N Buggy" (bandas.csv linea 18) escribio bass 44,2 en un
+     DELUXE CLN, cuya perilla va de 1 a 10. No es un ajuste, es un dedazo, y
+     dejarlo pasar no era neutral: la conversion lo habria acotado y le habria
+     mandado al amplificador el bass AL TOPE por un error de otra persona. Se
+     descarta en la importacion, con aviso, y la perilla queda en el valor por
+     defecto de la unidad, que es dato real del equipo. */
+  const UNIDADES_JSON = JSON.parse(readFileSync(new URL('../public/lt25-unidades.json', import.meta.url), 'utf8'))
+  const rango = (fenderId, controlId) => {
+    const d = UNIDADES_JSON.find(u => u.FenderId === fenderId)?.ui?.uiParameters?.find(p => p.controlId === controlId)
+    const escalas = [d?.remap, d].filter(e => typeof e?.min === 'number' && typeof e?.max === 'number')
+    return escalas.length ? { min: Math.min(...escalas.map(e => e.min)), max: Math.max(...escalas.map(e => e.max)) } : null
+  }
   const fuera = []
   for (const p of PRESETS_BANDA) {
-    const v = p.cadena.amp?.valores ?? {}
-    for (const k of ['gain', 'volume', 'treb', 'bass', 'mid']) {
-      if (v[k] != null && (v[k] < 0 || v[k] > 10)) fuera.push(`${p.clave}: ${k} = ${v[k]}`)
+    for (const [ranura, u] of Object.entries(p.cadena)) {
+      for (const [k, v] of Object.entries(u.valores)) {
+        // El rango sale del catalogo del equipo, no de un 0-10 escrito a mano:
+        // el time del delay va de 30 a 1000 ms y un 0-10 lo daria por malo.
+        const r = rango(u.fenderId, k)
+        if (r && (v < r.min || v > r.max)) fuera.push(`${p.clave} ${ranura}: ${k} = ${v} (${r.min}..${r.max})`)
+      }
     }
   }
-  assert.deepEqual(fuera, ['Custom User - Horse N Buggy: bass = 44.2'])
+  assert.deepEqual(fuera, [])
+
+  // Y no se descarto en silencio: el aviso dice fila, archivo, linea y ranura.
+  const aviso = auditoria().avisos.find(a => a.fila === 'Custom User - Horse N Buggy' && /fuera del rango/.test(a.motivo))
+  assert.ok(aviso, 'el valor descartado tiene que quedar anotado, no desaparecer')
+  assert.equal(aviso.ranura, 'amp')
+  assert.equal(aviso.linea, 18)
+  assert.match(aviso.motivo, /44\.2/)
+})
+
+test('un track acustico no recibe el preset electrico de la banda', () => {
+  /* Estos presets estan indexados por banda, y el tono de una banda es el de su
+     equipo electrico. Casos reales del catalogo: sin esta regla, Rush "Closer To
+     The Heart" con guitarra de NYLON recibia BURN a gain 10, y Metallica
+     "Mama Said" en acustica de acero, 70S UK CLEAN a gain 10. */
+  for (const instr of ['Acoustic Guitar (steel)', 'Acoustic Guitar (nylon)']) {
+    const r = sugerirAjustes({ tags: ['thrash metal'], instrument: instr,
+      tuning: null, artist: 'Metallica', title: 'Enter Sandman' })
+    assert.equal(r.fuente, 'reglas', `${instr} no deberia recibir el preset de la banda`)
+    assert.equal(r.modelo, 'CHAMPION')
+    assert.ok(r.gain <= 2, `un acustico no lleva ganancia, dio ${r.gain}`)
+    assert.equal(r.cadena, null, 'tampoco la cadena de pedales electricos')
+  }
+  // Y el tono de genero cae por lo mismo: tambien es un tono de guitarra electrica.
+  const g = sugerirAjustes({ tags: ['doom metal'], instrument: 'Acoustic Guitar (steel)',
+    tuning: null, artist: 'Banda Que No Existe', title: 'x' })
+  assert.equal(g.fuente, 'reglas')
+  assert.equal(g.modelo, 'CHAMPION')
+})
+
+test('un track electrico limpio SI conserva el preset de la banda', () => {
+  // Decision explicita y del lado contrario: sigue siendo una guitarra
+  // electrica, asi que el modelo de ampli de esa banda es plausible. Si esto
+  // cambia alguna vez, que cambie a la vista y no por arrastre del caso acustico.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (clean)',
+    tuning: null, artist: 'Metallica', title: 'Enter Sandman' })
+  assert.equal(r.fuente, 'comunidad')
+  assert.equal(r.modelo, '90S ROCK')
 })
 
 // --- Lo que NO se manda al amplificador --------------------------------------
