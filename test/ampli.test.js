@@ -168,3 +168,72 @@ test('los valores quedan acotados aunque entre basura', () => {
     assert.ok(v >= 0 && v <= 1, `${k} fuera de rango: ${v}`)
   }
 })
+
+// --- El modelo que se manda al amplificador ---------------------------------
+import { fenderIdDeModelo } from '../lib/ampli.js'
+import { readFileSync } from 'node:fs'
+
+const UNIDADES = JSON.parse(readFileSync(new URL('../public/lt25-unidades.json', import.meta.url), 'utf8'))
+const AMPS_DEL_CATALOGO = UNIDADES.filter(u => u.info?.subcategory === 'amp')
+
+/* Este es el test que cierra un agujero real de este proyecto. Los veinte
+   nombres de MODELOS_LT25 salieron una vez de extraer texto de un PDF; tres
+   estaban mal y afectaban al 36% de las sugerencias, y el test que debia
+   cazarlo comparaba la tabla contra esa MISMA lista equivocada, asi que pasaba
+   en verde. Ahora la lista se valida contra el catalogo de unidades del propio
+   equipo, que es lo que el amplificador acepta de verdad. */
+test('los veinte modelos que nombramos existen en el catalogo del equipo', () => {
+  for (const m of MODELOS_LT25) {
+    const id = fenderIdDeModelo(m)
+    assert.ok(id, `"${m}" no existe en el catalogo del LT25`)
+    assert.ok(AMPS_DEL_CATALOGO.some(u => u.FenderId === id),
+      `"${m}" resolvio a ${id}, que no es una unidad de tipo amp`)
+  }
+})
+
+test('y no sobra ninguno: la lista y el catalogo dicen lo mismo', () => {
+  // Un modelo del catalogo que no esta en la lista es una sugerencia que nunca
+  // vamos a poder hacer; uno de la lista que no esta en el catalogo es una que
+  // el equipo va a ignorar en silencio.
+  const enCatalogo = AMPS_DEL_CATALOGO.map(u => u.info.displayName).sort()
+  assert.deepEqual([...MODELOS_LT25].sort(), enCatalogo)
+})
+
+test('un modelo que no existe no se inventa un identificador', () => {
+  assert.equal(fenderIdDeModelo('80s METAL'), null)   // uno de los tres nombres malos de aquella vez
+  assert.equal(fenderIdDeModelo(''), null)
+  assert.equal(fenderIdDeModelo(undefined), null)
+})
+
+test('la sugerencia viaja con el identificador que el equipo entiende', () => {
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(r.modelo, 'METAL 2000')
+  assert.equal(r.fenderId, fenderIdDeModelo('METAL 2000'))
+  assert.ok(r.fenderId.startsWith('DUBS_'), 'un FenderId del LT25 siempre empieza con DUBS_')
+})
+
+test('todo modelo alcanzable por la tabla trae su identificador, incluidas las sustituciones', () => {
+  // Las sustituciones (acustico, limpio, epoca) nombran modelos con literales
+  // dentro de la funcion, fuera de REGLAS: si una se escribe mal, solo se ve
+  // ejercitando la tabla entera.
+  const generos = [
+    'thrash metal','metalcore','nu metal','doom metal','progressive metal','heavy metal',
+    'grunge','alternative metal','punk','hard rock','blues rock','blues','rockabilly',
+    'country','britpop','progressive rock','classic rock','indie rock','funk','jazz',
+    'alternative rock','pop','surf','soul','ska','post-rock','power metal','shoegaze',
+  ]
+  const vistos = new Set()
+  for (const g of generos) {
+    for (const instr of ['Distortion Guitar', 'Electric Guitar (clean)', 'Acoustic Guitar (steel)']) {
+      for (const tags of [[g], [g, '60s'], [g, '70s']]) {
+        const r = sugerirAjustes({ tags, instrument: instr, tuning: null })
+        if (!r) continue
+        vistos.add(r.modelo)
+        assert.ok(r.fenderId, `"${r.modelo}" viajaria sin identificador`)
+      }
+    }
+  }
+  for (const esperado of ['CHAMPION', 'DELUXE CLN', '60S UK CLEAN', 'BASSMAN']) {
+    assert.ok(vistos.has(esperado), `la prueba no llego a ejercitar la sustitucion a "${esperado}"`)
+  }
+})

@@ -95,8 +95,8 @@ function pintar({ song, matching, hint }) {
            <p class="descargo">
              Punto de partida, no el tono del disco.
              Deducido de: ${a.motivos.map(esc).join(', ')}.<br>
-             Al ampli se mandan solo <strong>gain, treb y bass</strong>: el volumen
-             depende de tu pieza y el modelo hay que ponerlo a mano.
+             Al ampli se mandan el <strong>modelo</strong> y <strong>gain, treb y bass</strong>.
+             El volumen no: depende de tu pieza, y el tuyo se respeta aunque cambie el modelo.
            </p>
            ${ampli.soportado()
              ? `<p class="envio">
@@ -318,6 +318,44 @@ $('#tarjeta').addEventListener('click', async e => {
     // Se informa lo que el amplificador CONFIRMO, no lo que se intento: el
     // equipo ignora en silencio lo que no entiende.
     const confirmados = [], fallidos = []
+
+    /* El modelo va ANTES que las perillas: cargar una unidad nueva trae sus
+       parametros por defecto, asi que ponerlo despues pisaria los valores
+       recien enviados.
+
+       Y antes de cambiarlo hay que leer el volumen que tenias. Los `volume`
+       por defecto de los veinte modelos van de -13,88 a -1,17 dB, asi que
+       cambiar de modelo puede ser un salto de mas de 12 dB de golpe con la
+       guitarra enchufada. El volumen no se sugiere -- su curva es de las que
+       todavia no sabemos convertir -- pero eso no es excusa para moverlo sin
+       querer. */
+    let notaModelo = ''
+    const fenderId = cancion.ampli?.fenderId
+    if (fenderId) {
+      try {
+        const { preset } = await ampli.leerPreset()
+        if (actual !== cancion) return
+        const nodo = preset.audioGraph?.nodes?.find(n => n.nodeId === 'amp')
+        if (nodo?.FenderId === fenderId) {
+          notaModelo = 'el modelo ya estaba puesto'
+        } else {
+          const volumen = nodo?.dspUnitParameters?.volume
+          await ampli.reemplazarUnidad('amp', fenderId)
+          notaModelo = `modelo ${cancion.ampli.modelo}`
+          if (typeof volumen === 'number') {
+            // Si esto falla, el equipo se queda con el volumen por defecto del
+            // modelo nuevo, que puede ser bastante mas alto. Hay que decirlo.
+            try { await ampli.ponerParametro('amp', 'volume', volumen) }
+            catch { notaModelo += ' (ojo: no pude devolverte el volumen)' }
+          }
+        }
+      } catch {
+        // Sin poder leer el equipo no sabemos que volumen devolver, asi que no
+        // se cambia el modelo: mejor dejarlo como estaba que subirlo a ciegas.
+        notaModelo = 'no pude cambiar el modelo'
+      }
+    }
+
     for (const [parametro, valor] of Object.entries(valores)) {
       // Si ya sorteamos otra cancion, `b` y `estado` son nodos desprendidos:
       // escribirles es un no-op legal que no avisa de nada, asi que hay que
@@ -328,15 +366,18 @@ $('#tarjeta').addEventListener('click', async e => {
       catch { fallidos.push(parametro) }
     }
     if (actual !== cancion) return
+    // El modelo se cuenta aparte de las perillas: no es una de ellas, y
+    // "ya estaba puesto" no es lo mismo que "lo confirmo el equipo".
+    const conModelo = t => notaModelo ? `${notaModelo} · ${t}` : t
     if (!fallidos.length) {
-      estado.className = 'envio-estado ok'
-      estado.textContent = `${confirmados.join(', ')} confirmados por el ampli`
+      estado.className = notaModelo.startsWith('no pude') ? 'envio-estado mal' : 'envio-estado ok'
+      estado.textContent = conModelo(`${confirmados.join(', ')} confirmados por el ampli`)
     } else if (!confirmados.length) {
       estado.className = 'envio-estado mal'
-      estado.textContent = `sin confirmar: ${fallidos.join(', ')}`
+      estado.textContent = conModelo(`sin confirmar: ${fallidos.join(', ')}`)
     } else {
       estado.className = 'envio-estado mal'
-      estado.textContent = `${confirmados.join(', ')} confirmados; sin confirmar: ${fallidos.join(', ')}`
+      estado.textContent = conModelo(`${confirmados.join(', ')} confirmados; sin confirmar: ${fallidos.join(', ')}`)
     }
     // pintarBotonEnviar recalcula segun ampli.conectado() y actual, en vez de
     // rehabilitar a ciegas: si el ampli se desconecto a mitad del envio, el
