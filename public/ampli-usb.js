@@ -67,13 +67,29 @@ const pendientesNodo = []      // { nodo, resolver, rechazar, temporizador }
    llegue el preset de un pedido abandonado en vez del propio, lo cual solo
    pasa si el preset cambio en el medio. */
 const pendientesPreset = []    // { resolver, rechazar, temporizador }
-/* Espera de presetJSONMessage (respuesta a retrievePreset, 105). Misma
-   justificacion que pendientesPreset -- un solo cable, el equipo responde en
-   el orden en que le llegan los pedidos, y esto es una consulta, no la
-   confirmacion de una escritura -- asi que un FIFO simple alcanza y no hace
-   falta deuda. La precondicion de leerRanura() prohibe dos lecturas de
-   ranura vivas a la vez, que es el unico caso donde el orden importaria. */
-const pendientesRanura = []    // { resolver, rechazar, temporizador }
+/* Espera de presetJSONMessage (respuesta a retrievePreset, 105). A
+   DIFERENCIA de pendientesPreset (que es un FIFO simple, ver su comentario
+   arriba), esto SI necesita correlacionarse por ranura -- ronda de revision
+   de esta tarea, reproducido con un dispositivo simulado: una respuesta
+   tardia de una lectura de ranura ABANDONADA describe OTRA ranura, no una
+   version vieja de la MISMA, asi que un FIFO le entregaria a la lectura
+   siguiente el contenido de una ranura distinta a la pedida -- y esto
+   alimenta la unica operacion irreversible del proyecto (el usuario ve "la
+   ranura 60 tiene X" con el X de otra ranura, y confirma un guardado sobre
+   un preset que nunca vio).
+
+   No hace falta un mapa de deuda como el de pendientesGuardado, mas abajo:
+   una respuesta tardia de la ranura N sigue describiendo el contenido REAL
+   de la ranura N -- a diferencia de un ACK de escritura, que puede
+   "confirmar" un valor que en realidad aplico un intento distinto --, asi
+   que resolver con lo que el equipo dijo sobre esa ranura no es mentir.
+   Sigue habiendo una precondicion: no puede haber dos llamadas a
+   leerRanura() vivas a la vez, porque comparten `reensamblador` con
+   leerPreset()/reemplazarUnidad() y reiniciarlo a mitad de una transferencia
+   descartaria lo que llevaba juntado -- pero esa precondicion ya no es lo
+   que hace segura la correlacion, es la correlacion por ranura la que lo
+   hace. */
+const pendientesRanura = []    // { ranura, resolver, rechazar, temporizador }
 /* Espera de presetSavedStatus (respuesta a saveCurrentPresetTo, 54). A
    diferencia de las lecturas de arriba, esto SI confirma una escritura -- la
    unica irreversible del proyecto -- asi que se correlaciona por ranura
@@ -235,10 +251,15 @@ function alRecibir(e) {
     return
   }
   if (r.tipo === 'presetDeRanura') {
-    // FIFO, sin clave: misma razon que 'presetActivo' arriba -- es una
-    // consulta, no la confirmacion de una escritura.
-    const p = pendientesRanura.shift()
-    if (!p) return
+    // Correlacionado por ranura, NO por FIFO -- ver el comentario largo de
+    // pendientesRanura, mas arriba, sobre por que esto es distinto de
+    // 'presetActivo'. Una ranura null (mensaje truncado) no calza con
+    // ninguna entrada real -- todas se crean con un numero -- asi que cae
+    // en el `if (i < 0) return` de abajo, igual que cualquier respuesta que
+    // no es la que se esperaba: se trata como falta de confirmacion.
+    const i = pendientesRanura.findIndex(p => p.ranura === r.ranura)
+    if (i < 0) return
+    const [p] = pendientesRanura.splice(i, 1)
     clearTimeout(p.temporizador)
     p.resolver({ preset: r.preset, ranura: r.ranura })
     return
@@ -259,13 +280,13 @@ function alRecibir(e) {
     if (i < 0) return
     const [p] = pendientesGuardado.splice(i, 1)
     clearTimeout(p.temporizador)
-    /* Un presetSavedStatus truncado deja ranura en null (ver interpretar()
-       en fender-protocolo.js) -- y sin ranura no hay con que correlacionar,
-       asi que esta rama nunca se alcanzaria para esa entrada por el
-       findIndex de arriba. Se deja documentado igual, por si el equipo
-       alguna vez manda una ranura que no es la pedida: en ese caso el
-       nombre puede no ser el que se guardo, pero se resuelve con lo que el
-       equipo dijo, no con lo que se pidio -- misma regla que reemplazarUnidad. */
+    // Una ranura que no calza con la pedida -- incluida la null de un
+    // presetSavedStatus truncado (ver interpretar() en fender-protocolo.js)
+    // -- ya se descarto arriba, en el `if (i < 0) return`: el findIndex
+    // busca exactamente `r.ranura`, asi que solo se llega aca cuando
+    // coincide. En efecto, cualquier ranura que no es la pedida se trata
+    // como falta de confirmacion, igual que un timeout -- nunca como un
+    // guardado confirmado sobre datos que no se pidieron.
     p.resolver({ nombre: r.nombre, ranura: r.ranura })
     return
   }
@@ -656,7 +677,7 @@ export const ampli = {
           if (i >= 0) pendientesRanura.splice(i, 1)
           rechazar(new Error(`El amplificador no mandó la ranura ${indice}`))
         }, ESPERA_RANURA)
-        entrada = { resolver, rechazar, temporizador }
+        entrada = { ranura: indice, resolver, rechazar, temporizador }
         pendientesRanura.push(entrada)
       })
       try {

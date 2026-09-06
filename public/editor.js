@@ -52,6 +52,19 @@ let confirmados = {}   // "nodo.parametro" -> ultimo valor que el equipo confirm
 let presetActivo = null   // el preset que devolvio el ultimo leerPreset(): de ahi sale el nombre a guardar
 let ranuraActiva = null   // la ranura de la que se cargo ese preset: solo un valor de partida para el dialogo
 
+// Ranura para la que YA LLEGO una lectura valida de leerRanura() -- ver el
+// comentario largo junto a actualizarBotonGuardar(), mas abajo. null si no
+// hay ninguna, si la ultima lectura fallo, o si el campo cambio despues de
+// la ultima lectura buena. Esto es lo unico que decide si el boton de
+// confirmar puede quedar habilitado: es un estado de SEGURIDAD (el paso
+// previo a la unica operacion irreversible del proyecto), no un estado de
+// "ocupado", y por eso no lo toca desactivarOcupado() a ciegas -- ronda de
+// revision de esta tarea: sin esto, una lectura que FALLA (ranura invalida,
+// timeout, equipo desconectado) dejaba el boton "Guardar y pisar" habilitado
+// de todos modos, porque desactivarOcupado() rehabilitaba TODOS los
+// controles en bloque al salir del `finally` de la lectura fallida.
+let ranuraLeida = null
+
 // Hay una lectura (leerPreset, leerRanura), un reemplazo de unidad
 // (reemplazarUnidad) o un guardado (guardarEn) vivo. Las cuatro funciones
 // documentan en ampli-usb.js que comparten el reensamblador y que no toleran
@@ -207,6 +220,13 @@ function desactivarOcupado() {
   operando = false
   contEditor.classList.remove('ocupado')
   for (const el of elementosControlables()) el.disabled = false
+  // El barrido de arriba acaba de rehabilitar TODOS los controles, incluido
+  // "Guardar y pisar" -- pero ese boton no es un estado de "ocupado", es un
+  // estado de seguridad (ver el comentario de `ranuraLeida`), y esta funcion
+  // se llama tambien cuando la operacion que terminó fue una lectura de
+  // ranura que FALLO. Sin esto, el boton quedaba habilitado al lado de un
+  // aviso de error. Se recalcula, no se asume.
+  actualizarBotonGuardar()
   // Mientras `operando` estuvo activo no pudo encolarse ninguna escritura
   // nueva (los controles estaban deshabilitados), asi que si la cola tambien
   // esta vacia ahora, no queda nada pendiente: es el punto correcto para
@@ -383,12 +403,40 @@ contEditor.addEventListener('change', async e => {
    vuelva. No hay un guardado de un clic.
    --------------------------------------------------------------------------- */
 
-// Se limpia cada vez que el campo de ranura cambia: cualquier cambio invalida
-// la lectura anterior, y el boton de confirmar no puede quedar habilitado
-// para una ranura que ya no es la escrita en el campo.
+// Numero valido de ranura escrito AHORA en el campo, o null si esta vacio,
+// no es entero, o es negativo. No se le pone techo (`max`): cuantas ranuras
+// tiene el equipo es exactamente lo que el Step 4 de esta tarea tiene que
+// medir con hardware, y a proposito no se inventa un numero. Un indice fuera
+// de rango no es un caso especial: simplemente la lectura correspondiente
+// falla (el equipo no contesta esa ranura, o contesta con un timeout), y
+// ranuraLeida se queda en null -- el mismo camino que cualquier otra lectura
+// fallida, sin necesitar saber de antemano cual es el rango real.
+function indiceEnCampo() {
+  const v = campoIndiceGuardar.value
+  const n = Number(v)
+  return v !== '' && Number.isInteger(n) && n >= 0 ? n : null
+}
+
+// Unica fuente de verdad para si "Guardar y pisar" puede estar habilitado:
+// solo si hay una lectura valida (`ranuraLeida` no nula) Y coincide con la
+// ranura que hay escrita ahora en el campo. Se llama tanto tras una lectura
+// como desde desactivarOcupado() -- ver el comentario de esa funcion --
+// porque ese es un barrido generico de "termino una operacion, reactivar
+// todo" que no puede decidir por si solo si ESTE boton, en particular, tiene
+// permiso para quedar habilitado.
+function actualizarBotonGuardar() {
+  const indice = indiceEnCampo()
+  botonConfirmarGuardar.disabled = ranuraLeida === null || indice === null || indice !== ranuraLeida
+}
+
+// Se limpia cada vez que el campo de ranura cambia, al abrir el dialogo, y al
+// cerrarlo (ver el listener de 'close' mas abajo): cualquiera de esas cosas
+// invalida la ultima lectura, y el boton de confirmar no puede quedar
+// habilitado para una ranura que ya no es la que el usuario esta mirando.
 function resetearAvisoGuardar() {
   avisoGuardar.innerHTML = ''
-  botonConfirmarGuardar.disabled = true
+  ranuraLeida = null
+  actualizarBotonGuardar()
 }
 
 function abrirDialogoGuardar() {
@@ -399,7 +447,8 @@ function abrirDialogoGuardar() {
   // entrada: el usuario ve de inmediato que hay ahi sin tener que tocar el
   // campo primero. Sigue siendo solo un valor de partida -- `ranuraActiva`
   // nunca sustituye esta lectura, es lo que la dispara.
-  if (campoIndiceGuardar.value !== '') leerYMostrarDestino(Number(campoIndiceGuardar.value))
+  const indice = indiceEnCampo()
+  if (indice !== null) leerYMostrarDestino(indice)
 }
 
 // Lee la ranura destino y pinta en el dialogo el nombre del preset que hay
@@ -408,20 +457,39 @@ function abrirDialogoGuardar() {
 // cierra su propia ventana, porque no tiene un llamador comun con otra
 // operacion (el 'input' de mas abajo es el unico punto que la invoca).
 async function leerYMostrarDestino(indice) {
-  if (operando || !Number.isInteger(indice) || indice < 0) return
+  if (!Number.isInteger(indice) || indice < 0) return
+  if (operando) {
+    // Puede pasar: el debounce de 'input' dispara este callback en un
+    // momento arbitrario, y para entonces pudo haber arrancado OTRA
+    // operacion del editor (un "Releer" general, un cambio de unidad) que
+    // tambien usa `operando` y deshabilita el campo -- pero deshabilitar no
+    // cancela un setTimeout ya programado. Sin este aviso, el usuario veia
+    // el dialogo mudo, sin saber por que "no paso nada".
+    avisoGuardar.innerHTML = 'Esperando que termine la operación anterior…'
+    return
+  }
   activarOcupado()
   try {
     await esperarDespachadorVacio()
     const destino = await ampli.leerRanura(indice)
+    // Defensa en profundidad ademas de la correlacion por ranura que ya
+    // hace ampli-usb.js (ver el comentario de pendientesRanura ahi): si por
+    // lo que sea la respuesta no es la de la ranura pedida, esto NO se
+    // muestra como si lo fuera. Alimenta la unica operacion irreversible
+    // del proyecto -- sin confirmacion no se afirma nada, tampoco aca.
+    if (destino.ranura !== indice) {
+      throw new Error(`El amplificador contestó con la ranura ${destino.ranura ?? '(desconocida)'} en vez de la ${indice}.`)
+    }
     // El nombre viene del equipo: pasa por esc() antes de entrar al innerHTML,
     // igual que cualquier otro texto del amplificador en este archivo.
     const nombre = esc(destino.preset?.info?.displayName?.trim() || '(sin nombre)')
     avisoGuardar.innerHTML = `La ranura ${indice} tiene ahora «${nombre}». Guardar la pisa y no se puede deshacer.`
-    botonConfirmarGuardar.disabled = false
+    ranuraLeida = indice
   } catch (err) {
+    ranuraLeida = null
     avisoGuardar.innerHTML = esc(err.message)
   } finally {
-    desactivarOcupado()
+    desactivarOcupado()   // tambien recalcula el boton de confirmar -- ver actualizarBotonGuardar()
   }
 }
 
@@ -433,11 +501,25 @@ let temporizadorLecturaDestino = null
 campoIndiceGuardar.addEventListener('input', () => {
   clearTimeout(temporizadorLecturaDestino)
   resetearAvisoGuardar()
-  const valor = campoIndiceGuardar.value
   temporizadorLecturaDestino = setTimeout(() => {
-    const indice = Number(valor)
-    if (valor !== '' && Number.isInteger(indice) && indice >= 0) leerYMostrarDestino(indice)
+    const indice = indiceEnCampo()
+    if (indice !== null) leerYMostrarDestino(indice)
   }, 400)
+})
+
+// El evento nativo 'close' cubre los tres caminos por los que el dialogo
+// puede cerrarse -- el boton Cancelar, Escape (que ademas dispara 'cancel'
+// antes), y el .close() que el propio guardado exitoso llama mas abajo --
+// asi que es el unico lugar que hace falta para invalidar lo que quedaba
+// pendiente. Sin esto, cancelar o Escape a mitad de la pausa del debounce
+// dejaba el temporizador vivo: la lectura disparaba igual unos cientos de ms
+// despues, con el dialogo ya cerrado -- `operando` deshabilitaba el editor
+// entero hasta por ESPERA_RANURA (los mismos 4 s que leerPreset) sin ninguna
+// causa visible para el usuario, y el aviso resultante caia en un dialogo
+// que nadie estaba mirando.
+contDialogoGuardar.addEventListener('close', () => {
+  clearTimeout(temporizadorLecturaDestino)
+  resetearAvisoGuardar()
 })
 
 $('#guardar-cancelar').addEventListener('click', () => contDialogoGuardar.close())
@@ -447,8 +529,13 @@ botonConfirmarGuardar.addEventListener('click', async () => {
   // `operando` los controles del dialogo quedan deshabilitados, asi que un
   // usuario real no puede disparar este click mientras dura.
   if (operando) return
-  const indice = Number(campoIndiceGuardar.value)
-  if (!Number.isInteger(indice) || indice < 0) return
+  const indice = indiceEnCampo()
+  // Ademas de la validacion de forma, esto exige que haya una lectura VALIDA
+  // de esta misma ranura -- botonConfirmarGuardar.disabled ya lo impide en
+  // la practica (ver actualizarBotonGuardar()), pero un handler de click no
+  // deberia confiar solo en el atributo `disabled` del elemento que lo
+  // disparo para la unica operacion irreversible del proyecto.
+  if (indice === null || ranuraLeida !== indice) return
   // El nombre bajo el que se guarda es el del preset activo: renombrar
   // presets esta fuera de alcance (ver la spec), asi que se guarda tal cual
   // se llama ahora, no un nombre nuevo que el usuario no pidio poder elegir.
@@ -460,19 +547,28 @@ botonConfirmarGuardar.addEventListener('click', async () => {
   activarOcupado()
   try {
     await esperarDespachadorVacio()
-    await ampli.guardarEn(indice, nombre)
+    const confirmado = await ampli.guardarEn(indice, nombre)
     contDialogoGuardar.close()
     // El guardado puede cambiar el estado "editado sin guardar" del preset
     // activo (si la ranura pisada es la misma de la que se cargo): se relee
-    // para que la pantalla no siga afirmando algo que el equipo ya cambio.
+    // ANTES de avisar, para que el aviso de exito se enganche a la cabecera
+    // recien redibujada -- mostrarAvisoCabecera() busca `.editor-cabecera`
+    // en el momento en que se llama, y dibujar() la reemplaza entera en
+    // cada redibujado (ver su comentario). Mostrar el aviso antes de releer
+    // lo dejaria pintado durante un instante y despues borrado por el
+    // redibujado, indistinguible de no haber dicho nada -- el mismo silencio
+    // que el punto 3 de la ronda de revision señalo como un problema: sobre
+    // la unica operacion irreversible del proyecto, un guardado exitoso
+    // tiene que decir que ranura quedo y con que nombre, con los valores que
+    // el EQUIPO confirmo (`confirmado`), no los que se pidieron.
     await releerYRedibujar()
+    mostrarAvisoCabecera(`Guardado en la ranura ${confirmado.ranura} como "${confirmado.nombre ?? nombre}".`)
   } catch (err) {
     avisoGuardar.innerHTML = esc(err.message)
   } finally {
     desactivarOcupado()
   }
 })
-
 function bloqueRanura(cat, ranura, nodo) {
   const fenderId = nodo?.FenderId ?? ''
   const unidades = cat.deRanura(ranura)
