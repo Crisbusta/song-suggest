@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { PRESETS_BANDA, PRESETS_TONO, auditoria } from '../lib/presets-comunidad.js'
+import { PRESETS_BANDA, PRESETS_TONO, auditoria, buscarPreset } from '../lib/presets-comunidad.js'
 import { resolverUnidad } from '../lib/lt25-nombres.js'
 import { parsearCsv, numeroCsv } from '../lib/csv.js'
 
@@ -211,4 +211,70 @@ test('una ranura con valores pero sin nombre de unidad tambien es un aviso, no u
   assert.ok(!('amp' in p.cadena), 'sin nombre de unidad no puede haber ranura de ampli')
   const { avisos } = auditoria()
   assert.ok(avisos.some(a => a.fila === 'Super Clean' && a.ranura === 'amp' && /sin nombre de unidad|columna de unidad esta vacia/.test(a.motivo)))
+})
+
+test('una cancion nombrada gana sobre el preset de su artista', () => {
+  // Metallica trae DOS filas en la planilla: "James Hetfield / Metallica"
+  // (generica) y "Metallica - Enter Sandman" (de esta cancion puntual).
+  // Verificado contra data/presets-lt25-bandas.csv, lineas 34 y 50.
+  const r = buscarPreset({ artist: 'Metallica', title: 'Enter Sandman', tags: [] })
+  assert.equal(r.motivo, 'cancion')
+  assert.match(r.preset.clave, /Enter Sandman/i)
+})
+
+test('otra cancion del mismo artista cae en el preset de artista, no en el de otra cancion suya', () => {
+  // "Master of Puppets" no esta en la planilla: tiene que caer en el preset
+  // GENERICO de Metallica ("James Hetfield / Metallica"), no en el de
+  // "Enter Sandman" disfrazado de "el tono de Metallica" -- un preset de
+  // cancion puntual no es candidato generico de su artista.
+  const r = buscarPreset({ artist: 'Metallica', title: 'Master of Puppets', tags: [] })
+  assert.equal(r.motivo, 'artista')
+  assert.equal(r.preset.artista.toLowerCase(), 'metallica')
+  assert.equal(r.preset.clave, 'James Hetfield / Metallica')
+  assert.notEqual(r.preset.cancion, 'Enter Sandman')
+})
+
+test('el nombre se normaliza: mayusculas, acentos y el articulo inicial', () => {
+  // La planilla escribe "Keith Richards / Rolling Stones" (sin articulo);
+  // el catalogo puede traer "The Rolling Stones". Mayuscula, articulo y
+  // acento no pueden decidir si el guitarrista tiene o no su tono.
+  const base = buscarPreset({ artist: 'Rolling Stones', title: 'x', tags: [] })
+  assert.ok(base)
+  assert.deepEqual(buscarPreset({ artist: 'THE ROLLING STONES', title: 'x', tags: [] }).preset, base.preset)
+  // El acento es lo que se normaliza, no una coincidencia aproximada: sin
+  // strip de acentos esta variante NO calzaria con "Rolling Stones" (no hay
+  // ninguna regla de substring o distancia de edicion detras).
+  assert.deepEqual(buscarPreset({ artist: 'Röllîng Stönes', title: 'x', tags: [] }).preset, base.preset)
+})
+
+test('con varios presets del mismo artista, la epoca de la cancion desempata', () => {
+  // Rush tiene tres presets (70s, 80s, 90s: data/presets-lt25-bandas.csv
+  // lineas 4-6). Se piden las tres decadas para que un desempate que
+  // simplemente devolviera "el primero de la lista" (que en el CSV es el de
+  // los 80s) no pase por casualidad.
+  const r80 = buscarPreset({ artist: 'Rush', title: 'x', tags: ['80s'] })
+  assert.match(r80.preset.epoca, /80/)
+  assert.equal(r80.motivo, 'artista')
+
+  const r70 = buscarPreset({ artist: 'Rush', title: 'x', tags: ['70s'] })
+  assert.match(r70.preset.epoca, /70/)
+  assert.equal(r70.motivo, 'artista')
+
+  const r90 = buscarPreset({ artist: 'Rush', title: 'x', tags: ['90s'] })
+  assert.match(r90.preset.epoca, /90/)
+  assert.equal(r90.motivo, 'artista')
+
+  assert.notEqual(r70.preset, r80.preset)
+  assert.notEqual(r70.preset, r90.preset)
+})
+
+test('sin epoca que calce se elige uno, y se dice que fue sin desempate', () => {
+  const r = buscarPreset({ artist: 'Rush', title: 'x', tags: [] })
+  assert.equal(r.motivo, 'artista (sin desempate de epoca)')
+  assert.ok(PRESETS_BANDA.includes(r.preset))
+})
+
+test('un artista sin preset no devuelve uno parecido', () => {
+  assert.equal(buscarPreset({ artist: 'Los Prisioneros', title: 'x', tags: [] }), null)
+  assert.equal(buscarPreset({ artist: '', title: '', tags: [] }), null)
 })
