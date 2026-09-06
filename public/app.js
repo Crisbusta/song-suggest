@@ -349,6 +349,10 @@ $('#tarjeta').addEventListener('click', async e => {
         const v = nodo?.dspUnitParameters?.volume
         volumen = typeof v === 'number' ? v : null
       } catch {
+        // Si ademas sortearon otra cancion, no hay nada que avisar: esta
+        // lectura no escribio nada, asi que gritar en rojo sobre la tarjeta
+        // nueva seria alarmar por un riesgo que no existe.
+        if (actual !== cancion) return { abandonado: true }
         return { nota: 'no pude leer el ampli, dejo el modelo como estaba', mal: true }
       }
 
@@ -403,15 +407,24 @@ $('#tarjeta').addEventListener('click', async e => {
     /* Abandonar por una tirada nueva NO puede tragarse un aviso sobre el
        amplificador. Hasta aca ya pudimos haberle cambiado el modelo y fallado
        al devolverle el volumen, y `estado` es un nodo desprendido: escribirle
-       es un no-op que no avisa de nada. Un aviso de volumen no es de la
-       cancion, es del equipo, asi que se pinta en la tarjeta que este en
-       pantalla, que es donde el usuario lo va a ver. */
+       es un no-op que no avisa de nada.
+
+       El aviso va a `#hint`, no al estado de la tarjeta, por dos razones que
+       aprendimos a golpes:
+
+       - `#envio-estado` vive DENTRO del bloque del ampli, que solo se dibuja
+         si la cancion trae sugerencia. Si la tirada nueva no la trae, ese nodo
+         no existe y el aviso se perderia en silencio -- con el equipo hasta 16
+         dB mas arriba.
+       - Y aunque exista, ese bloque es un <details> cerrado por defecto, asi
+         que el aviso quedaria dentro de un acordeon plegado. Estar en el
+         documento no es lo mismo que estar a la vista.
+
+       `#hint` esta siempre en el markup, siempre visible, y ya es la linea
+       donde esta app pone lo que hay que leer. */
     const abandonar = () => {
       if (actual === cancion) return false
-      if (malModelo) {
-        const vivo = $('#envio-estado')
-        if (vivo) { vivo.className = 'envio-estado mal'; vivo.textContent = notaModelo }
-      }
+      if (malModelo) $('#hint').textContent = notaModelo
       return true
     }
 
