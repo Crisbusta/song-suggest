@@ -270,6 +270,10 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 .envio-estado.mal { color: #e2585b; }
 
 /* --- Editor del amplificador -------------------------------------------- */
+/* Mientras hay una lectura o un reemplazo de unidad en curso: los controles
+   ya quedan deshabilitados por JS, esto es solo la senal visual de por que. */
+#vista-editor.ocupado { opacity: .6; }
+#vista-editor.ocupado * { cursor: wait; }
 .editor-cabecera { display: flex; align-items: baseline; gap: var(--e2); margin-bottom: var(--e3); }
 .editor-cabecera h2 { margin: 0; font-size: var(--t-grande); }
 .editor-cabecera button {

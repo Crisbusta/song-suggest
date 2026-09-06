@@ -28,11 +28,13 @@ let confirmados = {}   // "nodo.parametro" -> ultimo valor que el equipo confirm
 // vivo. Las dos funciones documentan en ampli-usb.js que comparten el
 // reensamblador y que no toleran superposicion -- ni entre ellas ni consigo
 // mismas -- y las dos nombran a este editor como el llamador que tiene que
-// imponer esa serializacion. Sin esta guarda: dos clics en "Releer", o
-// cambiar una segunda ranura mientras la primera sigue en su ventana de
-// varios segundos (los demas selectores quedan habilitados), pisan el
-// reensamblador de la otra llamada y hacen vencer una operacion que si
-// funciono.
+// imponer esa serializacion. Mientras esta activo, activarOcupado()
+// deshabilita todos los controles del editor: eso es lo que de verdad
+// impide que una escritura NUEVA se encole durante la ventana (el usuario no
+// puede disparar un 'input'/'change' sobre un control deshabilitado), y sin
+// eso una escritura que llama a reensamblador.reiniciar() a mitad de la
+// transferencia multi-paquete de leerPreset() le destruye lo que llevaba
+// acumulado.
 let operando = false
 
 // Numero de render. Cada vez que dibujar() reemplaza las ranuras, sube en
@@ -45,6 +47,23 @@ let operando = false
 let generacion = 0
 const generacionDe = {}   // "nodo.parametro" -> generacion en la que se encolo su ultima escritura
 
+// Claves de controles continuos con un puntero activo (el usuario todavia
+// tiene el dedo o el mouse encima, arrastrando). Un ACK que se confirma o
+// vence mientras dura el arrastre queda casi siempre desactualizado -- el
+// usuario ya siguio de largo -- y pintarlo encima de la posicion real del
+// puntero se ve como un tembleque que antes no existia. Se resuelve solo:
+// el listener de 'input' ya repinta en cada movimiento, y el ultimo ACK que
+// llegue DESPUES de soltar (arrastrando ya vacio) sigue pintando lo que
+// corresponda.
+const arrastrando = new Set()
+contEditor.addEventListener('pointerdown', e => {
+  const campo = e.target.closest('[data-clave]')
+  if (campo?.__descriptor?.tipo === 'continuo') arrastrando.add(campo.dataset.clave)
+})
+const soltarArrastre = () => arrastrando.clear()
+window.addEventListener('pointerup', soltarArrastre)
+window.addEventListener('pointercancel', soltarArrastre)
+
 const despachador = crearDespachador(async (clave, valor) => {
   const [nodo, parametro] = clave.split('.')
   await ampli.ponerParametro(nodo, parametro, valor)
@@ -55,27 +74,41 @@ const despachador = crearDespachador(async (clave, valor) => {
 // tambien hay que pintarlo: el despachador solo manda el ultimo valor de un
 // arrastre, asi que puede llegar aqui bastante despues de que el usuario haya
 // seguido moviendo el control (incluso despues de que otra escritura, ya
-// vencida, lo haya hecho volver a un valor viejo).
+// vencida, lo haya hecho volver a un valor viejo) -- salvo que el arrastre
+// siga en curso, ver `arrastrando` arriba.
 despachador.alTerminar((clave, valor, error) => {
-  if (generacionDe[clave] !== generacion) return   // el render que la origino ya no existe
-  const campo = document.querySelector(`[data-clave="${clave}"]`)
-  if (!error) {
-    confirmados[clave] = valor
-    if (campo) pintarControl(campo, valor)
-    marcar(campo, '')
-  } else {
-    if (campo && confirmados[clave] != null) pintarControl(campo, confirmados[clave])
-    marcar(campo, 'sin confirmar')
+  try {
+    if (generacionDe[clave] !== generacion) return   // el render que la origino ya no existe
+    const campo = document.querySelector(`[data-clave="${clave}"]`)
+    const enVivo = arrastrando.has(clave)
+    if (!error) {
+      confirmados[clave] = valor
+      if (campo && !enVivo) pintarControl(campo, valor)
+      marcar(campo, '')
+    } else {
+      if (campo && !enVivo && confirmados[clave] != null) pintarControl(campo, confirmados[clave])
+      marcar(campo, 'sin confirmar')
+    }
+  } finally {
+    /* El chequeo de drenado va en un finally, no despues del `if` de arriba:
+       si el `return` temprano de la guarda de generacion se ejecutara antes,
+       una escritura de un render superado saldria sin agendar este chequeo,
+       y el sync se quedaria abierto sin ningun disparador futuro que lo
+       cierre.
+
+       El drenado de la cola sigue corriendo, sincronicamente, despues de
+       este callback (vaciar() recien revisa si queda algo pendiente al
+       volver de el): en un microtask posterior enVuelo() ya refleja bien si
+       de verdad no queda nada por mandar. Se exige ademas `!operando`: un
+       ACK que llega mientras hay una lectura o un reemplazo en curso no
+       debe cerrar el sync -- esa ventana ya tiene su propio cierre en
+       desactivarOcupado(), y cerrar aca podria mandar un SYNC_END justo en
+       el hueco entre el SYNC_BEGIN habilitador de esa operacion y su
+       pedido real, haciendola vencer sobre algo que el usuario hizo bien. */
+    queueMicrotask(() => {
+      if (!operando && !despachador.enVuelo()) ampli.cerrarSync().catch(() => {})
+    })
   }
-  // El drenado de la cola sigue corriendo, sincronicamente, despues de este
-  // callback (vaciar() recien revisa si queda algo pendiente al volver de
-  // el): en un microtask posterior enVuelo() ya refleja bien si de verdad no
-  // queda nada por mandar. Sin cerrar el sync la pantalla del ampli se queda
-  // en "sync with Fender Tone" en vez de volver al preset -- lo mismo que
-  // app.js ya resuelve para el envio de la tarjeta, pero alla es una sola
-  // tanda con su propio finally; aqui las escrituras son continuas y el
-  // drenado de la cola es el unico punto donde "termine" tiene sentido.
-  queueMicrotask(() => { if (!despachador.enVuelo()) ampli.cerrarSync().catch(() => {}) })
 })
 
 function marcar(campo, texto) {
@@ -111,6 +144,31 @@ function valorDe(campo) {
   if (tipo === 'interruptor') return campo.checked
   if (tipo === 'lista') return campo.value
   return Number(campo.value)
+}
+
+// Entra y sale de la ventana en la que hay una lectura o un reemplazo de
+// unidad en curso. Deshabilitar los controles no es solo cosmetico: es lo
+// que impide que el usuario encole una escritura nueva mientras dura -- ver
+// el comentario de `operando` mas arriba. El boton "Releer" queda deshabilitado
+// igual que el resto: sin esto, quedaba visible y clickeable durante los
+// varios segundos que dura un cambio de unidad, y pulsarlo sin que pase nada
+// se ve igual que un boton roto (mismo motivo que la guarda de `enviando` en
+// app.js).
+function activarOcupado() {
+  operando = true
+  contEditor.classList.add('ocupado')
+  for (const el of contEditor.querySelectorAll('input, select, button')) el.disabled = true
+}
+
+function desactivarOcupado() {
+  operando = false
+  contEditor.classList.remove('ocupado')
+  for (const el of contEditor.querySelectorAll('input, select, button')) el.disabled = false
+  // Mientras `operando` estuvo activo no pudo encolarse ninguna escritura
+  // nueva (los controles estaban deshabilitados), asi que si la cola tambien
+  // esta vacia ahora, no queda nada pendiente: es el punto correcto para
+  // cerrar el sync si el chequeo de alTerminar lo salto por `operando`.
+  if (!despachador.enVuelo()) ampli.cerrarSync().catch(() => {})
 }
 
 function mostrarAvisoCabecera(mensaje) {
@@ -163,11 +221,11 @@ export async function montarEditor() {
     return
   }
   if (operando) return
-  operando = true
+  activarOcupado()
   try {
     await releerYRedibujar()
   } finally {
-    operando = false
+    desactivarOcupado()
   }
 }
 
@@ -212,7 +270,10 @@ function dibujar(cat, preset, editado) {
    para impedir. */
 contEditor.addEventListener('input', e => {
   const campo = e.target.closest('[data-clave]')
-  if (!campo) return
+  // `operando` deja los controles deshabilitados, asi que un usuario real no
+  // puede disparar este evento mientras dura -- se chequea igual, en forma
+  // defensiva, para no encolar una escritura si de algun modo llega.
+  if (!campo || operando) return
   const valor = valorDe(campo)
   if (campo.__descriptor?.tipo === 'continuo') pintarValor(campo, valor)
   generacionDe[campo.dataset.clave] = generacion
@@ -221,28 +282,18 @@ contEditor.addEventListener('input', e => {
 
 contEditor.addEventListener('change', async e => {
   const selector = e.target.closest('[data-ranura]')
-  if (!selector) return
-  if (operando) {
-    // Hay una lectura u otro reemplazo en curso: este cambio no puede
-    // mandarse ahora sin arriesgar la misma superposicion que `operando`
-    // existe para evitar. Se revierte la seleccion visible -- ya cambio
-    // sola, antes de este handler -- y se avisa en vez de quedar mudo.
-    const anterior = selector.querySelector('option[selected]')
-    if (anterior) selector.value = anterior.value
-    mostrarAvisoCabecera('Hay una operación en curso; esperá a que termine.')
-    return
-  }
+  // Mismo motivo que en 'input': con los controles deshabilitados durante
+  // `operando`, un <select> no puede recibir esta interaccion del usuario.
+  if (!selector || operando) return
   const ranura = selector.dataset.ranura
-  operando = true
-  selector.disabled = true
+  activarOcupado()
   try {
     await ampli.reemplazarUnidad(ranura, selector.value)
     await releerYRedibujar()   // la unidad nueva tiene otras perillas: se redibuja
   } catch (err) {
     mostrarAvisoCabecera(err.message)
-    selector.disabled = false
   } finally {
-    operando = false
+    desactivarOcupado()
   }
 })
 
