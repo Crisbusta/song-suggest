@@ -240,7 +240,13 @@ De lo más específico a lo más genérico. Gana el primero que calza:
    desempate.
 3. **Tono de género** (hoja 2, mapeado por el autor de esta spec a las reglas
    existentes). Este mapeo **es juicio, no dato**, y queda marcado como tal.
-4. **La tabla de reglas actual**, que sigue siendo el suelo para el 85% restante.
+4. **La tabla de reglas actual**, que sigue siendo el suelo para el resto.
+
+**Cobertura medida de la cadena completa**, sobre las 9.974 canciones: 7 por
+canción exacta, 980 por artista, 61 por artista sin desempate de época, 15 desde
+el preset de otra canción del mismo artista, y **3.101 por tono de género** —
+**4.164 en total, un 41,7%**. Los presets por banda son los que suenan a la
+banda; los tonos por género son los que evitan que el resto caiga en la nada.
 
 La sugerencia viaja con su **procedencia** y con la **incertidumbre que la fuente
 declaró**. Un `{EXPERIMENTAL}` de la planilla llega hasta la pantalla; no se
