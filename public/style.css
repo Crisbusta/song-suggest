@@ -277,6 +277,7 @@ nav button.activo { color: var(--acento); font-weight: 600; }
   padding: var(--e1) var(--e2); border-radius: var(--radio); font: inherit;
   font-size: var(--t-micro); cursor: pointer;
 }
+.editor-cabecera .aviso { font-size: var(--t-micro); color: #e2585b; }
 .ranura { border: 1px solid var(--borde); border-radius: var(--radio); margin-bottom: var(--e2); }
 .ranura > header {
   display: flex; align-items: center; justify-content: space-between;
