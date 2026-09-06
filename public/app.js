@@ -96,7 +96,9 @@ function pintar({ song, matching, hint }) {
              Punto de partida, no el tono del disco.
              Deducido de: ${a.motivos.map(esc).join(', ')}.<br>
              Al ampli se mandan el <strong>modelo</strong> y <strong>gain, treb y bass</strong>.
-             El volumen no: depende de tu pieza, y el tuyo se respeta aunque cambie el modelo.
+             Cambiar de modelo deja el resto de sus perillas (mid, master, presence…)
+             en los valores por defecto de ese modelo; tu volumen se lee antes y se
+             devuelve, y si no se puede, se te avisa y el modelo no se toca.
            </p>
            ${ampli.soportado()
              ? `<p class="envio">
@@ -292,7 +294,8 @@ $('#tarjeta').addEventListener('click', async e => {
   // segundo click alcance a colarse.
   if (enviando) {
     /* La guarda no cambia; solo deja de ser muda. El envio anterior puede
-       durar hasta 6 s (tres timeouts de 2 s) y sobrevive a sortear otra
+       durar hasta unos 16 s (leer el preset, cambiar el modelo y cinco
+       escrituras, cada una con su timeout) y sobrevive a sortear otra
        cancion: el boton de la tarjeta nueva esta habilitado, asi que este clic
        es legitimo y quedarse callado se ve igual que un boton roto. El de la
        tarjeta en curso no llega aca: se deshabilita mientras dura el envio. */
@@ -305,7 +308,7 @@ $('#tarjeta').addEventListener('click', async e => {
   }
   enviando = true
   // La cancion de este envio queda fijada aqui: si el usuario sortea otra
-  // mientras el bucle corre (hasta 6 s, tres timeouts de 2 s), `actual`
+  // mientras el envio corre (hasta unos 16 s en el peor caso), `actual`
   // cambia y `#tarjeta` se reemplaza por completo, pero este envio sigue
   // corriendo sobre los nodos y valores de la cancion original.
   const cancion = actual
@@ -323,37 +326,67 @@ $('#tarjeta').addEventListener('click', async e => {
        parametros por defecto, asi que ponerlo despues pisaria los valores
        recien enviados.
 
-       Y antes de cambiarlo hay que leer el volumen que tenias. Los `volume`
-       por defecto de los veinte modelos van de -13,88 a -1,17 dB, asi que
-       cambiar de modelo puede ser un salto de mas de 12 dB de golpe con la
-       guitarra enchufada. El volumen no se sugiere -- su curva es de las que
-       todavia no sabemos convertir -- pero eso no es excusa para moverlo sin
-       querer. */
-    let notaModelo = ''
-    const fenderId = cancion.ampli?.fenderId
-    if (fenderId) {
+       Y antes de cambiarlo hay que leer el volumen que tenias. Calculado del
+       catalogo: los `volume` por defecto de los veinte modelos van de -15,88 dB
+       (SUPER HEAVY) a 0 (SUPER CLEAN), casi 16 dB de diferencia entre los
+       extremos. Cambiar de modelo sin devolver el tuyo puede ser ese salto de
+       golpe, con la guitarra enchufada. El volumen no se sugiere -- su curva es
+       de las que todavia no sabemos convertir -- pero eso no es excusa para
+       moverlo sin querer.
+
+       Devolverlo tal cual es correcto porque los veinte modelos declaran la
+       MISMA escala para `volume`: -60..0 dB con curva t20r. Es el hecho que
+       sostiene toda esta parte, asi que queda escrito. */
+    let notaModelo = '', malModelo = false
+
+    async function ponerModelo(fenderId) {
+      let volumen = null, cargado = null
       try {
         const { preset } = await ampli.leerPreset()
-        if (actual !== cancion) return
+        if (actual !== cancion) return { abandonado: true }
         const nodo = preset.audioGraph?.nodes?.find(n => n.nodeId === 'amp')
-        if (nodo?.FenderId === fenderId) {
-          notaModelo = 'el modelo ya estaba puesto'
-        } else {
-          const volumen = nodo?.dspUnitParameters?.volume
-          await ampli.reemplazarUnidad('amp', fenderId)
-          notaModelo = `modelo ${cancion.ampli.modelo}`
-          if (typeof volumen === 'number') {
-            // Si esto falla, el equipo se queda con el volumen por defecto del
-            // modelo nuevo, que puede ser bastante mas alto. Hay que decirlo.
-            try { await ampli.ponerParametro('amp', 'volume', volumen) }
-            catch { notaModelo += ' (ojo: no pude devolverte el volumen)' }
-          }
+        cargado = nodo?.FenderId ?? null
+        const v = nodo?.dspUnitParameters?.volume
+        volumen = typeof v === 'number' ? v : null
+      } catch {
+        return { nota: 'no pude leer el ampli, dejo el modelo como estaba', mal: true }
+      }
+
+      // Sin un volumen que devolver NO se cambia el modelo. El equipo se
+      // quedaria con el del modelo nuevo, que puede estar 16 dB mas arriba.
+      if (volumen === null) {
+        return { nota: 'no pude leer tu volumen, dejo el modelo como estaba', mal: true }
+      }
+      if (cargado === fenderId) return { nota: 'el modelo ya estaba puesto' }
+
+      try {
+        // Se informa el identificador que el EQUIPO dice que quedo puesto, no
+        // el que se pidio: es la misma regla que sigue el editor.
+        const puesto = await ampli.reemplazarUnidad('amp', fenderId)
+        const nota = puesto === fenderId ? `modelo ${cancion.ampli.modelo}` : `modelo ${puesto}`
+        try {
+          await ampli.ponerParametro('amp', 'volume', volumen)
+          return { nota }
+        } catch {
+          return { nota: `${nota} (ojo: no pude devolverte el volumen)`, mal: true }
         }
       } catch {
-        // Sin poder leer el equipo no sabemos que volumen devolver, asi que no
-        // se cambia el modelo: mejor dejarlo como estaba que subirlo a ciegas.
-        notaModelo = 'no pude cambiar el modelo'
+        /* Sin confirmacion no sabemos si el equipo cargo el modelo o no, y en la
+           duda hay que suponer que SI: un ACK perdido por timeout no significa
+           que la unidad no se haya cargado, y si se cargo, el volumen quedo en
+           el del modelo nuevo. Se intenta devolverlo igual -- si el cambio no
+           ocurrio, escribir el valor que ya estaba no hace nada. */
+        try { await ampli.ponerParametro('amp', 'volume', volumen) } catch { /* nada mas que hacer */ }
+        return { nota: 'no pude confirmar el cambio de modelo, revisa el volumen del ampli', mal: true }
       }
+    }
+
+    const fenderId = cancion.ampli?.fenderId
+    if (fenderId) {
+      const r = await ponerModelo(fenderId)
+      if (r.abandonado) return
+      notaModelo = r.nota
+      malModelo = !!r.mal
     }
 
     for (const [parametro, valor] of Object.entries(valores)) {
@@ -370,7 +403,7 @@ $('#tarjeta').addEventListener('click', async e => {
     // "ya estaba puesto" no es lo mismo que "lo confirmo el equipo".
     const conModelo = t => notaModelo ? `${notaModelo} · ${t}` : t
     if (!fallidos.length) {
-      estado.className = notaModelo.startsWith('no pude') ? 'envio-estado mal' : 'envio-estado ok'
+      estado.className = malModelo ? 'envio-estado mal' : 'envio-estado ok'
       estado.textContent = conModelo(`${confirmados.join(', ')} confirmados por el ampli`)
     } else if (!confirmados.length) {
       estado.className = 'envio-estado mal'

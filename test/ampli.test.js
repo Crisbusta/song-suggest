@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sugerirAjustes, MODELOS_LT25 } from '../lib/ampli.js'
+import { sugerirAjustes, MODELOS_LT25, fenderIdDeModelo, TAGS_CON_REGLA } from '../lib/ampli.js'
+import { readFileSync } from 'node:fs'
 
 // Los nombres de modelo de estos tests salen del catalogo de unidades DSP del
 // amplificador, no del manual. La primera version usaba nombres extraidos de
@@ -170,8 +171,6 @@ test('los valores quedan acotados aunque entre basura', () => {
 })
 
 // --- El modelo que se manda al amplificador ---------------------------------
-import { fenderIdDeModelo } from '../lib/ampli.js'
-import { readFileSync } from 'node:fs'
 
 const UNIDADES = JSON.parse(readFileSync(new URL('../public/lt25-unidades.json', import.meta.url), 'utf8'))
 const AMPS_DEL_CATALOGO = UNIDADES.filter(u => u.info?.subcategory === 'amp')
@@ -184,10 +183,9 @@ const AMPS_DEL_CATALOGO = UNIDADES.filter(u => u.info?.subcategory === 'amp')
    equipo, que es lo que el amplificador acepta de verdad. */
 test('los veinte modelos que nombramos existen en el catalogo del equipo', () => {
   for (const m of MODELOS_LT25) {
-    const id = fenderIdDeModelo(m)
-    assert.ok(id, `"${m}" no existe en el catalogo del LT25`)
-    assert.ok(AMPS_DEL_CATALOGO.some(u => u.FenderId === id),
-      `"${m}" resolvio a ${id}, que no es una unidad de tipo amp`)
+    // No se comprueba ademas que el id este en AMPS_DEL_CATALOGO: el mapa se
+    // construye con ese mismo filtro, asi que esa asercion no puede fallar.
+    assert.ok(fenderIdDeModelo(m), `"${m}" no existe en el catalogo del LT25`)
   }
 })
 
@@ -212,28 +210,43 @@ test('la sugerencia viaja con el identificador que el equipo entiende', () => {
   assert.ok(r.fenderId.startsWith('DUBS_'), 'un FenderId del LT25 siempre empieza con DUBS_')
 })
 
-test('todo modelo alcanzable por la tabla trae su identificador, incluidas las sustituciones', () => {
-  // Las sustituciones (acustico, limpio, epoca) nombran modelos con literales
-  // dentro de la funcion, fuera de REGLAS: si una se escribe mal, solo se ve
-  // ejercitando la tabla entera.
-  const generos = [
-    'thrash metal','metalcore','nu metal','doom metal','progressive metal','heavy metal',
-    'grunge','alternative metal','punk','hard rock','blues rock','blues','rockabilly',
-    'country','britpop','progressive rock','classic rock','indie rock','funk','jazz',
-    'alternative rock','pop','surf','soul','ska','post-rock','power metal','shoegaze',
-  ]
-  const vistos = new Set()
-  for (const g of generos) {
+test('todo modelo alcanzable por la tabla trae su identificador', () => {
+  // La cobertura sale de REGLAS, no de una lista escrita a mano: con una lista
+  // a mano, la fila de 'new wave'/'post-punk'/'gothic rock' quedaba sin
+  // ejercitar, y ponerle un modelo inexistente pasaba en verde.
+  for (const tag of TAGS_CON_REGLA) {
     for (const instr of ['Distortion Guitar', 'Electric Guitar (clean)', 'Acoustic Guitar (steel)']) {
-      for (const tags of [[g], [g, '60s'], [g, '70s']]) {
+      for (const tags of [[tag], [tag, '60s'], [tag, '70s']]) {
         const r = sugerirAjustes({ tags, instrument: instr, tuning: null })
         if (!r) continue
-        vistos.add(r.modelo)
+        assert.ok(MODELOS_LT25.includes(r.modelo), `"${r.modelo}" no es un modelo del LT25`)
         assert.ok(r.fenderId, `"${r.modelo}" viajaria sin identificador`)
       }
     }
   }
-  for (const esperado of ['CHAMPION', 'DELUXE CLN', '60S UK CLEAN', 'BASSMAN']) {
-    assert.ok(vistos.has(esperado), `la prueba no llego a ejercitar la sustitucion a "${esperado}"`)
-  }
+})
+
+/* Las tres sustituciones se comprueban DIRECTAMENTE. Comprobarlas viendo si su
+   modelo aparece en el conjunto de los alcanzados no prueba nada: dos de los
+   tres modelos sustitutos tambien salen de reglas directas, asi que el
+   conjunto los contiene aunque la sustitucion no corra. */
+test('la sustitucion por instrumento acustico apunta a un modelo real', () => {
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Acoustic Guitar (steel)', tuning: null })
+  assert.equal(r.modelo, 'CHAMPION')
+  assert.ok(r.fenderId)
+})
+
+test('la sustitucion por track limpio apunta a un modelo real', () => {
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (clean)', tuning: null })
+  assert.equal(r.modelo, 'DELUXE CLN')
+  assert.ok(r.fenderId)
+})
+
+test('las dos sustituciones por epoca apuntan a modelos reales', () => {
+  const sesenta = sugerirAjustes({ tags: ['heavy metal', '60s'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(sesenta.modelo, '60S UK CLEAN')
+  assert.ok(sesenta.fenderId)
+  const setenta = sugerirAjustes({ tags: ['heavy metal', '70s'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(setenta.modelo, 'BASSMAN')
+  assert.ok(setenta.fenderId)
 })
