@@ -286,3 +286,53 @@ test('el payload trae los valores ya convertidos para el amplificador', () => {
   assert.ok(a.paraElAmpli.gain > 0 && a.paraElAmpli.gain <= 1)
   assert.equal(a.paraElAmpli.volume, undefined, 'el volumen no se manda')
 })
+
+/* Este test existe por una razon puntual: sin el, `hidratar` puede llamar a
+   sugerirAjustes sin `artist` ni `title` -- que es como lo hacia hasta ahora --
+   y TODO el camino de los presets de la comunidad queda inerte con la suite
+   entera en verde, porque los tests de lib/ampli.js llaman a la funcion
+   directamente y nunca pasan por la consulta. Un preset que nunca se busca es
+   una funcion muerta que aprueba su propia revision. */
+test('el sorteo le pasa el artista y el titulo a la sugerencia', () => {
+  const db = base()
+  // "Metallica - Enter Sandman" es una fila real de la planilla de la comunidad.
+  const id = agregar(db, { artist: 'Metallica', title: 'Enter Sandman', instrument: 'Distortion Guitar' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
+  const a = roll(db, {}).song.ampli
+  assert.equal(a.fuente, 'comunidad', 'sin artista esto diria "reglas"')
+  assert.equal(a.modelo, '90S ROCK', 'METAL 2000 seria lo que dicen las reglas de genero')
+  assert.match(a.procedencia, /Enter Sandman/i)
+  assert.ok(a.cadena.amp, 'la cadena completa tiene que llegar hasta la tarjeta')
+})
+
+test('las listas tambien pasan el artista, no solo el sorteo', () => {
+  const db = base()
+  const id = agregar(db, { artist: 'Metallica', title: 'Enter Sandman', instrument: 'Distortion Guitar' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
+  mark(db, { songId: id, status: 'queued' })
+  assert.equal(getList(db, 'queued')[0].ampli.fuente, 'comunidad')
+})
+
+test('una cancion sin preset propio sigue cayendo en la tabla de reglas', () => {
+  const db = base()
+  const id = agregar(db, { artist: 'Banda Que No Existe', title: 'Cancion Que No Existe' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
+  const a = roll(db, {}).song.ampli
+  assert.equal(a.fuente, 'reglas')
+  assert.equal(a.modelo, 'METAL 2000')
+  assert.equal(a.cadena, null)
+})
+
+test('una perilla que la planilla no declaro no llega al payload del ampli', () => {
+  /* "James Hetfield / Metallica" no declara bass. Antes de la correccion,
+     `Number(null)` daba 0 y el bass viajaba en el minimo, presentado como un
+     valor elegido: la misma mentira que el modulo evita en pantalla, del otro
+     lado del cable. */
+  const db = base()
+  const id = agregar(db, { artist: 'Metallica', title: 'Cancion Que No Esta En La Planilla' })
+  db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
+  const a = roll(db, {}).song.ampli
+  assert.equal(a.bass, null)
+  assert.ok(!('bass' in a.paraElAmpli), `bass no deberia viajar, vino ${a.paraElAmpli.bass}`)
+  assert.ok('gain' in a.paraElAmpli, 'las que si declaro tienen que viajar')
+})
