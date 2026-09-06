@@ -283,10 +283,13 @@ $('#tarjeta').addEventListener('click', async e => {
   if (e.target.id !== 'enviar-ampli') return
   const valores = actual?.ampli?.paraElAmpli
   if (!valores) return
-  // Evita un segundo envio mientras el primero sigue vivo: los dos
-  // compartirian el reensamblador y la lista de pendientes de ampli-usb.js.
-  // Se marca en forma sincrona, antes del primer await, para no dejar una
-  // ventana en la que un segundo click alcance a colarse.
+  // Evita un segundo envio mientras el primero sigue vivo. Ya no es lo que
+  // protege el estado compartido de ampli-usb.js -- de eso se ocupa el turno
+  // de ese modulo (ver `enTurno` alla), que es el unico que puede coordinar
+  // este envio con el editor, que esta guarda no ve --: es para la interfaz,
+  // que necesita saber cuando el boton esta ocupado. Se marca en forma
+  // sincrona, antes del primer await, para no dejar una ventana en la que un
+  // segundo click alcance a colarse.
   if (enviando) {
     /* La guarda no cambia; solo deja de ser muda. El envio anterior puede
        durar hasta 6 s (tres timeouts de 2 s) y sobrevive a sortear otra

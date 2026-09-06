@@ -401,6 +401,447 @@ if (typeof navigator !== 'undefined' && navigator.hid) {
   })
 }
 
+/* ---------------------------------------------------------------------------
+   Turno exclusivo de las operaciones que le hablan al equipo.
+
+   Todo el estado de mas arriba -- `reensamblador`, las listas de pendientes,
+   los mapas de deuda -- es estado de MODULO, y desde que existe el editor hay
+   dos llamadores que lo comparten sin poder verse entre si: public/app.js (el
+   envio de la tarjeta, con su guarda `enviando`) y public/editor.js (con la
+   suya, `operando`). Cada guarda serializa a su propio llamador y ninguna sabe
+   de la otra. Reproducido con un dispositivo falso, en las dos direcciones:
+
+   - Una escritura que arranca a mitad de la transferencia multi-paquete de
+     leerPreset() llama a reensamblador.reiniciar() y le tira lo acumulado: la
+     lectura muere por su propio timeout, segundos despues, sin ninguna razon
+     visible en pantalla.
+   - Un ACK de parametro que llega entre el primer paquete del preset y el
+     ultimo entra en el reensamblador con la secuencia ABIERTA: se lo toma por
+     terminador y se lo pega al preset. La escritura se reporta "sin confirmar"
+     sobre una perilla que el equipo SI movio -- la mentira exacta contra la
+     que existe todo este diseño, solo que al reves --, la lectura tambien
+     falla, y encima queda una deuda que se come el ACK del reintento.
+
+   Por eso la exclusion vive aca y no en una tercera guarda del lado del
+   llamador: la precondicion pasa a ser una propiedad del estado que protege,
+   en vez de un contrato delegado a llamadores que no pueden coordinarse. Las
+   guardas de app.js y editor.js se quedan como estan -- sirven para la
+   interfaz, que necesita saber cuando deshabilitar controles --, pero dejan de
+   ser la unica defensa.
+
+   Se ENCOLA, no se rechaza: que el envio de la tarjeta este en curso no puede
+   hacer fallar la lectura del editor, solo retrasarla. El orden es el de
+   llamada (FIFO), que es el que el usuario espera.
+
+   El turno cubre la ESPERA, no solo el envio: `enTurno` adopta lo que devuelve
+   la operacion, asi que el eslabon siguiente no arranca hasta que el equipo
+   confirmo -- o hasta que vencio el plazo. Soltarlo al terminar el sendReport
+   no serviria de nada: la ventana peligrosa es justo la espera.
+
+   Y liberarlo no depende de que ningun camino se acuerde de bajar una bandera:
+   `cola` se reasigna en el mismo instante en que se encola, y ese eslabon se
+   traga el rechazo, asi que una operacion que lanza -- o que espera un ACK que
+   nunca llega y vence -- deja pasar a la siguiente igual. Es el `finally` que
+   hace falta, sin la bandera que algun camino podria olvidar.
+
+   Lo que queda AFUERA del turno, a proposito:
+
+   - desconectar(), que es la que corta todo. Encolarla detras de una operacion
+     que quiza nunca termine seria peor que la carrera que esto arregla. Y no
+     hace falta: rechaza todos los pendientes, asi que la operacion que tenga
+     el turno se cae sola y lo suelta, y las que estaban encoladas arrancan y
+     mueren en su primera linea, la que exige `dispositivo`.
+   - conectar() y reconectarSiSePuede(), por el mismo motivo de fondo: tampoco
+     pueden quedar esperando a una operacion ajena. No comparten el estado
+     protegido (abrir() arma un `reensamblador` nuevo), y ya se serializan
+     entre ellas con `conectando`.
+   --------------------------------------------------------------------------- */
+let cola = Promise.resolve()
+
+function enTurno(operacion) {
+  const turno = cola.then(operacion)
+  /* El eslabon que encadena al siguiente se traga el resultado, bueno o malo:
+     `cola` no puede quedar rechazada -- seria un unhandled rejection, y ademas
+     saltearia la operacion siguiente. Quien llamo recibe `turno` tal cual, con
+     su error si lo hubo. */
+  cola = turno.then(() => {}, () => {})
+  return turno
+}
+
+/* Cierra el modo sync. Cada escritura lo abre con SYNC_BEGIN, y mientras este
+   abierto el amplificador muestra en su pantalla "sync with Fender Tone" en
+   vez del preset. Se cierra al terminar la tanda para que el equipo vuelva a
+   su pantalla normal; la siguiente tanda lo reabre sola, que es lo que
+   ponerParametro ya hace por cada perilla.
+   No lanza: que la pantalla quede en sync es un detalle cosmetico y no tiene
+   por que hacer fracasar un envio que si funciono.
+
+   Tambien pasa por el turno, aunque no toque el reensamblador ni ninguna lista
+   de pendientes: lo que toca es el estado de sync DEL EQUIPO, que es
+   exactamente de lo que dependen las otras cinco. Un SYNC_END de app.js (su
+   `finally { await ampli.cerrarSync() }`) que caiga en el hueco entre el
+   SYNC_BEGIN habilitador de una lectura del editor y su pedido real puede
+   dejar ese pedido en silencio, y la lectura vence sin motivo visible. El
+   editor ya se defiende de su PROPIO cierre -- la guarda `!operando` de
+   alTerminar dice justamente esto -- pero no tiene forma de defenderse del de
+   app.js. El turno cuesta poco aca: esta operacion no espera ninguna
+   confirmacion, y no puede trabarse porque ninguna de las otras la llama. */
+
+async function opCerrarSync() {
+  if (!dispositivo) return
+  try { await dispositivo.sendReport(0, empaquetar(SYNC_END)) } catch { /* se fue el equipo */ }
+}
+
+/* Escribe un parametro y espera la confirmacion del equipo.
+   El amplificador ignora en silencio lo que no entiende, asi que sin ACK no
+   hay ninguna garantia de que algo haya cambiado: esta funcion rechaza en vez
+   de mentir.
+
+   No puede haber dos llamadas vivas a la vez para la misma (nodo, parametro):
+   alRecibir() busca el ACK con findIndex por esa clave y se queda con la
+   primera coincidencia, asi que una segunda escritura sobre la misma perilla
+   mientras la primera todavia espera su ACK podria resolver la entrada
+   equivocada. Eso ya NO es una precondicion delegada al llamador. Lo era
+   cuando app.js era el unico que llamaba aca -- y esa nota quedo mintiendo
+   apenas aparecio el segundo llamador, el despachador de public/editor.js --;
+   hoy lo garantiza el turno de `enTurno`, que serializa esta funcion consigo
+   misma y con las otras cinco, cubriendo tambien la espera del ACK. Un control
+   que mande la perilla mientras el usuario la arrastra no rompe la garantia:
+   se encola. */
+
+async function opPonerParametro(nodo, parametro, valor) {
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  /* Medido contra el equipo: cada SYNC_BEGIN habilita UNA sola escritura; la
+     segunda y las siguientes caen en silencio. Reenviarlo antes de cada
+     parametro es lo que permite mandar las tres perillas. No hace falta
+     SYNC_END: basta con volver a abrir el sync. */
+  reensamblador.reiniciar()
+  await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+  /* Entre la guarda de arriba y este punto hay un await: el equipo se puede
+     desenchufar justo ahi. Si eso pasa, desconectar() corre entero mientras
+     seguimos esperando -- incluido su descartar.clear() -- y `dispositivo`
+     queda en null antes de que retomemos. Sin este segundo chequeo,
+     seguiriamos de largo y creariamos una entrada y una deuda para una
+     sesion que ya termino: al reconectar, esa deuda huerfana se comeria el
+     primer ACK legitimo de la sesion nueva, reportando "sin confirmar" una
+     perilla que el ampli si aplico. */
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  let entrada
+  const promesa = new Promise((resolver, rechazar) => {
+    const temporizador = setTimeout(() => {
+      const i = pendientes.findIndex(p => p.resolver === resolver)
+      if (i >= 0) pendientes.splice(i, 1)
+      /* Damos esta escritura por perdida, pero su ACK todavia puede llegar
+         tarde. Si llega, no puede quedar disponible para el reintento que el
+         usuario esta por hacer -- que es la reaccion natural a leer
+         "sin confirmar" --, porque lo confirmaria con la respuesta de una
+         escritura anterior. La deuda se anota sin excepciones: esta escritura
+         puede producir su propio ACK tardio, y esa posibilidad es exactamente
+         lo que la deuda representa. */
+      anotarDeuda(nodo, parametro)
+      rechazar(new Error(`El amplificador no confirmó ${parametro}`))
+    }, ESPERA_ACK)
+    entrada = { nodo, parametro, resolver, rechazar, temporizador }
+    pendientes.push(entrada)
+  })
+  try {
+    await dispositivo.sendReport(0, empaquetar(mensajePonerParametro(nodo, parametro, valor)))
+  } catch (err) {
+    // Este sendReport fallo despues de haber empujado la entrada a
+    // pendientes. Si la dejamos ahi, sigue viva hasta que su propio
+    // setTimeout la rechace a los 2s (un unhandled rejection, porque
+    // `promesa` no se devuelve y nadie la sostiene), y mientras tanto un
+    // reintento del usuario para el mismo (nodo, parametro) -- interaccion
+    // perfectamente normal -- puede hacer que alRecibir encuentre esta
+    // entrada vieja primero (busca por findIndex, se queda con la primera
+    // coincidencia) y le entregue el ACK del reintento, dejando al
+    // reintento real esperando un ACK que ya se gasto. Por eso se saca la
+    // entrada por referencia -- no por (nodo, parametro): buscar por esa
+    // clave tiene el mismo problema de "primera coincidencia" y podria
+    // sacar la entrada de otro pedido igual que si este en curso -- y se
+    // le cancela el timeout antes de relanzar. No rechazamos `promesa` a
+    // mano: como nadie la sostiene, rechazarla produciria el mismo
+    // unhandled rejection que estamos evitando; queda pendiente y sin
+    // referencias, que es justamente lo que buscamos.
+    const i = pendientes.indexOf(entrada)
+    if (i >= 0) pendientes.splice(i, 1)
+    clearTimeout(entrada.temporizador)
+    /* Y se le anota su deuda, igual que a una escritura vencida. Que
+       sendReport rechace no prueba que el equipo no haya recibido nada: dice
+       que la transferencia no se pudo confirmar, no que no haya salido. Bajo
+       la regla de la casa -- sin confirmacion no se afirma nada -- esta
+       escritura queda abandonada con un ACK tardio posible, que sin la deuda
+       confirmaria falsamente al reintento. Cuesta casi nada: un sendReport
+       que falla suele ser el equipo yendose, y desconectar() limpia el mapa
+       entero. */
+    anotarDeuda(nodo, parametro)
+    throw err
+  }
+  return promesa
+}
+
+/* Lee el preset activo completo. Llega en varios paquetes: el
+   reensamblador ya los junta.
+
+   Pedir el preset TRABA las escrituras del resto de la sesion -- medido
+   contra el equipo -- y un SYNC_BEGIN nuevo las destraba. La regla nunca
+   fue "no leer" sino "no dejar la sesion trabada", asi que destrabar es
+   responsabilidad de esta funcion y no de quien la llama. Va en un
+   `finally` para que tambien destrabe cuando la lectura falla o se cae por
+   el timeout: sin esto, toda escritura posterior a la primera lectura de
+   preset se perderia en silencio, indistinguible de un equipo
+   desconectado.
+
+   El SYNC_BEGIN de aca abajo, antes de pedir el preset, es una habilitacion
+   distinta de la del finally: cada SYNC_BEGIN habilita UNA sola operacion,
+   asi que si hubo una escritura antes en la sesion, ese permiso ya esta
+   gastado y pedir el preset sin reabrirlo puede caer en silencio. Medido
+   contra el equipo: todas las lecturas que funcionaron en las pruebas
+   mandaron SYNC_BEGIN justo antes de mensajePedirPreset(); no hay ninguna
+   medicion de una lectura sin sync previo.
+
+   Los llamadores son montarEditor() y el flujo de guardado de
+   public/editor.js. No tienen que garantizar nada: esta funcion comparte
+   `reensamblador` con leerRanura(), reemplazarUnidad(), guardarEn() y
+   ponerParametro(), y reiniciarlo a mitad de esta transferencia -- que no es
+   de uno o dos paquetes sino de varios segundos -- tiraria lo acumulado, pero
+   de eso se ocupa el turno de `enTurno`. Ese `reiniciar()` corre DENTRO del
+   turno, no antes de tomarlo. */
+
+async function opLeerPreset() {
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  reensamblador.reiniciar()
+  try {
+    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+    // Entre la guarda de arriba y este punto hay un await: mismo motivo
+    // que en ponerParametro, el equipo se puede desenchufar justo ahi.
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    let entrada
+    const promesa = new Promise((resolver, rechazar) => {
+      const temporizador = setTimeout(() => {
+        const i = pendientesPreset.indexOf(entrada)
+        if (i >= 0) pendientesPreset.splice(i, 1)
+        rechazar(new Error('El amplificador no mandó el preset'))
+      }, ESPERA_PRESET)
+      entrada = { resolver, rechazar, temporizador }
+      pendientesPreset.push(entrada)
+    })
+    try {
+      await dispositivo.sendReport(0, empaquetar(mensajePedirPreset()))
+    } catch (err) {
+      // Mismo motivo que en ponerParametro: si no se saca la entrada de
+      // aca, queda viva hasta que la gaste su propio timeout (un
+      // unhandledRejection, porque `promesa` no se devuelve y nadie la
+      // sostiene) y mientras tanto una lectura siguiente la encontraria
+      // primero en la FIFO -- pendientesPreset.shift() le entregaria a
+      // esta entrada huerfana el preset que le llego a la lectura nueva,
+      // y la lectura nueva se quedaria esperando sus 4s completos sin
+      // motivo. Sin deuda: a diferencia de un ACK de parametro o de nodo,
+      // esto no arriesga confirmar de mas -- es una consulta, no la
+      // confirmacion de un valor -- asi que alcanza con sacarla.
+      const i = pendientesPreset.indexOf(entrada)
+      if (i >= 0) pendientesPreset.splice(i, 1)
+      clearTimeout(entrada.temporizador)
+      throw err
+    }
+    return await promesa
+  } finally {
+    // Destraba, pase lo que pase. No lanza: si el equipo ya se fue, no hay
+    // nada que destrabar y no tiene sentido que ese sendReport tape el
+    // error real de la lectura.
+    try { await dispositivo?.sendReport(0, empaquetar(SYNC_BEGIN)) } catch { /* se fue el equipo */ }
+  }
+}
+
+/* Lee el preset GUARDADO en una ranura del equipo (retrievePreset, 105) --
+   no el activo en memoria. No es destructiva: solo consulta, igual que
+   leerPreset(). Es la lectura que el flujo de guardado necesita para
+   mostrarle al usuario que preset va a pisar antes de que confirme, y la
+   unica lectura de ranura que existe en este modulo (navegar o cargar
+   otros presets guardados esta fuera de alcance, ver la spec).
+
+   Misma forma que leerPreset(), a proposito -- ver el docblock de arriba
+   -- incluido el `finally` que reenvia SYNC_BEGIN: se asume que pedir una
+   ranura traba la sesion igual que pedir el preset activo, porque las dos
+   son la misma familia de mensaje (una consulta que devuelve el preset
+   completo, multi-paquete). Esto NO esta medido contra el equipo -- el
+   Step 4 de esta tarea, que lo mide, quedo fuera de alcance sin hardware
+   -- asi que es la asuncion mas conservadora, no un hecho verificado.
+
+   A diferencia de leerPreset(), lo que devuelve no trae `editado`: la
+   respuesta a retrievePreset (presetJSONMessage, 31) no tiene ese campo en
+   su definicion -- el estado "editado sin guardar" solo tiene sentido para
+   el preset activo en memoria, no para uno guardado en una ranura.
+
+   El llamador es el dialogo de guardado de public/editor.js, y no tiene que
+   garantizar nada: la serializacion con las otras cuatro la impone el turno
+   de `enTurno`. */
+
+async function opLeerRanura(indice) {
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  reensamblador.reiniciar()
+  try {
+    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+    // Mismo motivo que en leerPreset(): el equipo se puede desenchufar
+    // durante el await de arriba.
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    let entrada
+    const promesa = new Promise((resolver, rechazar) => {
+      const temporizador = setTimeout(() => {
+        const i = pendientesRanura.indexOf(entrada)
+        if (i >= 0) pendientesRanura.splice(i, 1)
+        rechazar(new Error(`El amplificador no mandó la ranura ${indice}`))
+      }, ESPERA_RANURA)
+      entrada = { ranura: indice, resolver, rechazar, temporizador }
+      pendientesRanura.push(entrada)
+    })
+    try {
+      await dispositivo.sendReport(0, empaquetar(mensajePedirRanura(indice)))
+    } catch (err) {
+      // Mismo motivo que en leerPreset(): se saca por referencia para no
+      // dejar una entrada huerfana que se coma la respuesta de una
+      // lectura de ranura posterior.
+      const i = pendientesRanura.indexOf(entrada)
+      if (i >= 0) pendientesRanura.splice(i, 1)
+      clearTimeout(entrada.temporizador)
+      throw err
+    }
+    return await promesa
+  } finally {
+    // Destraba, pase lo que pase -- mismo motivo que en leerPreset().
+    try { await dispositivo?.sendReport(0, empaquetar(SYNC_BEGIN)) } catch { /* se fue el equipo */ }
+  }
+}
+
+/* Cambia la unidad de una ranura -- incluido `amp`, que es como se cambia
+   el modelo de amplificador. Espera la confirmacion del equipo y devuelve
+   el FenderId que el equipo dice que quedo puesto, no el que se pidio: son
+   iguales cuando todo sale bien, pero es la respuesta del equipo la que
+   cuenta.
+
+   Igual que las perillas: cada SYNC_BEGIN habilita una sola operacion, asi
+   que se reenvia antes de cada pedido. Y la misma limitacion de fondo que
+   ponerParametro -- sin identificador de correlacion, un ACK atrasado de un
+   intento abandonado podria confirmar falsamente el siguiente -- asi que
+   lleva la misma defensa de deuda (anotarDeudaNodo), no solo el ACK feliz.
+
+   Usa ESPERA_REEMPLAZO, no ESPERA_ACK: reemplazar una unidad DSP carga un
+   nodo entero, no un solo valor, y es mas pesado que una perilla -- ver el
+   comentario de la constante.
+
+   El llamador es el <select> de unidades de public/editor.js. No tiene que
+   garantizar nada: comparte `reensamblador` con las lecturas, y reiniciarlo a
+   mitad de una de ellas descartaria lo que llevaban juntado, pero de eso se
+   ocupa el turno de `enTurno`. */
+
+async function opReemplazarUnidad(nodo, fenderId) {
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  reensamblador.reiniciar()
+  await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+  // Mismo motivo que en ponerParametro: el equipo se puede desenchufar
+  // durante el await de arriba.
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  let entrada
+  const promesa = new Promise((resolver, rechazar) => {
+    const temporizador = setTimeout(() => {
+      const i = pendientesNodo.indexOf(entrada)
+      if (i >= 0) pendientesNodo.splice(i, 1)
+      anotarDeudaNodo(nodo)
+      rechazar(new Error(`El amplificador no confirmó el cambio de ${nodo}`))
+    }, ESPERA_REEMPLAZO)
+    entrada = { nodo, resolver, rechazar, temporizador }
+    pendientesNodo.push(entrada)
+  })
+  try {
+    await dispositivo.sendReport(0, empaquetar(mensajeReemplazarNodo(nodo, fenderId)))
+  } catch (err) {
+    // Mismo motivo que en ponerParametro: se saca por referencia, no por
+    // nodo, y se le anota la deuda antes de relanzar.
+    const i = pendientesNodo.indexOf(entrada)
+    if (i >= 0) pendientesNodo.splice(i, 1)
+    clearTimeout(entrada.temporizador)
+    anotarDeudaNodo(nodo)
+    throw err
+  }
+  return promesa
+}
+
+/* Guarda el tono actual en una ranura del equipo (saveCurrentPresetTo, 54).
+
+   ES LA UNICA OPERACION IRREVERSIBLE DE TODO EL PROYECTO: pisa lo que haya
+   en esa ranura sin posibilidad de deshacer, y este mensaje NUNCA se probo
+   contra el equipo real -- la prueba (Step 6 de la tarea que agrega esta
+   funcion) requiere al usuario y al amplificador delante, y quedo fuera de
+   alcance a proposito. Todo lo de aca abajo sigue la regla de la casa --
+   nunca declarar exito sin confirmacion -- pero esa regla protege contra
+   mentir sobre si el equipo confirmo, no contra que el mensaje mismo este
+   mal armado; eso solo lo cierra la prueba real.
+
+   Esta funcion NO decide que ranura pisar, ni lee la que hay ahi, ni sabe que
+   tono va a quedar escrito: guarda LO QUE ESTE VIVO EN EL EQUIPO en el
+   momento en que llega el mensaje, que no tiene por que ser lo que el editor
+   muestra -- la rueda del equipo lo puede haber cambiado. Quien la llama es
+   responsable de las dos mitades del "mirar antes de pisar": mostrar con
+   leerRanura() que se va a pisar, y con leerPreset() que se va a escribir.
+   guardarEn() en si mismo no mira nada antes de escribir.
+
+   Espera la confirmacion del equipo (presetSavedStatus, 50) con la misma
+   estructura que reemplazarUnidad(): mismo problema de fondo -- sin
+   identificador de correlacion propio, solo la ranura que el equipo
+   devuelve --, misma defensa de deuda (anotarDeudaGuardar) para que el ACK
+   atrasado de un intento abandonado no confirme falsamente un reintento
+   sobre la misma ranura. Con la unica operacion irreversible del proyecto
+   de por medio, esta defensa importa mas aca que en cualquier otro lado.
+
+   Usa ESPERA_GUARDAR, no ESPERA_REEMPLAZO -- ver el comentario de la
+   constante: no hay ninguna medicion real de cuanto tarda escribir en
+   almacenamiento persistente, asi que el margen es una decision
+   deliberadamente generosa, no un dato medido.
+
+   A diferencia de leerPreset()/leerRanura(), no reenvia SYNC_BEGIN en un
+   `finally`: ese trabamiento esta medido solo para las consultas que piden
+   un preset completo (currentPresetRequest, retrievePreset), y guardar es,
+   como reemplazarUnidad, una escritura -- no hay ninguna razon para
+   esperar que trabe la sesion igual. Sigue siendo una suposicion sin
+   medir: si el Step 6 de esta tarea encuentra que si traba, hay que
+   agregar el mismo `finally` que tiene leerRanura().
+
+   El llamador es el dialogo de guardado de public/editor.js. La
+   serializacion con las otras cuatro la impone el turno de `enTurno`, no el
+   llamador. */
+
+async function opGuardarEn(indice, nombre) {
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  reensamblador.reiniciar()
+  await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+  // Mismo motivo que en reemplazarUnidad: el equipo se puede desenchufar
+  // durante el await de arriba.
+  if (!dispositivo) throw new Error('El amplificador no está conectado.')
+  let entrada
+  const promesa = new Promise((resolver, rechazar) => {
+    const temporizador = setTimeout(() => {
+      const i = pendientesGuardado.indexOf(entrada)
+      if (i >= 0) pendientesGuardado.splice(i, 1)
+      anotarDeudaGuardar(indice)
+      rechazar(new Error(`El amplificador no confirmó el guardado en la ranura ${indice}`))
+    }, ESPERA_GUARDAR)
+    entrada = { ranura: indice, resolver, rechazar, temporizador }
+    pendientesGuardado.push(entrada)
+  })
+  try {
+    await dispositivo.sendReport(0, empaquetar(mensajeGuardarEn(indice, nombre)))
+  } catch (err) {
+    // Mismo motivo que en reemplazarUnidad: se saca por referencia y se
+    // le anota la deuda antes de relanzar.
+    const i = pendientesGuardado.indexOf(entrada)
+    if (i >= 0) pendientesGuardado.splice(i, 1)
+    clearTimeout(entrada.temporizador)
+    anotarDeudaGuardar(indice)
+    throw err
+  }
+  return promesa
+}
+
 export const ampli = {
   soportado: () => typeof navigator !== 'undefined' && 'hid' in navigator,
   conectado: () => !!dispositivo,
@@ -475,356 +916,14 @@ export const ampli = {
 
   desconectar,
 
-  /* Escribe un parametro y espera la confirmacion del equipo.
-     El amplificador ignora en silencio lo que no entiende, asi que sin ACK no
-     hay ninguna garantia de que algo haya cambiado: esta funcion rechaza en vez
-     de mentir.
-
-     Precondicion: no puede haber dos llamadas vivas a la vez para la misma
-     (nodo, parametro). alRecibir() busca el ACK con findIndex por esa clave y
-     se queda con la primera coincidencia, asi que una segunda escritura sobre
-     la misma perilla mientras la primera todavia espera su ACK puede resolver
-     la entrada equivocada. Hoy se cumple porque public/app.js serializa con
-     `enviando` y espera cada parametro antes de mandar el siguiente, y es el
-     unico punto que llama a esta funcion -- pero eso esta documentado solo
-     alla. Un control futuro que mande la perilla mientras el usuario la
-     arrastra (sin esperar el ACK anterior) rompe justamente esta garantia. */
-  /* Cierra el modo sync. Cada escritura lo abre con SYNC_BEGIN, y mientras
-     este abierto el amplificador muestra en su pantalla "sync with Fender
-     Tone" en vez del preset. Se cierra al terminar la tanda para que el equipo
-     vuelva a su pantalla normal; la siguiente tanda lo reabre sola, que es lo
-     que ponerParametro ya hace por cada perilla.
-     No lanza: que la pantalla quede en sync es un detalle cosmetico y no
-     tiene por que hacer fracasar un envio que si funciono. */
-  async cerrarSync() {
-    if (!dispositivo) return
-    try { await dispositivo.sendReport(0, empaquetar(SYNC_END)) } catch { /* se fue el equipo */ }
-  },
-
-  async ponerParametro(nodo, parametro, valor) {
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    /* Medido contra el equipo: cada SYNC_BEGIN habilita UNA sola escritura; la
-       segunda y las siguientes caen en silencio. Reenviarlo antes de cada
-       parametro es lo que permite mandar las tres perillas. No hace falta
-       SYNC_END: basta con volver a abrir el sync. */
-    reensamblador.reiniciar()
-    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
-    /* Entre la guarda de arriba y este punto hay un await: el equipo se puede
-       desenchufar justo ahi. Si eso pasa, desconectar() corre entero mientras
-       seguimos esperando -- incluido su descartar.clear() -- y `dispositivo`
-       queda en null antes de que retomemos. Sin este segundo chequeo,
-       seguiriamos de largo y creariamos una entrada y una deuda para una
-       sesion que ya termino: al reconectar, esa deuda huerfana se comeria el
-       primer ACK legitimo de la sesion nueva, reportando "sin confirmar" una
-       perilla que el ampli si aplico. */
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    let entrada
-    const promesa = new Promise((resolver, rechazar) => {
-      const temporizador = setTimeout(() => {
-        const i = pendientes.findIndex(p => p.resolver === resolver)
-        if (i >= 0) pendientes.splice(i, 1)
-        /* Damos esta escritura por perdida, pero su ACK todavia puede llegar
-           tarde. Si llega, no puede quedar disponible para el reintento que el
-           usuario esta por hacer -- que es la reaccion natural a leer
-           "sin confirmar" --, porque lo confirmaria con la respuesta de una
-           escritura anterior. La deuda se anota sin excepciones: esta escritura
-           puede producir su propio ACK tardio, y esa posibilidad es exactamente
-           lo que la deuda representa. */
-        anotarDeuda(nodo, parametro)
-        rechazar(new Error(`El amplificador no confirmó ${parametro}`))
-      }, ESPERA_ACK)
-      entrada = { nodo, parametro, resolver, rechazar, temporizador }
-      pendientes.push(entrada)
-    })
-    try {
-      await dispositivo.sendReport(0, empaquetar(mensajePonerParametro(nodo, parametro, valor)))
-    } catch (err) {
-      // Este sendReport fallo despues de haber empujado la entrada a
-      // pendientes. Si la dejamos ahi, sigue viva hasta que su propio
-      // setTimeout la rechace a los 2s (un unhandled rejection, porque
-      // `promesa` no se devuelve y nadie la sostiene), y mientras tanto un
-      // reintento del usuario para el mismo (nodo, parametro) -- interaccion
-      // perfectamente normal -- puede hacer que alRecibir encuentre esta
-      // entrada vieja primero (busca por findIndex, se queda con la primera
-      // coincidencia) y le entregue el ACK del reintento, dejando al
-      // reintento real esperando un ACK que ya se gasto. Por eso se saca la
-      // entrada por referencia -- no por (nodo, parametro): buscar por esa
-      // clave tiene el mismo problema de "primera coincidencia" y podria
-      // sacar la entrada de otro pedido igual que si este en curso -- y se
-      // le cancela el timeout antes de relanzar. No rechazamos `promesa` a
-      // mano: como nadie la sostiene, rechazarla produciria el mismo
-      // unhandled rejection que estamos evitando; queda pendiente y sin
-      // referencias, que es justamente lo que buscamos.
-      const i = pendientes.indexOf(entrada)
-      if (i >= 0) pendientes.splice(i, 1)
-      clearTimeout(entrada.temporizador)
-      /* Y se le anota su deuda, igual que a una escritura vencida. Que
-         sendReport rechace no prueba que el equipo no haya recibido nada: dice
-         que la transferencia no se pudo confirmar, no que no haya salido. Bajo
-         la regla de la casa -- sin confirmacion no se afirma nada -- esta
-         escritura queda abandonada con un ACK tardio posible, que sin la deuda
-         confirmaria falsamente al reintento. Cuesta casi nada: un sendReport
-         que falla suele ser el equipo yendose, y desconectar() limpia el mapa
-         entero. */
-      anotarDeuda(nodo, parametro)
-      throw err
-    }
-    return promesa
-  },
-
-  /* Lee el preset activo completo. Llega en varios paquetes: el
-     reensamblador ya los junta.
-
-     Pedir el preset TRABA las escrituras del resto de la sesion -- medido
-     contra el equipo -- y un SYNC_BEGIN nuevo las destraba. La regla nunca
-     fue "no leer" sino "no dejar la sesion trabada", asi que destrabar es
-     responsabilidad de esta funcion y no de quien la llama. Va en un
-     `finally` para que tambien destrabe cuando la lectura falla o se cae por
-     el timeout: sin esto, toda escritura posterior a la primera lectura de
-     preset se perderia en silencio, indistinguible de un equipo
-     desconectado.
-
-     El SYNC_BEGIN de aca abajo, antes de pedir el preset, es una habilitacion
-     distinta de la del finally: cada SYNC_BEGIN habilita UNA sola operacion,
-     asi que si hubo una escritura antes en la sesion, ese permiso ya esta
-     gastado y pedir el preset sin reabrirlo puede caer en silencio. Medido
-     contra el equipo: todas las lecturas que funcionaron en las pruebas
-     mandaron SYNC_BEGIN justo antes de mensajePedirPreset(); no hay ninguna
-     medicion de una lectura sin sync previo.
-
-     Precondicion: no puede haber una lectura o un reemplazarUnidad() vivos al
-     mismo tiempo que otra llamada a esta funcion. Las dos comparten
-     `reensamblador`, y `reensamblador.reiniciar()` de esta funcion tira lo
-     que el reensamblador tuviera a medio juntar de la otra -- y para un
-     preset esa ventana no es de uno o dos paquetes sino de una transferencia
-     de varios segundos. Hoy no hay ningun llamador todavia (esto lo agrega el
-     editor, en una tarea futura), asi que no hay nada roto; queda para quien
-     lo escriba. */
-  async leerPreset() {
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    reensamblador.reiniciar()
-    try {
-      await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
-      // Entre la guarda de arriba y este punto hay un await: mismo motivo
-      // que en ponerParametro, el equipo se puede desenchufar justo ahi.
-      if (!dispositivo) throw new Error('El amplificador no está conectado.')
-      let entrada
-      const promesa = new Promise((resolver, rechazar) => {
-        const temporizador = setTimeout(() => {
-          const i = pendientesPreset.indexOf(entrada)
-          if (i >= 0) pendientesPreset.splice(i, 1)
-          rechazar(new Error('El amplificador no mandó el preset'))
-        }, ESPERA_PRESET)
-        entrada = { resolver, rechazar, temporizador }
-        pendientesPreset.push(entrada)
-      })
-      try {
-        await dispositivo.sendReport(0, empaquetar(mensajePedirPreset()))
-      } catch (err) {
-        // Mismo motivo que en ponerParametro: si no se saca la entrada de
-        // aca, queda viva hasta que la gaste su propio timeout (un
-        // unhandledRejection, porque `promesa` no se devuelve y nadie la
-        // sostiene) y mientras tanto una lectura siguiente la encontraria
-        // primero en la FIFO -- pendientesPreset.shift() le entregaria a
-        // esta entrada huerfana el preset que le llego a la lectura nueva,
-        // y la lectura nueva se quedaria esperando sus 4s completos sin
-        // motivo. Sin deuda: a diferencia de un ACK de parametro o de nodo,
-        // esto no arriesga confirmar de mas -- es una consulta, no la
-        // confirmacion de un valor -- asi que alcanza con sacarla.
-        const i = pendientesPreset.indexOf(entrada)
-        if (i >= 0) pendientesPreset.splice(i, 1)
-        clearTimeout(entrada.temporizador)
-        throw err
-      }
-      return await promesa
-    } finally {
-      // Destraba, pase lo que pase. No lanza: si el equipo ya se fue, no hay
-      // nada que destrabar y no tiene sentido que ese sendReport tape el
-      // error real de la lectura.
-      try { await dispositivo?.sendReport(0, empaquetar(SYNC_BEGIN)) } catch { /* se fue el equipo */ }
-    }
-  },
-
-  /* Lee el preset GUARDADO en una ranura del equipo (retrievePreset, 105) --
-     no el activo en memoria. No es destructiva: solo consulta, igual que
-     leerPreset(). Es la lectura que el flujo de guardado necesita para
-     mostrarle al usuario que preset va a pisar antes de que confirme, y la
-     unica lectura de ranura que existe en este modulo (navegar o cargar
-     otros presets guardados esta fuera de alcance, ver la spec).
-
-     Misma forma que leerPreset(), a proposito -- ver el docblock de arriba
-     -- incluido el `finally` que reenvia SYNC_BEGIN: se asume que pedir una
-     ranura traba la sesion igual que pedir el preset activo, porque las dos
-     son la misma familia de mensaje (una consulta que devuelve el preset
-     completo, multi-paquete). Esto NO esta medido contra el equipo -- el
-     Step 4 de esta tarea, que lo mide, quedo fuera de alcance sin hardware
-     -- asi que es la asuncion mas conservadora, no un hecho verificado.
-
-     A diferencia de leerPreset(), lo que devuelve no trae `editado`: la
-     respuesta a retrievePreset (presetJSONMessage, 31) no tiene ese campo en
-     su definicion -- el estado "editado sin guardar" solo tiene sentido para
-     el preset activo en memoria, no para uno guardado en una ranura.
-
-     Precondicion: la misma que leerPreset() y reemplazarUnidad() -- ninguna
-     llamada viva a las tres al mismo tiempo que esta. Comparten
-     `reensamblador`. */
-  async leerRanura(indice) {
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    reensamblador.reiniciar()
-    try {
-      await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
-      // Mismo motivo que en leerPreset(): el equipo se puede desenchufar
-      // durante el await de arriba.
-      if (!dispositivo) throw new Error('El amplificador no está conectado.')
-      let entrada
-      const promesa = new Promise((resolver, rechazar) => {
-        const temporizador = setTimeout(() => {
-          const i = pendientesRanura.indexOf(entrada)
-          if (i >= 0) pendientesRanura.splice(i, 1)
-          rechazar(new Error(`El amplificador no mandó la ranura ${indice}`))
-        }, ESPERA_RANURA)
-        entrada = { ranura: indice, resolver, rechazar, temporizador }
-        pendientesRanura.push(entrada)
-      })
-      try {
-        await dispositivo.sendReport(0, empaquetar(mensajePedirRanura(indice)))
-      } catch (err) {
-        // Mismo motivo que en leerPreset(): se saca por referencia para no
-        // dejar una entrada huerfana que se coma la respuesta de una
-        // lectura de ranura posterior.
-        const i = pendientesRanura.indexOf(entrada)
-        if (i >= 0) pendientesRanura.splice(i, 1)
-        clearTimeout(entrada.temporizador)
-        throw err
-      }
-      return await promesa
-    } finally {
-      // Destraba, pase lo que pase -- mismo motivo que en leerPreset().
-      try { await dispositivo?.sendReport(0, empaquetar(SYNC_BEGIN)) } catch { /* se fue el equipo */ }
-    }
-  },
-
-  /* Cambia la unidad de una ranura -- incluido `amp`, que es como se cambia
-     el modelo de amplificador. Espera la confirmacion del equipo y devuelve
-     el FenderId que el equipo dice que quedo puesto, no el que se pidio: son
-     iguales cuando todo sale bien, pero es la respuesta del equipo la que
-     cuenta.
-
-     Igual que las perillas: cada SYNC_BEGIN habilita una sola operacion, asi
-     que se reenvia antes de cada pedido. Y la misma limitacion de fondo que
-     ponerParametro -- sin identificador de correlacion, un ACK atrasado de un
-     intento abandonado podria confirmar falsamente el siguiente -- asi que
-     lleva la misma defensa de deuda (anotarDeudaNodo), no solo el ACK feliz.
-
-     Usa ESPERA_REEMPLAZO, no ESPERA_ACK: reemplazar una unidad DSP carga un
-     nodo entero, no un solo valor, y es mas pesado que una perilla -- ver el
-     comentario de la constante.
-
-     Precondicion: no puede haber una llamada a esta funcion o a leerPreset()
-     viva al mismo tiempo que otra llamada a esta funcion. Comparten
-     `reensamblador`, y reiniciarlo a mitad de la lectura del preset (que
-     tarda varios paquetes) descartaria lo que llevaba juntado. Hoy no hay
-     ningun llamador todavia; queda para quien escriba el editor. */
-  async reemplazarUnidad(nodo, fenderId) {
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    reensamblador.reiniciar()
-    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
-    // Mismo motivo que en ponerParametro: el equipo se puede desenchufar
-    // durante el await de arriba.
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    let entrada
-    const promesa = new Promise((resolver, rechazar) => {
-      const temporizador = setTimeout(() => {
-        const i = pendientesNodo.indexOf(entrada)
-        if (i >= 0) pendientesNodo.splice(i, 1)
-        anotarDeudaNodo(nodo)
-        rechazar(new Error(`El amplificador no confirmó el cambio de ${nodo}`))
-      }, ESPERA_REEMPLAZO)
-      entrada = { nodo, resolver, rechazar, temporizador }
-      pendientesNodo.push(entrada)
-    })
-    try {
-      await dispositivo.sendReport(0, empaquetar(mensajeReemplazarNodo(nodo, fenderId)))
-    } catch (err) {
-      // Mismo motivo que en ponerParametro: se saca por referencia, no por
-      // nodo, y se le anota la deuda antes de relanzar.
-      const i = pendientesNodo.indexOf(entrada)
-      if (i >= 0) pendientesNodo.splice(i, 1)
-      clearTimeout(entrada.temporizador)
-      anotarDeudaNodo(nodo)
-      throw err
-    }
-    return promesa
-  },
-
-  /* Guarda el tono actual en una ranura del equipo (saveCurrentPresetTo, 54).
-
-     ES LA UNICA OPERACION IRREVERSIBLE DE TODO EL PROYECTO: pisa lo que haya
-     en esa ranura sin posibilidad de deshacer, y este mensaje NUNCA se probo
-     contra el equipo real -- la prueba (Step 6 de la tarea que agrega esta
-     funcion) requiere al usuario y al amplificador delante, y quedo fuera de
-     alcance a proposito. Todo lo de aca abajo sigue la regla de la casa --
-     nunca declarar exito sin confirmacion -- pero esa regla protege contra
-     mentir sobre si el equipo confirmo, no contra que el mensaje mismo este
-     mal armado; eso solo lo cierra la prueba real.
-
-     Esta funcion NO decide que ranura pisar ni lee la que hay ahi: quien la
-     llama es responsable de mostrarle al usuario, con leerRanura(), que va a
-     pisar antes de invocar esto. guardarEn() en si mismo no mira antes de
-     escribir.
-
-     Espera la confirmacion del equipo (presetSavedStatus, 50) con la misma
-     estructura que reemplazarUnidad(): mismo problema de fondo -- sin
-     identificador de correlacion propio, solo la ranura que el equipo
-     devuelve --, misma defensa de deuda (anotarDeudaGuardar) para que el ACK
-     atrasado de un intento abandonado no confirme falsamente un reintento
-     sobre la misma ranura. Con la unica operacion irreversible del proyecto
-     de por medio, esta defensa importa mas aca que en cualquier otro lado.
-
-     Usa ESPERA_GUARDAR, no ESPERA_REEMPLAZO -- ver el comentario de la
-     constante: no hay ninguna medicion real de cuanto tarda escribir en
-     almacenamiento persistente, asi que el margen es una decision
-     deliberadamente generosa, no un dato medido.
-
-     A diferencia de leerPreset()/leerRanura(), no reenvia SYNC_BEGIN en un
-     `finally`: ese trabamiento esta medido solo para las consultas que piden
-     un preset completo (currentPresetRequest, retrievePreset), y guardar es,
-     como reemplazarUnidad, una escritura -- no hay ninguna razon para
-     esperar que trabe la sesion igual. Sigue siendo una suposicion sin
-     medir: si el Step 6 de esta tarea encuentra que si traba, hay que
-     agregar el mismo `finally` que tiene leerRanura().
-
-     Precondicion: la misma que reemplazarUnidad() y leerPreset()/leerRanura()
-     -- ninguna llamada viva a las cuatro al mismo tiempo que esta. */
-  async guardarEn(indice, nombre) {
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    reensamblador.reiniciar()
-    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
-    // Mismo motivo que en reemplazarUnidad: el equipo se puede desenchufar
-    // durante el await de arriba.
-    if (!dispositivo) throw new Error('El amplificador no está conectado.')
-    let entrada
-    const promesa = new Promise((resolver, rechazar) => {
-      const temporizador = setTimeout(() => {
-        const i = pendientesGuardado.indexOf(entrada)
-        if (i >= 0) pendientesGuardado.splice(i, 1)
-        anotarDeudaGuardar(indice)
-        rechazar(new Error(`El amplificador no confirmó el guardado en la ranura ${indice}`))
-      }, ESPERA_GUARDAR)
-      entrada = { ranura: indice, resolver, rechazar, temporizador }
-      pendientesGuardado.push(entrada)
-    })
-    try {
-      await dispositivo.sendReport(0, empaquetar(mensajeGuardarEn(indice, nombre)))
-    } catch (err) {
-      // Mismo motivo que en reemplazarUnidad: se saca por referencia y se
-      // le anota la deuda antes de relanzar.
-      const i = pendientesGuardado.indexOf(entrada)
-      if (i >= 0) pendientesGuardado.splice(i, 1)
-      clearTimeout(entrada.temporizador)
-      anotarDeudaGuardar(indice)
-      throw err
-    }
-    return promesa
-  },
+  /* Las cinco operaciones de dispositivo y el cierre de sync pasan SIEMPRE por
+     `enTurno`, que es el unico lugar donde se toma el turno: asi no queda
+     ningun camino que llegue al estado compartido sin el. Ver el comentario
+     largo de `enTurno` mas arriba, y el de cada operacion para lo suyo. */
+  cerrarSync: () => enTurno(() => opCerrarSync()),
+  ponerParametro: (nodo, parametro, valor) => enTurno(() => opPonerParametro(nodo, parametro, valor)),
+  leerPreset: () => enTurno(() => opLeerPreset()),
+  leerRanura: indice => enTurno(() => opLeerRanura(indice)),
+  reemplazarUnidad: (nodo, fenderId) => enTurno(() => opReemplazarUnidad(nodo, fenderId)),
+  guardarEn: (indice, nombre) => enTurno(() => opGuardarEn(indice, nombre)),
 }

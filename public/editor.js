@@ -31,9 +31,9 @@ document.body.insertAdjacentHTML('beforeend', `
   <dialog id="dialogo-guardar">
     <form method="dialog">
       <h3>Guardar en el ampli</h3>
-      <p class="dialogo-riesgo">Es la unica operacion irreversible de esta app: pisa lo que haya en la ranura elegida y no se puede deshacer.</p>
+      <p class="dialogo-riesgo">Es la única operación irreversible de esta app: pisa lo que haya en la ranura elegida y no se puede deshacer.</p>
       <label>Ranura de destino
-        <input type="number" id="guardar-indice" min="0" step="1" inputmode="numeric">
+        <input type="number" id="guardar-indice" min="0" step="1" inputmode="numeric" placeholder="número de ranura">
       </label>
       <p id="aviso-guardar" class="aviso"></p>
       <menu>
@@ -49,8 +49,19 @@ const avisoGuardar = $('#aviso-guardar')
 
 let catalogo = null
 let confirmados = {}   // "nodo.parametro" -> ultimo valor que el equipo confirmo
-let presetActivo = null   // el preset que devolvio el ultimo leerPreset(): de ahi sale el nombre a guardar
-let ranuraActiva = null   // la ranura de la que se cargo ese preset: solo un valor de partida para el dialogo
+
+/* Foto del tono ACTIVO del equipo -- { ranura, nombre, editado } -- tal como
+   se le MOSTRO al usuario en el dialogo de guardado, o null si no hay ninguna
+   mostrada. guardarEn() escribe lo que este vivo en el amplificador en ese
+   momento, no lo que el editor tenga dibujado, y las dos cosas se separan con
+   un gesto que la spec llama normal: girar la rueda del equipo (§5.3, §6).
+   Sin esto, la ranura elegida quedaba escrita con el tono de OTRO preset bajo
+   el nombre del que el editor mostraba, y el dialogo lo anunciaba como un
+   exito. Se toma junto con la lectura de la ranura destino y se vuelve a
+   verificar contra el equipo justo antes de escribir -- ver el listener de
+   "Guardar y pisar". El "mirar antes de pisar" de la spec §7 vale para el
+   destino y tambien para el origen. */
+let origenLeido = null
 
 // Ranura para la que YA LLEGO una lectura valida de leerRanura() -- ver el
 // comentario largo junto a actualizarBotonGuardar(), mas abajo. null si no
@@ -66,20 +77,18 @@ let ranuraActiva = null   // la ranura de la que se cargo ese preset: solo un va
 let ranuraLeida = null
 
 // Hay una lectura (leerPreset, leerRanura), un reemplazo de unidad
-// (reemplazarUnidad) o un guardado (guardarEn) vivo. Las cuatro funciones
-// documentan en ampli-usb.js que comparten el reensamblador y que no toleran
-// superposicion -- ni entre ellas ni consigo mismas -- y todas nombran a
-// este editor como el llamador que tiene que imponer esa serializacion.
-// Mientras esta activo, activarOcupado() deshabilita todos los controles del
-// editor Y los del dialogo de guardado: eso es lo que de verdad impide que
-// una escritura NUEVA se encole durante la ventana (el usuario no puede
-// disparar un 'input'/'change' sobre un control deshabilitado), y sin eso
-// una escritura que llama a reensamblador.reiniciar() a mitad de la
-// transferencia multi-paquete de leerPreset() le destruye lo que llevaba
-// acumulado. El dialogo necesita la misma guarda que el resto: es la misma
-// razon de fondo, y ademas es el paso previo a la unica operacion
-// irreversible del proyecto -- una lectura de ranura a medio hacer no puede
-// dejar pasar un guardado sobre datos que todavia no llegaron.
+// (reemplazarUnidad) o un guardado (guardarEn) vivo. Esto YA NO es lo que
+// impide que dos operaciones se pisen sobre el estado compartido de
+// ampli-usb.js: de eso se ocupa ahora el turno de ese modulo (ver `enTurno`
+// alla), porque esta guarda nunca pudo ver la del envio de la tarjeta en
+// app.js ni al reves. Lo que sigue haciendo, y por eso se queda, es lo de la
+// INTERFAZ: activarOcupado() deshabilita todos los controles del editor Y los
+// del dialogo de guardado, asi que el usuario no encola gestos que despues
+// van a salir tarde y no ve controles que parecen vivos mientras el equipo
+// esta ocupado varios segundos. El dialogo necesita la misma guarda que el
+// resto: es el paso previo a la unica operacion irreversible del proyecto --
+// una lectura de ranura a medio hacer no puede dejar pasar un guardado sobre
+// datos que todavia no llegaron.
 let operando = false
 
 // Numero de render. Cada vez que dibujar() reemplaza las ranuras, sube en
@@ -146,10 +155,12 @@ despachador.alTerminar((clave, valor, error) => {
        volver de el): en un microtask posterior enVuelo() ya refleja bien si
        de verdad no queda nada por mandar. Se exige ademas `!operando`: un
        ACK que llega mientras hay una lectura o un reemplazo en curso no
-       debe cerrar el sync -- esa ventana ya tiene su propio cierre en
-       desactivarOcupado(), y cerrar aca podria mandar un SYNC_END justo en
-       el hueco entre el SYNC_BEGIN habilitador de esa operacion y su
-       pedido real, haciendola vencer sobre algo que el usuario hizo bien. */
+       tiene por que cerrar el sync -- esa ventana ya tiene su propio cierre
+       en desactivarOcupado(). Que ese SYNC_END pudiera caer en el hueco entre
+       el SYNC_BEGIN habilitador de esa operacion y su pedido real, haciendola
+       vencer sobre algo que el usuario hizo bien, ya no depende de esta
+       guarda: cerrarSync() tambien pasa por el turno de ampli-usb.js, que es
+       lo unico que puede impedir el mismo SYNC_END viniendo de app.js. */
     queueMicrotask(() => {
       if (!operando && !despachador.enVuelo()) ampli.cerrarSync().catch(() => {})
     })
@@ -244,13 +255,15 @@ function mostrarAvisoCabecera(mensaje) {
 }
 
 // Espera a que el despachador termine de drenar antes de leer o reemplazar.
-// Si una escritura ya en vuelo cae justo DENTRO de la transferencia
-// multi-paquete de leerPreset(), el reensamblador la trata como el cierre
-// de esa secuencia: le pega la carga del ACK a lo que llevaba juntado del
-// preset y entrega ese pegote como si fuera un mensaje completo. Eso no
-// parsea como un preset valido, asi que la lectura no miente -- termina
-// fallando por su propio timeout -- pero falla por una razon que nadie va
-// a poder explicar mirando la pantalla.
+// El motivo original -- que un ACK en vuelo cayera DENTRO de la transferencia
+// multi-paquete de leerPreset() y el reensamblador se lo pegara al preset --
+// ya no depende de esta espera: el turno de ampli-usb.js serializa las dos
+// operaciones, asi que la escritura pendiente termina antes de que la lectura
+// mande su pedido. Se queda por lo que sigue siendo suyo: el despachador
+// puede tener ademas valores ENCOLADOS que todavia no salieron, y arrancar una
+// lectura de varios segundos dejandolos para despues es peor que mandarlos
+// primero; y esta espera es la unica que puede decirlo en pantalla, mientras
+// que la del turno es invisible.
 //
 // Se llama DESPUES de deshabilitar los controles (activarOcupado ya lo
 // hizo antes de esto): si se llamara con los controles todavia vivos, el
@@ -283,24 +296,37 @@ async function cargarCatalogo() {
 // Lee el preset y redibuja. Sin guarda propia: quien la llama (montarEditor,
 // o el cambio de unidad que ya tiene la suya) es responsable de sostener
 // `operando` mientras esto corre.
-async function releerYRedibujar() {
+//
+// `noticia` es un hecho que YA ocurrio antes de esta relectura y que el
+// usuario tiene que leer pase lo que pase con ella -- hoy, que la unidad de
+// una ranura cambio y el equipo lo confirmo. Los dos caminos de fallo de mas
+// abajo reemplazan contEditor entero por un parrafo de error sin cabecera, asi
+// que un aviso que se enganchara DESPUES en `.editor-cabecera` se perderia
+// justo cuando mas importa: un cambio que si ocurrio, seguido de un equipo que
+// se va. Se pinta junto al error, no en vez de el. (Mismo defecto que la ronda
+// 2 de la Task 8 arreglo para el guardado, misma solucion.)
+async function releerYRedibujar(noticia = '') {
+  const conNoticia = mensaje => noticia
+    ? `<p class="vacio">${esc(noticia)}</p><p class="vacio">${esc(mensaje)}</p>`
+    : `<p class="vacio">${esc(mensaje)}</p>`
   contEditor.innerHTML = '<p class="vacio">Leyendo el amplificador…</p>'
   let cat
   try {
     cat = await cargarCatalogo()
   } catch (err) {
-    contEditor.innerHTML = `<p class="vacio">${esc(err.message)}</p>`
+    contEditor.innerHTML = conNoticia(err.message)
     return
   }
-  let preset, ranura, editado
+  let preset, editado
   try {
-    ({ preset, ranura, editado } = await ampli.leerPreset())
+    ({ preset, editado } = await ampli.leerPreset())
   } catch (err) {
-    contEditor.innerHTML = `<p class="vacio">${esc(err.message)}</p>`
+    contEditor.innerHTML = conNoticia(err.message)
     return
   }
   confirmados = {}
-  dibujar(cat, preset, ranura, editado)
+  dibujar(cat, preset, editado)
+  if (noticia) mostrarAvisoCabecera(noticia)
 }
 
 export async function montarEditor() {
@@ -318,18 +344,18 @@ export async function montarEditor() {
   }
 }
 
-function dibujar(cat, preset, ranura, editado) {
+function dibujar(cat, preset, editado) {
   generacion++
-  // Se guardan a nivel de modulo para que el dialogo de guardado -- que vive
-  // fuera de este redibujado, ver su comentario de creacion -- pueda leer el
-  // nombre a guardar (presetActivo) y ofrecer una ranura de partida
-  // (ranuraActiva) sin depender de que dibujar() siga en el stack.
-  presetActivo = preset
-  ranuraActiva = ranura
+  // Nada de este preset queda guardado a nivel de modulo para el dialogo de
+  // guardado: lo que se va a escribir y sobre que se va a escribir se leen del
+  // equipo en el momento, no de este redibujado -- ver `origenLeido`.
   const nodos = Object.fromEntries((preset.audioGraph?.nodes ?? []).map(n => [n.nodeId, n]))
+  // El nombre del preset se resuelve con `||` y no con `??`: un displayName
+  // vacio ('') pasa por `??` sin activar el respaldo, y dejaba un <h2> vacio
+  // justo donde el usuario busca de que preset se trata.
   contEditor.innerHTML = `
     <div class="editor-cabecera">
-      <h2>${esc(preset.info?.displayName?.trim() ?? 'Preset activo')}</h2>
+      <h2>${esc(preset.info?.displayName?.trim() || 'Preset activo')}</h2>
       ${editado ? '<span class="editado">editado sin guardar</span>' : ''}
       <button type="button" id="releer">Releer del ampli</button>
       <button type="button" id="abrir-guardar">Guardar en el ampli</button>
@@ -386,8 +412,14 @@ contEditor.addEventListener('change', async e => {
   activarOcupado()
   try {
     await esperarDespachadorVacio()
-    await ampli.reemplazarUnidad(ranura, selector.value)
-    await releerYRedibujar()   // la unidad nueva tiene otras perillas: se redibuja
+    const puesta = await ampli.reemplazarUnidad(ranura, selector.value)
+    /* A partir de aca el cambio YA ocurrio y el equipo lo confirmo, asi que
+       tiene que quedar dicho aunque la relectura de la linea siguiente falle
+       -- ver el comentario de `noticia` en releerYRedibujar(). El nombre sale
+       del FenderId que EL EQUIPO dice que quedo puesto, no del que se pidio:
+       reemplazarUnidad() devuelve el suyo justamente para esto. */
+    const noticia = `La unidad de ${ranura} quedó en «${catalogo?.nombre(puesta) ?? puesta}».`
+    await releerYRedibujar(noticia)   // la unidad nueva tiene otras perillas: se redibuja
   } catch (err) {
     mostrarAvisoCabecera(err.message)
   } finally {
@@ -397,11 +429,25 @@ contEditor.addEventListener('change', async e => {
 
 /* --- Dialogo "Guardar en el ampli" -----------------------------------------
    Es la unica operacion irreversible del proyecto, y el flujo esta pensado
-   para obligar a mirar antes de pisar: el usuario elige una ranura, la app
-   LEE esa ranura primero (leerRanura) y muestra que preset hay ahi ahora
-   mismo, y el boton de confirmar queda deshabilitado hasta que esa lectura
-   vuelva. No hay un guardado de un clic.
+   para obligar a mirar antes de pisar, de los DOS lados:
+
+   - el destino: el usuario escribe una ranura, la app LEE esa ranura
+     (leerRanura) y muestra que preset hay ahi ahora mismo;
+   - el origen: guardarEn() escribe lo que este vivo en el amplificador, que no
+     tiene por que ser lo que el editor dibujo hace rato, asi que la app LEE
+     tambien el preset activo (leerPreset) y muestra con que se va a pisar.
+
+   El boton de confirmar queda deshabilitado hasta que las dos lecturas
+   vuelvan, y justo antes de escribir se relee el origen y se compara con lo
+   que se mostro: si cambio, no se guarda. No hay un guardado de un clic, y no
+   hay ninguna ranura prellenada.
    --------------------------------------------------------------------------- */
+
+// Como describir el tono activo del equipo en el dialogo. El nombre viene del
+// amplificador: pasa por esc() antes de entrar a innerHTML, igual que
+// cualquier otro texto del equipo en este archivo.
+const descripcionOrigen = o =>
+  `«${esc(o.nombre)}»${o.ranura != null ? `, de la ranura ${o.ranura}` : ''}${o.editado ? ', editado sin guardar' : ''}`
 
 // Numero valido de ranura escrito AHORA en el campo, o null si esta vacio,
 // no es entero, o es negativo. No se le pone techo (`max`): cuantas ranuras
@@ -436,26 +482,27 @@ function actualizarBotonGuardar() {
 function resetearAvisoGuardar() {
   avisoGuardar.innerHTML = ''
   ranuraLeida = null
+  origenLeido = null
   actualizarBotonGuardar()
 }
 
 function abrirDialogoGuardar() {
-  campoIndiceGuardar.value = ranuraActiva ?? ''
+  /* La ranura de destino arranca VACIA, a proposito. Prellenarla con la del
+     preset activo dejaba una ranura VIVA -- justo la que el usuario acababa de
+     estar editando -- a un clic de la unica operacion irreversible del
+     proyecto, y ademas se leia como una recomendacion de la app. Que la
+     escriba: el gesto de escribir el numero es parte de la confirmacion. */
+  campoIndiceGuardar.value = ''
   resetearAvisoGuardar()
   contDialogoGuardar.showModal()
-  // Si hay una ranura de partida (la que ocupa el preset activo), se lee de
-  // entrada: el usuario ve de inmediato que hay ahi sin tener que tocar el
-  // campo primero. Sigue siendo solo un valor de partida -- `ranuraActiva`
-  // nunca sustituye esta lectura, es lo que la dispara.
-  const indice = indiceEnCampo()
-  if (indice !== null) leerYMostrarDestino(indice)
 }
 
-// Lee la ranura destino y pinta en el dialogo el nombre del preset que hay
-// ahi ahora mismo. Sin guarda propia sobre `operando` sostenido por otra
-// funcion -- a diferencia de releerYRedibujar(), esta es la unica que abre y
-// cierra su propia ventana, porque no tiene un llamador comun con otra
-// operacion (el 'input' de mas abajo es el unico punto que la invoca).
+// Lee la ranura destino Y el preset activo, y pinta en el dialogo que hay en
+// la ranura ahora mismo y con que se va a pisar. Sin guarda propia sobre
+// `operando` sostenido por otra funcion -- a diferencia de releerYRedibujar(),
+// esta es la unica que abre y cierra su propia ventana, porque no tiene un
+// llamador comun con otra operacion (el 'input' de mas abajo es el unico punto
+// que la invoca).
 async function leerYMostrarDestino(indice) {
   if (!Number.isInteger(indice) || indice < 0) return
   if (operando) {
@@ -485,10 +532,25 @@ async function leerYMostrarDestino(indice) {
     // El nombre viene del equipo: pasa por esc() antes de entrar al innerHTML,
     // igual que cualquier otro texto del amplificador en este archivo.
     const nombre = esc(destino.preset?.info?.displayName?.trim() || '(sin nombre)')
-    avisoGuardar.innerHTML = `La ranura ${indice} tiene ahora «${nombre}». Guardar la pisa y no se puede deshacer.`
+    /* Y ahora el ORIGEN, que es la mitad que faltaba: que tono va a quedar
+       escrito. No se saca del ultimo redibujado del editor -- eso es
+       exactamente lo que puede estar desactualizado, porque girar la rueda del
+       equipo cambia el preset activo y nada obliga a releer -- sino del
+       amplificador, aca y ahora. Va en la misma ventana de `operando` que la
+       lectura del destino: el turno de ampli-usb.js las serializa igual, y
+       cobrarle al usuario las dos esperas juntas es mas honesto que armar una
+       segunda ventana de ocupado. */
+    const origen = await ampli.leerPreset()
+    const nombreOrigen = origen.preset?.info?.displayName?.trim()
+    // Sin nombre no hay nada que guardar: guardarEn() manda el nombre junto al
+    // pedido, y renombrar presets esta fuera de alcance (ver la spec).
+    if (!nombreOrigen) throw new Error('El preset activo del equipo no tiene nombre, y este flujo guarda con el nombre que ya tiene.')
+    origenLeido = { ranura: origen.ranura, nombre: nombreOrigen, editado: !!origen.editado }
+    avisoGuardar.innerHTML = `La ranura ${indice} tiene ahora «${nombre}». Vas a pisarla con el tono activo del equipo: ${descripcionOrigen(origenLeido)}. No se puede deshacer.`
     ranuraLeida = indice
   } catch (err) {
     ranuraLeida = null
+    origenLeido = null
     avisoGuardar.innerHTML = esc(err.message)
   } finally {
     desactivarOcupado()   // tambien recalcula el boton de confirmar -- ver actualizarBotonGuardar()
@@ -551,17 +613,50 @@ botonConfirmarGuardar.addEventListener('click', async () => {
   // deberia confiar solo en el atributo `disabled` del elemento que lo
   // disparo para la unica operacion irreversible del proyecto.
   if (indice === null || ranuraLeida !== indice) return
-  // El nombre bajo el que se guarda es el del preset activo: renombrar
-  // presets esta fuera de alcance (ver la spec), asi que se guarda tal cual
-  // se llama ahora, no un nombre nuevo que el usuario no pidio poder elegir.
-  const nombre = presetActivo?.info?.displayName?.trim()
-  if (!nombre) {
-    avisoGuardar.innerHTML = 'No hay un preset activo con nombre para guardar.'
-    return
-  }
+  // Lo que se le MOSTRO al usuario sobre el tono a escribir. Sin eso no hay
+  // nada que confirmar: el boton no deberia estar habilitado (leerYMostrar-
+  // Destino los pone juntos), pero esta es la unica operacion irreversible
+  // del proyecto y no se confia en un `disabled`.
+  const mostrado = origenLeido
+  if (!mostrado) return
   activarOcupado()
   try {
     await esperarDespachadorVacio()
+    /* Releer el tono ACTIVO justo antes de escribirlo, y no guardar si esa
+       relectura falla: guardarEn() manda saveCurrentPresetTo, que graba lo que
+       este vivo en el amplificador en ese instante -- no lo que el editor
+       dibujo, ni lo que este dialogo mostro hace unos segundos. Entre una cosa
+       y la otra alcanza con girar la rueda del equipo, que la spec §5.3 y §6
+       llaman normal (y §6 lo vuelve EL mecanismo de reversibilidad). Sin
+       saber que se va a escribir no hay confirmacion posible, asi que un fallo
+       aca no se guarda: se dice y se corta. */
+    let ahora
+    try {
+      ahora = await ampli.leerPreset()
+    } catch (err) {
+      ranuraLeida = null
+      origenLeido = null
+      avisoGuardar.innerHTML = `No se guardó nada: no pude releer el tono activo del equipo (${esc(err.message)}). Vuelve a escribir la ranura para mirar de nuevo.`
+      return
+    }
+    const nombre = ahora.preset?.info?.displayName?.trim()
+    /* Y se compara con lo mostrado. Si el tono activo cambio -- otra ranura,
+       otro nombre, o el equipo lo marca editado y antes no --, lo que se
+       escribiria no es lo que el usuario aprobo: se corta, se desarma el boton
+       y el texto dice que hacer en vez de prometer un reintento que nada
+       dispara. Es lo mismo que ya se hace con el destino cuando el equipo
+       contesta otra ranura. Es todo lo que el protocolo permite comparar: dos
+       tonos distintos con el mismo nombre, la misma ranura y el mismo estado
+       de editado son indistinguibles desde aca. */
+    const actual = { ranura: ahora.ranura, nombre, editado: !!ahora.editado }
+    if (!nombre || actual.ranura !== mostrado.ranura || actual.nombre !== mostrado.nombre || actual.editado !== mostrado.editado) {
+      ranuraLeida = null
+      origenLeido = null
+      avisoGuardar.innerHTML = nombre
+        ? `No se guardó nada: el tono activo del equipo cambió desde que lo miraste (ahora es ${descripcionOrigen(actual)}). Vuelve a escribir la ranura para mirar de nuevo.`
+        : 'No se guardó nada: el preset activo del equipo ya no tiene nombre, y este flujo guarda con el nombre que ya tiene.'
+      return
+    }
     const confirmado = await ampli.guardarEn(indice, nombre)
     // Se pinta ACA, antes de intentar releer, y en el dialogo -- no en la
     // cabecera de contEditor -- y el dialogo NO se cierra solo. Ronda de
@@ -580,7 +675,10 @@ botonConfirmarGuardar.addEventListener('click', async () => {
       ? `como «${esc(confirmado.nombre)}»`
       : '(el amplificador no dijo con qué nombre)'
     avisoGuardar.innerHTML = `Guardado en la ranura ${confirmado.ranura} ${nombreTxt}.`
-    ranuraLeida = null   // ya no hay nada mas que confirmar aca; una lectura nueva exige escribir de nuevo
+    // Ya no hay nada mas que confirmar aca: un guardado nuevo exige escribir
+    // la ranura de nuevo, y con eso volver a mirar las dos puntas.
+    ranuraLeida = null
+    origenLeido = null
     // El guardado puede cambiar el estado "editado sin guardar" del preset
     // activo (si la ranura pisada es la misma de la que se cargo): se relee
     // igual, en el fondo, pero su resultado -- exito o fallo -- no toca el
@@ -640,9 +738,21 @@ function control(ranura, p, actual) {
         <span class="aviso"></span>
       </label>`
   }
-  const opciones = p.valores
+  let opciones = p.valores
     .map(v => `<option value="${esc(v.valor)}"${v.valor === actual ? ' selected' : ''}>${esc(v.nombre)}</option>`)
     .join('')
+  /* Mismo arreglo que el <select> de unidades de bloqueRanura(), que lo tiene
+     desde antes: un valor que el catalogo no lista para este parametro no
+     calza con ninguna <option> de arriba, y sin esto el <select> mostraria la
+     PRIMERA de la lista como si fuera la que el equipo tiene cargada. No es
+     cosmetico: dibujar() siembra `confirmados` con lo que el control muestre,
+     asi que una escritura fallida despues "revertiria" la perilla a un valor
+     inventado que el amplificador nunca tuvo -- exactamente la mentira que
+     este archivo existe para no decir. Se muestra el valor crudo: para un
+     valor de lista no hay nada como cat.nombre() que lo resuelva. */
+  if (actual != null && !p.valores.some(v => v.valor === actual)) {
+    opciones += `<option value="${esc(actual)}" selected>${esc(actual)}</option>`
+  }
   return `
     <label class="perilla-editor">
       <span class="nombre">${esc(p.nombre)}</span>
