@@ -278,3 +278,19 @@ test('un artista sin preset no devuelve uno parecido', () => {
   assert.equal(buscarPreset({ artist: 'Los Prisioneros', title: 'x', tags: [] }), null)
   assert.equal(buscarPreset({ artist: '', title: '', tags: [] }), null)
 })
+
+test('sin fila generica, otra cancion del mismo artista sirve de respaldo (y lo dice)', () => {
+  // The Police solo tiene una fila en la planilla, "The Police - Every
+  // Breath You Take" (data/presets-lt25-bandas.csv linea 74) -- no hay
+  // ninguna fila generica de la banda. El catalogo trae otras 15 canciones
+  // de The Police: perder el preset para todas ellas seria tirar una pista
+  // real (mismo guitarrista, misma banda, misma epoca) por las reglas de
+  // genero, que son peores. "Every Breath You Take" sigue ganando por
+  // cancion exacta; cualquier otra cancion de la banda cae al respaldo.
+  const exacta = buscarPreset({ artist: 'The Police', title: 'Every Breath You Take', tags: [] })
+  assert.equal(exacta.motivo, 'cancion')
+
+  const r = buscarPreset({ artist: 'The Police', title: 'Message In A Bottle', tags: [] })
+  assert.equal(r.motivo, 'artista (desde el preset de otra cancion)')
+  assert.equal(r.preset.clave, 'The Police - Every Breath You Take')
+})
