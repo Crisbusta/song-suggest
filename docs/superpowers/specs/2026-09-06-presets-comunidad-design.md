@@ -49,7 +49,7 @@ dos hojas:
 > Este repositorio es local y no se publica; si algún día se publicara, hay que
 > revisar antes en qué términos la planilla permite redistribuirse.
 
-**Hoja 1 — por banda (76 filas).** Columnas: `Band`, `Genre`, `Era`, y luego
+**Hoja 1 — por banda (77 filas).** Columnas: `Band`, `Genre`, `Era`, y luego
 `Amp` con cinco perillas, `Stompbox`, `Modulation`, `Delay` y `Reverb`, cada una
 con sus valores. La clave es el guitarrista y/o la banda, en formatos mezclados:
 `Alex Lifeson / Rush`, `Deftones`, `Metallica - Enter Sandman`,
@@ -70,7 +70,7 @@ puede auditar.
 
 Esto es otra cosa, y la diferencia es verificable:
 
-- **76 filas.** Caben en una pantalla y se pueden revisar a mano.
+- **77 filas.** Caben en una pantalla y se pueden revisar a mano.
 - **Indexada por banda**, que es como el tono funciona de verdad. Un guitarrista
   suena parecido a través de su discografía; una canción suelta no tiene un tono
   "correcto" documentado.
@@ -97,6 +97,13 @@ Medido sobre las dos hojas:
   `Sm. Room`, `Myth`. Coinciden con las del manual en PDF — el mismo manual del
   que salieron tres nombres mal en su día. **Los nombres que mandan son los del
   catálogo del equipo**, y la traducción es explícita (§4).
+- **Dos columnas del bloque de amplificador cuyo significado se desconoce.** La
+  hoja reserva 7 columnas para el amplificador, pero los veinte modelos declaran
+  exactamente 5 perillas (`gain, volume, treb, mid, bass`). 56 de las 75 filas
+  con amplificador usan la 6ª y la 7ª. **No son perillas**: traen valores
+  negativos, hasta −12, y las perillas de este equipo van de 0 a 10. Tampoco son
+  el reverb del panel: 36 de las 39 filas que usan la 6ª traen además su propio
+  bloque de reverb. Ver §3.3.
 
 ---
 
@@ -106,12 +113,12 @@ Todo lo de esta sección se calculó contra el catálogo real y el CSV real.
 
 | Comprobación | Resultado |
 |---|---|
-| Presets de la hoja 1 que calzan con un artista del catálogo | **51 de 76** |
+| Presets de la hoja 1 que calzan con un artista del catálogo | **51 de 77** |
 | Canciones que cubren esos 51 | **1.461 (14,6%)** |
 | Presets que nombran una canción concreta que existe en el catálogo | 5 |
 | Nombres de unidad distintos en ambas hojas | 46 |
 | Nombres que resuelven contra el catálogo con alias explícitos | **41**; los 5 restantes son alias triviales |
-| Filas con época declarada | 71 de 76 |
+| Filas con época declarada | 71 de 77 |
 
 Y cubre donde el usuario toca: Metallica 169 canciones, Megadeth 96, Nirvana 94,
 Deftones 76, Black Sabbath 58, Arctic Monkeys 57, Radiohead 54.
@@ -131,6 +138,35 @@ valor, Sustain 2 y 2, CHORUS 3 y 3, FLANGER 4 y 4, 5-BAND EQ 5 y 5.
 
 Esa igualdad se convierte en un test permanente: si alguien reordena el catálogo
 o edita el CSV, salta.
+
+### 3.1.1 La hoja 1 y sus dos columnas de más
+
+La misma comprobación se corrió sobre la hoja 1, con un resultado que decide
+cómo se importa:
+
+| Ranura | Filas que usan menos columnas que perillas | Las mismas | **Más** |
+|---|---|---|---|
+| stomp | 58 | 6 | **0** |
+| mod | 1 | 50 | **0** |
+| delay | 2 | 33 | **0** |
+| reverb | 4 | 64 | **0** |
+| amp | 0 | 19 | **56** |
+
+En las cuatro ranuras de efectos la decodificación posicional se cumple **sin una
+sola excepción** — usar menos columnas de las disponibles es legítimo, significa
+"sólo especifiqué estas perillas". La anomalía está aislada en el bloque de
+amplificador.
+
+**Decisión: del bloque de amplificador se usan las cinco primeras columnas
+—`gain`, `volume`, `treb`, `mid`, `bass`, en el orden del catálogo— y las dos
+últimas se descartan**, dejando constancia de que no sabemos qué son. Se pierde
+información de 56 filas y no se inventa nada, que es el intercambio que este
+proyecto viene haciendo desde el principio.
+
+Es recuperable sin código: la planilla original es una hoja de cálculo y muy
+probablemente tiene una fila de encabezado combinada que nombra esas columnas y
+que la exportación a CSV aplanó. Mirarla es cosa de medio minuto y está en la
+lista de incógnitas (§10).
 
 ### 3.2 Lo que todavía no se puede convertir
 
@@ -286,6 +322,9 @@ segundos. El envío ya avisa mientras corre y ya sobrevive a sortear otra canci�
 2. **El mapeo de los 10 tonos de la hoja 2 a las reglas de género** es juicio del
    autor de esta spec, no dato. Queda marcado en el código y el usuario puede
    discutir fila por fila.
-3. **Los 25 presets que no calzan** con ningún artista del catálogo (Fela, PJ
+3. **Qué son las columnas 6 y 7 del bloque de amplificador** (§3.1.1). Se
+   resuelve abriendo la planilla original y mirando si hay una fila de
+   encabezado que la exportación aplanó. Hasta entonces se descartan.
+4. **Los 25 presets que no calzan** con ningún artista del catálogo (Fela, PJ
    Harvey, Sunn O))), Tom Waits…) se importan igual: si algún día el catálogo
    crece, ya están. No cuestan nada y su ausencia sería una pérdida silenciosa.
