@@ -294,7 +294,7 @@ $('#tarjeta').addEventListener('click', async e => {
   // segundo click alcance a colarse.
   if (enviando) {
     /* La guarda no cambia; solo deja de ser muda. El envio anterior puede
-       durar hasta unos 16 s (leer el preset, cambiar el modelo y cinco
+       durar hasta unos 16 s (leer el preset, cambiar el modelo y cuatro
        escrituras, cada una con su timeout) y sobrevive a sortear otra
        cancion: el boton de la tarjeta nueva esta habilitado, asi que este clic
        es legitimo y quedarse callado se ve igual que un boton roto. El de la
@@ -352,21 +352,32 @@ $('#tarjeta').addEventListener('click', async e => {
         return { nota: 'no pude leer el ampli, dejo el modelo como estaba', mal: true }
       }
 
+      // El "ya estaba puesto" va PRIMERO: si no hay nada que cambiar, no
+      // importa que el volumen no se pueda leer, y avisar en rojo de un riesgo
+      // que no existe tapaba tres perillas que si se confirmaron.
+      if (cargado === fenderId) return { nota: 'el modelo ya estaba puesto' }
+
       // Sin un volumen que devolver NO se cambia el modelo. El equipo se
-      // quedaria con el del modelo nuevo, que puede estar 16 dB mas arriba.
+      // quedaria con el del modelo nuevo, que puede estar casi 16 dB arriba.
       if (volumen === null) {
         return { nota: 'no pude leer tu volumen, dejo el modelo como estaba', mal: true }
       }
-      if (cargado === fenderId) return { nota: 'el modelo ya estaba puesto' }
 
       try {
         // Se informa el identificador que el EQUIPO dice que quedo puesto, no
         // el que se pidio: es la misma regla que sigue el editor.
         const puesto = await ampli.reemplazarUnidad('amp', fenderId)
-        const nota = puesto === fenderId ? `modelo ${cancion.ampli.modelo}` : `modelo ${puesto}`
+        // Si el equipo dice que cargo OTRA unidad, no es un exito: el usuario
+        // pidio un modelo y tiene otro. Se muestra el identificador crudo
+        // porque el nombre de pantalla de una unidad que no pedimos no lo
+        // tenemos aca, y en rojo, porque no es lo que se pidio.
+        const distinto = puesto !== fenderId
+        const nota = distinto
+          ? `el ampli cargo ${puesto}, no ${cancion.ampli.modelo}`
+          : `modelo ${cancion.ampli.modelo}`
         try {
           await ampli.ponerParametro('amp', 'volume', volumen)
-          return { nota }
+          return { nota, mal: distinto }
         } catch {
           return { nota: `${nota} (ojo: no pude devolverte el volumen)`, mal: true }
         }
@@ -389,16 +400,31 @@ $('#tarjeta').addEventListener('click', async e => {
       malModelo = !!r.mal
     }
 
+    /* Abandonar por una tirada nueva NO puede tragarse un aviso sobre el
+       amplificador. Hasta aca ya pudimos haberle cambiado el modelo y fallado
+       al devolverle el volumen, y `estado` es un nodo desprendido: escribirle
+       es un no-op que no avisa de nada. Un aviso de volumen no es de la
+       cancion, es del equipo, asi que se pinta en la tarjeta que este en
+       pantalla, que es donde el usuario lo va a ver. */
+    const abandonar = () => {
+      if (actual === cancion) return false
+      if (malModelo) {
+        const vivo = $('#envio-estado')
+        if (vivo) { vivo.className = 'envio-estado mal'; vivo.textContent = notaModelo }
+      }
+      return true
+    }
+
     for (const [parametro, valor] of Object.entries(valores)) {
       // Si ya sorteamos otra cancion, `b` y `estado` son nodos desprendidos:
       // escribirles es un no-op legal que no avisa de nada, asi que hay que
       // cortar aqui y no seguir escribiendole al ampli valores de una
       // cancion que ya no esta en pantalla.
-      if (actual !== cancion) return
+      if (abandonar()) return
       try { await ampli.ponerParametro('amp', parametro, valor); confirmados.push(parametro) }
       catch { fallidos.push(parametro) }
     }
-    if (actual !== cancion) return
+    if (abandonar()) return
     // El modelo se cuenta aparte de las perillas: no es una de ellas, y
     // "ya estaba puesto" no es lo mismo que "lo confirmo el equipo".
     const conModelo = t => notaModelo ? `${notaModelo} · ${t}` : t
