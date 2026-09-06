@@ -1,4 +1,5 @@
 import { ampli } from './ampli-usb.js'
+import { montarEditor } from './editor.js'
 
 const $ = s => document.querySelector(s)
 
@@ -241,6 +242,7 @@ function pintarBotonEnviar() {
 // peor que ninguno.
 if (ampli.soportado()) {
   $botonAmpli.hidden = false
+  $('#ver-editor').hidden = false
   ampli.alCambiarEstado(conectado => {
     $botonAmpli.textContent = conectado ? 'Ampli conectado' : 'Conectar ampli'
     $botonAmpli.classList.toggle('conectado', conectado)
@@ -404,13 +406,15 @@ $('#vista-listas').addEventListener('click', async e => {
   pintarListas()
 })
 
-function cambiarVista(aListas) {
-  $('#vista-sorteo').hidden = aListas
-  $('#vista-listas').hidden = !aListas
-  $('#ver-sorteo').classList.toggle('activo', !aListas)
-  $('#ver-listas').classList.toggle('activo', aListas)
-  if (aListas) pintarListas()
+const VISTAS = ['sorteo', 'listas', 'editor']
+
+function cambiarVista(cual) {
+  for (const v of VISTAS) {
+    $(`#vista-${v}`).hidden = v !== cual
+    $(`#ver-${v}`).classList.toggle('activo', v === cual)
+  }
+  if (cual === 'listas') pintarListas()
+  if (cual === 'editor') montarEditor()
 }
 
-$('#ver-listas').addEventListener('click', () => cambiarVista(true))
-$('#ver-sorteo').addEventListener('click', () => cambiarVista(false))
+for (const v of VISTAS) $(`#ver-${v}`).addEventListener('click', () => cambiarVista(v))

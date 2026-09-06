@@ -268,3 +268,26 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 .envio-estado { font-size: var(--t-micro); color: var(--tenue); }
 .envio-estado.ok { color: var(--acento); }
 .envio-estado.mal { color: #e2585b; }
+
+/* --- Editor del amplificador -------------------------------------------- */
+.editor-cabecera { display: flex; align-items: baseline; gap: var(--e2); margin-bottom: var(--e3); }
+.editor-cabecera h2 { margin: 0; font-size: var(--t-grande); }
+.editor-cabecera button {
+  background: none; border: 1px solid var(--borde); color: var(--tenue);
+  padding: var(--e1) var(--e2); border-radius: var(--radio); font: inherit;
+  font-size: var(--t-micro); cursor: pointer;
+}
+.ranura { border: 1px solid var(--borde); border-radius: var(--radio); margin-bottom: var(--e2); }
+.ranura > header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e2); padding: var(--e2); border-bottom: 1px solid var(--borde);
+}
+.nombre-ranura { font-size: var(--t-micro); color: var(--tenue); text-transform: uppercase; letter-spacing: .08em; }
+.ranura select { background: var(--relieve); color: var(--texto); border: 1px solid var(--borde);
+  border-radius: var(--radio); padding: var(--e1); font: inherit; font-size: var(--t-chico); }
+.perillas { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--e2); padding: var(--e2); }
+.perilla-editor { display: grid; grid-template-columns: 5.5rem 1fr auto; align-items: center; gap: var(--e1); }
+.perilla-editor .nombre { font-size: var(--t-micro); color: var(--tenue); }
+.perilla-editor output { font-size: var(--t-micro); font-variant-numeric: tabular-nums; min-width: 4rem; text-align: right; }
+.perilla-editor .aviso { grid-column: 2 / -1; font-size: var(--t-micro); color: #e2585b; }
+.vacio-ranura { color: var(--tenue); font-size: var(--t-micro); margin: 0; }
