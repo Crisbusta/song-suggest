@@ -1,0 +1,11 @@
+TONE,Amp,Gain,Vol,Treb,Mid,Bass,Stomp,Set 1,Set 2,Set 3,Set 4,Set 5,Mod,Set 1,Set 2,Set 3,Set 4,Set 5,Delay,Level,Time,Feedback,Other,Rev,Level,Decay,Tone
+Texas Blues,80's Rock,2.1,6.9,7.1,6.7,6.6,5-Band EQ,"9,0","7,0","4,0","9,0",8.5,Vibratone,6.8,1.3,4.3,7.1,6.5,Delay,9.8,66,1.1,"10,0",Sm. Room,7.2,3.7,8.4
+Goated Solo Tone,Burn,"10,0",4.3,"10,0",8.1,5.9,OverDrive,5.5,3.6,2.9,6.5,"10,0",Chorus,"10,0",1.8,7.5,-,-,Delay,7.8,326,4.8,10,Sm. Room,7.3,4.7,6.6
+Heavy Distortion,Burn,"10,0",4.3,"10,0",6,5.6,Overdrive,5.5,"3,6",1.8,4.4,"10,0",Chorus,7.1,1.2,5,-,-,-,-,-,-,-,Sm. Room,5.1,4.9,6.9
+Sexy Flanger,Princeton,3.1,5.2,"10,0",8.6,5.7,Compressor,Low,-,-,-,-,Flanger,"10,0",1.5,7.3,8,-,Delay,6.1,280,2.2,"10,0",-,-,-,-
+Bright Chorus,Deluxe Cln,1.8,4.8,6.3,5.2,7.1,5-Band EQ,2.5,4.5,4.5,4.5,3.5,Chorus,9.9,1.7,6.8,-,-,Delay,8.1,34,1.3,"10,0",Lrg Hall,4.8,3.2,7.2
+Clean Jazz Amp,Princeton,3.9,6.6,6.2,3.6,1.1,Sustain,"3,2",6.4,-,-,-,Chorus,6.5,1.1,1.2,-,-,-,-,-,-,-,Sm Room,4.7,5.5,5.5
+Iommi/Sabbath,Burn,3.9,4.2,9.6,7.2,5.9,5-Band EQ,"0,0",0.5,2.5,"6,0","8,0",Chorus,6.9,1.1,1.6,-,-,Delay,7.6,78,1.1,"10,0",Sm Room,2.7,4.6,5.9
+Chorus + Drive,Princeton,6,4.2,6.7,4.7,1.1,Compressor,Low,-,-,-,-,Chorus,9.2,1.6,6.5,-,-,Delay,2.3,265,5.5,9.9,Lrg Hall,4.8,3.2,7.2
+Alt Metal ish,Metal 2000,5.8,4.2,7.1,7.8,5.1,Myth Drive,5.5,7.3,4.5,-,-,Chorus,8.4,1.2,5.5,-,-,Delay,5.8,34,3.7,9.9,-,-,-,-
+Doom Wizard,80's Rock,2.7,5.3,9.9,9.6,4.9,Big Fuzz,9.7,9.9,5.9,-,-,Chorus,5.1,1.1,1.1,-,-,-,-,-,-,-,-,-,-,-
