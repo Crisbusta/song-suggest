@@ -43,8 +43,8 @@ test('todo nombre de unidad de los dos CSV resuelve, o esta en la lista de desca
   // un nombre nuevo, aqui salta en vez de desaparecer.
   const DESCARTADOS = ['80s']   // valor mal puesto en la columna de delay de una fila
   const cols = [
-    ['/Users/coto/Desktop/song-suggest/data/presets-lt25-bandas.csv', 1, [3, 11, 17, 23, 28]],
-    ['/Users/coto/Desktop/song-suggest/data/presets-lt25-tonos.csv', 1, [1, 7, 13, 19, 24]],
+    [new URL('../data/presets-lt25-bandas.csv', import.meta.url), 1, [3, 11, 17, 23, 28]],
+    [new URL('../data/presets-lt25-tonos.csv', import.meta.url), 1, [1, 7, 13, 19, 24]],
   ]
   const sinResolver = []
   for (const [ruta, desde, indices] of cols) {
