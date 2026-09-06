@@ -180,6 +180,31 @@ function mostrarAvisoCabecera(mensaje) {
   cabecera.insertAdjacentHTML('beforeend', `<span class="aviso">${esc(mensaje)}</span>`)
 }
 
+// Espera a que el despachador termine de drenar antes de leer o reemplazar.
+// Si una escritura ya en vuelo cae justo DENTRO de la transferencia
+// multi-paquete de leerPreset(), el reensamblador la trata como el cierre
+// de esa secuencia: le pega la carga del ACK a lo que llevaba juntado del
+// preset y entrega ese pegote como si fuera un mensaje completo. Eso no
+// parsea como un preset valido, asi que la lectura no miente -- termina
+// fallando por su propio timeout -- pero falla por una razon que nadie va
+// a poder explicar mirando la pantalla.
+//
+// Se llama DESPUES de deshabilitar los controles (activarOcupado ya lo
+// hizo antes de esto): si se llamara con los controles todavia vivos, el
+// usuario podria seguir encolando escrituras y la espera no terminaria
+// nunca. En el caso normal (nada en vuelo, o la escritura en curso
+// confirma en ~120 ms) esta espera no se nota; en el peor -- una escritura
+// que va camino a su propio timeout -- son los mismos 2 s que esa
+// escritura ya iba a tardar de todos modos, y la interfaz lo dice mientras
+// tanto en vez de quedarse muda.
+async function esperarDespachadorVacio() {
+  if (!despachador.enVuelo()) return
+  mostrarAvisoCabecera('Esperando una escritura pendiente…')
+  while (despachador.enVuelo()) {
+    await new Promise(resolver => setTimeout(resolver, 50))
+  }
+}
+
 async function cargarCatalogo() {
   if (catalogo) return catalogo
   const r = await fetch('/lt25-unidades.json')
@@ -223,6 +248,7 @@ export async function montarEditor() {
   if (operando) return
   activarOcupado()
   try {
+    await esperarDespachadorVacio()
     await releerYRedibujar()
   } finally {
     desactivarOcupado()
@@ -288,6 +314,7 @@ contEditor.addEventListener('change', async e => {
   const ranura = selector.dataset.ranura
   activarOcupado()
   try {
+    await esperarDespachadorVacio()
     await ampli.reemplazarUnidad(ranura, selector.value)
     await releerYRedibujar()   // la unidad nueva tiene otras perillas: se redibuja
   } catch (err) {
