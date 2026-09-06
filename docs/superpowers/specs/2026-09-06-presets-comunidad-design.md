@@ -103,7 +103,7 @@ Medido sobre las dos hojas:
   con amplificador usan la 6ª y la 7ª. **No son perillas**: traen valores
   negativos, hasta −12, y las perillas de este equipo van de 0 a 10. Tampoco son
   el reverb del panel: 36 de las 39 filas que usan la 6ª traen además su propio
-  bloque de reverb. Ver §3.3.
+  bloque de reverb. Ver §3.1.1.
 
 ---
 
