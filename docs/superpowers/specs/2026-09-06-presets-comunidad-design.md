@@ -242,16 +242,47 @@ De lo más específico a lo más genérico. Gana el primero que calza:
    existentes). Este mapeo **es juicio, no dato**, y queda marcado como tal.
 4. **La tabla de reglas actual**, que sigue siendo el suelo para el resto.
 
-**Cobertura medida de la cadena completa**, sobre las 9.974 canciones: 7 por
-canción exacta, 980 por artista, 61 por artista sin desempate de época, 15 desde
-el preset de otra canción del mismo artista, y **3.101 por tono de género** —
-**4.164 en total, un 41,7%**. Los presets por banda son los que suenan a la
-banda; los tonos por género son los que evitan que el resto caiga en la nada.
+**Cobertura medida de la cadena completa** (2026-09-06, tras la regla acústica
+de §6.4): 7 por canción exacta, 882 por artista, 45 por artista sin desempate de
+época, 13 desde el preset de otra canción del mismo artista, y **2.720 por tono
+de género** — **3.667 de 10.011 canciones enriquecidas, un 36,6%**. Sobre el
+subconjunto que de verdad se sortea, **3.584 de 9.746, un 36,8%**.
+
+Los presets por banda son los que suenan a la banda; los tonos por género son
+los que evitan que el resto caiga en la nada.
+
+> Una versión anterior decía **41,7%**. Bajó al aplicar §6.4: 504 canciones con
+> track acústico dejaron de recibir un preset de banda. Se perdieron bien.
 
 La sugerencia viaja con su **procedencia** y con la **incertidumbre que la fuente
 declaró**. Un `{EXPERIMENTAL}` de la planilla llega hasta la pantalla; no se
 limpia. "Preset de la comunidad para Metallica (marcado como experimental)" y
 "deducido de tus tags de género" merecen palabras distintas.
+
+---
+
+## 6.4 El track acústico gana sobre el preset
+
+Cuando el track representativo de la canción es acústico, **el preset de la
+comunidad no aplica**: se cae a la tabla de reglas, que ya tiene su sustitución
+acústica y la aplica bien.
+
+La razón no es un umbral sino una categoría. Estos presets están indexados **por
+banda**, y el tono de una banda es el de su equipo eléctrico. Un track acústico
+de esa misma banda no es otra canción: es otro instrumento. La invariante que
+`lib/ampli.js` lleva escrita desde su primera versión —"el ajuste tiene que
+servir para lo que vas a tocar"— es más específica que la procedencia del dato,
+así que gana ella.
+
+Medido antes de decidirlo: de 1.624 canciones con track acústico, 504 recibían
+preset de la comunidad y **116 con gain ≥ 6**. Los casos que zanjaron la
+discusión: Rush, "Closer To The Heart", guitarra de **nylon**, recibía BURN a
+**gain 10**; Metallica, "Mama Said", acústica de acero, gain 10.
+
+**Lo que NO se toca:** los tracks eléctricos limpios. La tabla ya les recorta la
+ganancia, y un preset de banda sobre un track limpio es discutible pero no
+absurdo — sigue siendo una guitarra eléctrica y el modelo de esa banda es
+plausible. Queda para el oído del usuario en la prueba manual.
 
 ---
 
