@@ -14,6 +14,17 @@ import {
 const VENDOR = 0x1ed8, PRODUCT = 0x0037
 const ESPERA_ACK = 2000        // ms antes de dar por perdida una escritura
 const ESPERA_PRESET = 4000     // el preset viaja en varios paquetes; tarda mas que un ACK
+/* Reemplazar una unidad DSP (incluido el modelo de ampli) es mas pesado que
+   fijar un parametro: carga un nodo entero, no un solo valor. Con ESPERA_ACK
+   (2s) un ACK que tarda un poco mas hace vencer la operacion, anota una
+   deuda, y esa deuda se come el ACK del reintento -- que si funciono --
+   reportandolo tambien como "sin confirmar". El costo de ser generoso es
+   solo tardar mas en reportar un fallo real; el de quedarse corto es
+   reportar como fallida una operacion que si ocurrio, que es peor. Medido en
+   una sola muestra contra el equipo: el replaceNode del slot `amp` respondio
+   dentro de 1,8s, pero una muestra no alcanza para confiar en el margen
+   angosto de ESPERA_ACK. */
+const ESPERA_REEMPLAZO = 4000
 const LATIDO = 1000            // el equipo cierra la conexion sin heartbeat
 
 let dispositivo = null
@@ -162,7 +173,13 @@ function alRecibir(e) {
     if (i < 0) return
     const [p] = pendientesNodo.splice(i, 1)
     clearTimeout(p.temporizador)
-    p.resolver(r.fenderId)
+    /* Un replaceNodeStatus truncado deja fenderId en null (ver interpretar()
+       en fender-protocolo.js). Bajo la regla de la casa -- sin confirmacion
+       no se afirma nada --, un id nulo no es una confirmacion de que unidad
+       quedo puesta: se rechaza en vez de resolver con un valor que miente
+       por omision. */
+    if (r.fenderId == null) p.rechazar(new Error(`El amplificador confirmó el cambio de ${r.nodo} sin decir qué unidad quedó puesta`))
+    else p.resolver(r.fenderId)
     return
   }
   if (r.tipo !== 'ackParametro') return
@@ -448,11 +465,32 @@ export const ampli = {
      `finally` para que tambien destrabe cuando la lectura falla o se cae por
      el timeout: sin esto, toda escritura posterior a la primera lectura de
      preset se perderia en silencio, indistinguible de un equipo
-     desconectado. */
+     desconectado.
+
+     El SYNC_BEGIN de aca abajo, antes de pedir el preset, es una habilitacion
+     distinta de la del finally: cada SYNC_BEGIN habilita UNA sola operacion,
+     asi que si hubo una escritura antes en la sesion, ese permiso ya esta
+     gastado y pedir el preset sin reabrirlo puede caer en silencio. Medido
+     contra el equipo: todas las lecturas que funcionaron en las pruebas
+     mandaron SYNC_BEGIN justo antes de mensajePedirPreset(); no hay ninguna
+     medicion de una lectura sin sync previo.
+
+     Precondicion: no puede haber una lectura o un reemplazarUnidad() vivos al
+     mismo tiempo que otra llamada a esta funcion. Las dos comparten
+     `reensamblador`, y `reensamblador.reiniciar()` de esta funcion tira lo
+     que el reensamblador tuviera a medio juntar de la otra -- y para un
+     preset esa ventana no es de uno o dos paquetes sino de una transferencia
+     de varios segundos. Hoy no hay ningun llamador todavia (esto lo agrega el
+     editor, en una tarea futura), asi que no hay nada roto; queda para quien
+     lo escriba. */
   async leerPreset() {
     if (!dispositivo) throw new Error('El amplificador no está conectado.')
     reensamblador.reiniciar()
     try {
+      await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+      // Entre la guarda de arriba y este punto hay un await: mismo motivo
+      // que en ponerParametro, el equipo se puede desenchufar justo ahi.
+      if (!dispositivo) throw new Error('El amplificador no está conectado.')
       let entrada
       const promesa = new Promise((resolver, rechazar) => {
         const temporizador = setTimeout(() => {
@@ -463,7 +501,24 @@ export const ampli = {
         entrada = { resolver, rechazar, temporizador }
         pendientesPreset.push(entrada)
       })
-      await dispositivo.sendReport(0, empaquetar(mensajePedirPreset()))
+      try {
+        await dispositivo.sendReport(0, empaquetar(mensajePedirPreset()))
+      } catch (err) {
+        // Mismo motivo que en ponerParametro: si no se saca la entrada de
+        // aca, queda viva hasta que la gaste su propio timeout (un
+        // unhandledRejection, porque `promesa` no se devuelve y nadie la
+        // sostiene) y mientras tanto una lectura siguiente la encontraria
+        // primero en la FIFO -- pendientesPreset.shift() le entregaria a
+        // esta entrada huerfana el preset que le llego a la lectura nueva,
+        // y la lectura nueva se quedaria esperando sus 4s completos sin
+        // motivo. Sin deuda: a diferencia de un ACK de parametro o de nodo,
+        // esto no arriesga confirmar de mas -- es una consulta, no la
+        // confirmacion de un valor -- asi que alcanza con sacarla.
+        const i = pendientesPreset.indexOf(entrada)
+        if (i >= 0) pendientesPreset.splice(i, 1)
+        clearTimeout(entrada.temporizador)
+        throw err
+      }
       return await promesa
     } finally {
       // Destraba, pase lo que pase. No lanza: si el equipo ya se fue, no hay
@@ -483,8 +538,17 @@ export const ampli = {
      que se reenvia antes de cada pedido. Y la misma limitacion de fondo que
      ponerParametro -- sin identificador de correlacion, un ACK atrasado de un
      intento abandonado podria confirmar falsamente el siguiente -- asi que
-     lleva la misma defensa de deuda (anotarDeudaNodo), no solo el ACK
-     feliz. */
+     lleva la misma defensa de deuda (anotarDeudaNodo), no solo el ACK feliz.
+
+     Usa ESPERA_REEMPLAZO, no ESPERA_ACK: reemplazar una unidad DSP carga un
+     nodo entero, no un solo valor, y es mas pesado que una perilla -- ver el
+     comentario de la constante.
+
+     Precondicion: no puede haber una llamada a esta funcion o a leerPreset()
+     viva al mismo tiempo que otra llamada a esta funcion. Comparten
+     `reensamblador`, y reiniciarlo a mitad de la lectura del preset (que
+     tarda varios paquetes) descartaria lo que llevaba juntado. Hoy no hay
+     ningun llamador todavia; queda para quien escriba el editor. */
   async reemplazarUnidad(nodo, fenderId) {
     if (!dispositivo) throw new Error('El amplificador no está conectado.')
     reensamblador.reiniciar()
@@ -499,7 +563,7 @@ export const ampli = {
         if (i >= 0) pendientesNodo.splice(i, 1)
         anotarDeudaNodo(nodo)
         rechazar(new Error(`El amplificador no confirmó el cambio de ${nodo}`))
-      }, ESPERA_ACK)
+      }, ESPERA_REEMPLAZO)
       entrada = { nodo, resolver, rechazar, temporizador }
       pendientesNodo.push(entrada)
     })
