@@ -78,11 +78,17 @@ const pendientesPreset = []    // { resolver, rechazar, temporizador }
    ranura 60 tiene X" con el X de otra ranura, y confirma un guardado sobre
    un preset que nunca vio).
 
-   No hace falta un mapa de deuda como el de pendientesGuardado, mas abajo:
-   una respuesta tardia de la ranura N sigue describiendo el contenido REAL
-   de la ranura N -- a diferencia de un ACK de escritura, que puede
-   "confirmar" un valor que en realidad aplico un intento distinto --, asi
-   que resolver con lo que el equipo dijo sobre esa ranura no es mentir.
+   No hace falta un mapa de deuda como el de pendientesGuardado, mas abajo,
+   pero el argumento tiene un limite y hay que decirlo con precision: una
+   respuesta tardia de la ranura N sigue describiendo el contenido REAL de
+   la ranura N SOLO SI nadie escribio esa ranura entre el pedido abandonado
+   y esta respuesta tardia -- y guardarEn() es exactamente esa escritura.
+   Si N se guarda de por medio, la respuesta tardia trae el preset ANTERIOR
+   al guardado, no una ranura ajena: la propiedad de seguridad de fondo se
+   sostiene (sigue siendo la ranura correcta, nunca otra), pero lo que se ve
+   puede estar desactualizado. Ronda de revision de esta tarea: no cambia el
+   mecanismo (una lectura no arriesga confirmar de mas, que es lo que la
+   deuda existe para evitar), pero el alcance del argumento es ese y no mas.
    Sigue habiendo una precondicion: no puede haber dos llamadas a
    leerRanura() vivas a la vez, porque comparten `reensamblador` con
    leerPreset()/reemplazarUnidad() y reiniciarlo a mitad de una transferencia

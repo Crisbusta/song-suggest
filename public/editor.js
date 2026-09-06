@@ -463,9 +463,11 @@ async function leerYMostrarDestino(indice) {
     // momento arbitrario, y para entonces pudo haber arrancado OTRA
     // operacion del editor (un "Releer" general, un cambio de unidad) que
     // tambien usa `operando` y deshabilita el campo -- pero deshabilitar no
-    // cancela un setTimeout ya programado. Sin este aviso, el usuario veia
-    // el dialogo mudo, sin saber por que "no paso nada".
-    avisoGuardar.innerHTML = 'Esperando que termine la operación anterior…'
+    // cancela un setTimeout ya programado. Esto NO se re-arma solo cuando la
+    // otra operacion termina -- ronda de revision de esta tarea senalo que
+    // un aviso que prometiera un reintento automatico mentiria, porque nada
+    // lo dispara -- asi que el texto dice que hacer, no que ya esta hecho.
+    avisoGuardar.innerHTML = 'Hay otra operación en curso. Vuelve a escribir la ranura cuando termine.'
     return
   }
   activarOcupado()
@@ -522,6 +524,19 @@ contDialogoGuardar.addEventListener('close', () => {
   resetearAvisoGuardar()
 })
 
+// Escape dispara 'cancel' (y despues 'close') AUNQUE todos los botones del
+// dialogo esten deshabilitados -- a diferencia de un clic, que un control
+// disabled ya bloquea. Preexistente, encontrado en la ronda de revision de
+// esta tarea: sin esto, el usuario podia cerrar el dialogo con Escape a
+// mitad de una lectura o de un guardado, y la operacion seguia reteniendo
+// `operando` -- hasta ESPERA_RANURA/ESPERA_GUARDAR -- con el dialogo ya
+// invisible. Mismo criterio que el resto del editor (ver `operando` y
+// activarOcupado() mas arriba): mientras hay una operacion en vuelo, no se
+// sale por ningun camino, ni siquiera Escape.
+contDialogoGuardar.addEventListener('cancel', e => {
+  if (operando) e.preventDefault()
+})
+
 $('#guardar-cancelar').addEventListener('click', () => contDialogoGuardar.close())
 
 botonConfirmarGuardar.addEventListener('click', async () => {
@@ -548,27 +563,36 @@ botonConfirmarGuardar.addEventListener('click', async () => {
   try {
     await esperarDespachadorVacio()
     const confirmado = await ampli.guardarEn(indice, nombre)
-    contDialogoGuardar.close()
+    // Se pinta ACA, antes de intentar releer, y en el dialogo -- no en la
+    // cabecera de contEditor -- y el dialogo NO se cierra solo. Ronda de
+    // revision de esta tarea: releerYRedibujar(), mas abajo, tiene dos
+    // caminos de fallo (el catalogo no carga, o el equipo no manda el
+    // preset) y en los dos reemplaza contEditor entero por un parrafo de
+    // error SIN `.editor-cabecera` -- si el aviso de exito dependiera de
+    // engancharse ahi despues, un equipo que se desconecta justo despues de
+    // confirmar el guardado (o una relectura que vence) se tragaria la
+    // noticia de una escritura que ya no se puede deshacer. Pintandolo aca
+    // primero, en un elemento que no toca la relectura, queda dicho pase lo
+    // que pase con ella. El nombre es el que EL EQUIPO confirmo -- si vino
+    // nulo (mensaje truncado), se dice explicitamente en vez de mostrar en
+    // silencio el que se pidio, que se leeria como si fuera la confirmacion.
+    const nombreTxt = confirmado.nombre != null
+      ? `como «${esc(confirmado.nombre)}»`
+      : '(el amplificador no dijo con qué nombre)'
+    avisoGuardar.innerHTML = `Guardado en la ranura ${confirmado.ranura} ${nombreTxt}.`
+    ranuraLeida = null   // ya no hay nada mas que confirmar aca; una lectura nueva exige escribir de nuevo
     // El guardado puede cambiar el estado "editado sin guardar" del preset
     // activo (si la ranura pisada es la misma de la que se cargo): se relee
-    // ANTES de avisar, para que el aviso de exito se enganche a la cabecera
-    // recien redibujada -- mostrarAvisoCabecera() busca `.editor-cabecera`
-    // en el momento en que se llama, y dibujar() la reemplaza entera en
-    // cada redibujado (ver su comentario). Mostrar el aviso antes de releer
-    // lo dejaria pintado durante un instante y despues borrado por el
-    // redibujado, indistinguible de no haber dicho nada -- el mismo silencio
-    // que el punto 3 de la ronda de revision señalo como un problema: sobre
-    // la unica operacion irreversible del proyecto, un guardado exitoso
-    // tiene que decir que ranura quedo y con que nombre, con los valores que
-    // el EQUIPO confirmo (`confirmado`), no los que se pidieron.
+    // igual, en el fondo, pero su resultado -- exito o fallo -- no toca el
+    // aviso de arriba, que ya quedo dicho.
     await releerYRedibujar()
-    mostrarAvisoCabecera(`Guardado en la ranura ${confirmado.ranura} como "${confirmado.nombre ?? nombre}".`)
   } catch (err) {
     avisoGuardar.innerHTML = esc(err.message)
   } finally {
     desactivarOcupado()
   }
 })
+
 function bloqueRanura(cat, ranura, nodo) {
   const fenderId = nodo?.FenderId ?? ''
   const unidades = cat.deRanura(ranura)
