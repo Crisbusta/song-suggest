@@ -114,7 +114,7 @@ Todo lo de esta sección se calculó contra el catálogo real y el CSV real.
 | Comprobación | Resultado |
 |---|---|
 | Presets de la hoja 1 que calzan con un artista del catálogo | **51 de 77** |
-| Canciones que cubren esos 51 | **~1.050 (10,5%)** |
+| Canciones que cubren esos 51 | **1.063 (10,7%)** |
 
 > **Corrección del 2026-09-06.** Esta tabla decía antes **1.461 (14,6%)**, y era
 > un error de conteo del autor: sumaba las canciones **por preset** en vez de
@@ -122,8 +122,10 @@ Todo lo de esta sección se calculó contra el catálogo real y el CSV real.
 > contaron dos veces; Rush tiene tres, Nirvana, Radiohead, Arctic Monkeys,
 > Rolling Stones y Pearl Jam dos cada uno. En total, 501 canciones contadas de
 > más. La cifra medida corriendo el calce real sobre el catálogo entero es
-> **1.048 canciones, un 10,5%**, repartidas en 7 por canción exacta, 980 por
-> artista y 61 por artista sin desempate de época.
+> **1.063 canciones, un 10,7%**, repartidas en 7 por canción exacta, 980 por
+> artista, 61 por artista sin desempate de época y 15 desde el preset de otra
+> canción del mismo artista (las de The Police, que sólo tiene fila para "Every
+> Breath You Take").
 >
 > La diferencia no cambia ninguna decisión de este diseño —la fuente sigue
 > valiendo la pena y sigue cubriendo justo donde el usuario toca— pero un
