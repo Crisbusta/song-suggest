@@ -1136,7 +1136,9 @@ console.log(`canciones ${filas.length} | por cancion ${cancion} | por artista ${
 
 - [ ] **Step 2: Escribirla**
 
-Crear `docs/presets-comunidad-auditoria.md` con: la fecha, cuántas filas trae cada hoja, cuántas entraron, **la lista completa de descartes con su motivo**, y cuántas canciones del catálogo quedan cubiertas por preset de canción, por preset de artista y por ninguno.
+Crear `docs/presets-comunidad-auditoria.md` con: la fecha, cuántas filas trae cada hoja, cuántas entraron, **la lista completa de descartes Y DE AVISOS, cada uno con su motivo**, y cuántas canciones del catálogo quedan cubiertas por preset de canción, por preset de artista y por ninguno.
+
+Los `avisos` son lo que de verdad hay que leer: los descartes de fila entera van a ser cero, y todas las anomalías reales del corpus —un nombre de unidad irresoluble, una celda no numérica, una ranura con valores y sin unidad— viven en `avisos`. Imprimir sólo los descartes dejaría el documento vacío y la impresión de que no hubo ninguna anomalía.
 
 Si algún número no cuadra con la spec (§3), **el que manda es el medido**: corregir la spec en el mismo commit y decir cuál era el error.
 
