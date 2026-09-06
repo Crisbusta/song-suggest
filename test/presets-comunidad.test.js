@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { PRESETS_BANDA, PRESETS_TONO, auditoria, buscarPreset } from '../lib/presets-comunidad.js'
+import { PRESETS_BANDA, PRESETS_TONO, auditoria, buscarPreset, presetDeGenero, MAPEO_TONO_GENERO } from '../lib/presets-comunidad.js'
 import { resolverUnidad } from '../lib/lt25-nombres.js'
 import { parsearCsv, numeroCsv } from '../lib/csv.js'
 
@@ -293,4 +293,37 @@ test('sin fila generica, otra cancion del mismo artista sirve de respaldo (y lo 
   const r = buscarPreset({ artist: 'The Police', title: 'Message In A Bottle', tags: [] })
   assert.equal(r.motivo, 'artista (desde el preset de otra cancion)')
   assert.equal(r.preset.clave, 'The Police - Every Breath You Take')
+})
+
+test('cada tono mapeado existe de verdad en la hoja de tonos', () => {
+  // Un mapeo que apunta a un tono inexistente es una regla muerta y silenciosa.
+  for (const tono of Object.values(MAPEO_TONO_GENERO)) {
+    assert.ok(PRESETS_TONO.some(p => p.clave === tono), `"${tono}" no esta en la hoja de tonos`)
+  }
+})
+
+test('un tag mapeado devuelve su tono', () => {
+  const r = presetDeGenero(['blues'])
+  assert.equal(r.motivo, 'genero')
+  assert.equal(r.preset.clave, 'Texas Blues')
+})
+
+test('gana el tag mas especifico, no el primero de la lista de la cancion', () => {
+  const r = presetDeGenero(['rock', 'doom metal'])
+  assert.equal(r.preset.clave, 'Doom Wizard')
+
+  // La prueba de arriba no distingue "gana el orden del mapeo" de "gana el
+  // primero de la lista", porque 'rock' ni siquiera esta mapeado: cualquier
+  // implementacion que recorra la lista de tags encuentra 'doom metal' igual.
+  // Aqui los DOS tags de la cancion estan mapeados, y en el orden inverso al
+  // del mapeo ('blues' esta antes que 'doom metal' en MAPEO_TONO_GENERO):
+  // si gana el orden de la lista de la cancion, esto devolveria Doom Wizard;
+  // como tiene que ganar el orden del mapeo, devuelve Texas Blues.
+  const r2 = presetDeGenero(['doom metal', 'blues'])
+  assert.equal(r2.preset.clave, 'Texas Blues')
+})
+
+test('un genero sin mapeo no inventa un tono', () => {
+  assert.equal(presetDeGenero(['reggaeton']), null)
+  assert.equal(presetDeGenero([]), null)
 })
