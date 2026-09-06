@@ -421,7 +421,13 @@ $('#tarjeta').addEventListener('click', async e => {
          documento no es lo mismo que estar a la vista.
 
        `#hint` esta siempre en el markup, siempre visible, y ya es la linea
-       donde esta app pone lo que hay que leer. */
+       donde esta app pone lo que hay que leer.
+
+       Escribir ahi PISA lo que la tirada nueva acababa de poner (el conteo de
+       canciones que calzan, o un error del servidor). Es a proposito: en ese
+       instante, que tu amplificador quedo hasta 16 dB mas arriba importa mas
+       que cuantas canciones calzan con el filtro, y la proxima tirada devuelve
+       la linea a su contenido normal. */
     const abandonar = () => {
       if (actual === cancion) return false
       if (malModelo) $('#hint').textContent = notaModelo
