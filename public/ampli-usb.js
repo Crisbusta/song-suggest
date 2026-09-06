@@ -8,10 +8,12 @@
 import {
   empaquetar, crearReensamblador, interpretar,
   SYNC_BEGIN, SYNC_END, HEARTBEAT, mensajePonerParametro,
+  mensajePedirPreset, mensajeReemplazarNodo,
 } from './fender-protocolo.js'
 
 const VENDOR = 0x1ed8, PRODUCT = 0x0037
 const ESPERA_ACK = 2000        // ms antes de dar por perdida una escritura
+const ESPERA_PRESET = 4000     // el preset viaja en varios paquetes; tarda mas que un ACK
 const LATIDO = 1000            // el equipo cierra la conexion sin heartbeat
 
 let dispositivo = null
@@ -19,6 +21,21 @@ let conectando = false        // hay un conectar()/reconectarSiSePuede() en curs
 let latido = null
 let reensamblador = null
 const pendientes = []          // { nodo, parametro, resolver, rechazar, temporizador }
+/* Espera de replaceNodeStatus. Correlaciona por nodo (la ranura: 'amp',
+   'stomp', 'mod', 'delay', 'reverb'): el equipo no manda mas identificador
+   que ese, junto con el FenderId que quedo puesto. Misma limitacion de fondo
+   que `pendientes` -- sin identificador de correlacion, ver el comentario
+   largo de `descartar` mas abajo -- asi que lleva la misma defensa de deuda,
+   en `descartarNodo`. */
+const pendientesNodo = []      // { nodo, resolver, rechazar, temporizador }
+/* Espera de CurrentPresetStatus. No hace falta clave: el equipo responde en
+   el mismo orden en que le llegan los pedidos (un solo cable, un solo canal),
+   asi que un FIFO simple alcanza -- a diferencia de los ACK de parametro y de
+   nodo, leer el preset no "confirma" una escritura con un valor que podria
+   ser el de otra: es una consulta, y peor que le llegue tarde es que le
+   llegue el preset de un pedido abandonado en vez del propio, lo cual solo
+   pasa si el preset cambio en el medio. */
+const pendientesPreset = []    // { resolver, rechazar, temporizador }
 const oyentes = []
 
 const avisar = () => { for (const fn of oyentes) fn(!!dispositivo) }
@@ -88,16 +105,34 @@ function anotarDeuda(nodo, parametro) {
   else descartar.set(k, [vence])
 }
 
+/* Misma deuda que la de arriba, pero para replaceNodeStatus: reemplazarUnidad
+   tiene el mismo problema de fondo que ponerParametro -- sin identificador de
+   correlacion, un ACK atrasado de un intento abandonado (por ejemplo, elegir
+   un modelo de ampli, que tarda, y reintentar) puede confirmar falsamente el
+   intento siguiente sobre el mismo nodo -- asi que lleva la misma defensa.
+   Va en un mapa aparte, no en `descartar`, porque se cuenta por nodo solo:
+   replaceNodeStatus no trae parametro. */
+const descartarNodo = new Map()   // nodo -> ms de caducidad de cada deuda, en orden creciente
+function anotarDeudaNodo(nodo) {
+  const lista = descartarNodo.get(nodo)
+  const vence = Date.now() + VENTANA_DESCARTE
+  if (lista) lista.push(vence)
+  else descartarNodo.set(nodo, [vence])
+}
+
 /* Las deudas caducan solas: un ACK que no llega nunca dejaria esa clave
    envenenada para siempre, y todo reintento posterior sobre esa perilla se
    reportaria como no confirmado. Se purga con cada mensaje que entra. Como
-   VENTANA_DESCARTE es igual para todas, la lista queda ordenada por caducidad
-   y basta sacar del frente. */
+   VENTANA_DESCARTE es igual para todas, cada lista queda ordenada por
+   caducidad y basta sacar del frente. Purga los dos mapas -- `descartar` y
+   `descartarNodo` -- por la misma razon: ninguno de los dos se limpia solo. */
 function purgarDescartes() {
   const ahora = Date.now()
-  for (const [k, lista] of descartar) {
-    while (lista.length && lista[0] <= ahora) lista.shift()
-    if (!lista.length) descartar.delete(k)
+  for (const mapa of [descartar, descartarNodo]) {
+    for (const [k, lista] of mapa) {
+      while (lista.length && lista[0] <= ahora) lista.shift()
+      if (!lista.length) mapa.delete(k)
+    }
   }
 }
 
@@ -106,6 +141,30 @@ function alRecibir(e) {
   if (!mensaje) return
   purgarDescartes()
   const r = interpretar(mensaje)
+  if (r.tipo === 'presetActivo') {
+    const p = pendientesPreset.shift()
+    if (!p) return
+    clearTimeout(p.temporizador)
+    p.resolver({ preset: r.preset, ranura: r.ranura, editado: r.editado })
+    return
+  }
+  if (r.tipo === 'ackNodo') {
+    /* Misma logica que la deuda de ackParametro, mas abajo: si al nodo le
+       queda una deuda vigente, este ACK puede ser el rezagado de un intento
+       abandonado y no hay como distinguirlo del de la escritura viva. */
+    const deudasNodo = descartarNodo.get(r.nodo)
+    if (deudasNodo) {
+      deudasNodo.shift()
+      if (!deudasNodo.length) descartarNodo.delete(r.nodo)
+      return
+    }
+    const i = pendientesNodo.findIndex(p => p.nodo === r.nodo)
+    if (i < 0) return
+    const [p] = pendientesNodo.splice(i, 1)
+    clearTimeout(p.temporizador)
+    p.resolver(r.fenderId)
+    return
+  }
   if (r.tipo !== 'ackParametro') return
   const k = clave(r.nodo, r.parametro)
   /* Si a esta clave le queda alguna deuda vigente -- las caducadas ya se
@@ -129,8 +188,10 @@ function alRecibir(e) {
 
 /* Medido contra el equipo: si se envia `currentPresetRequest`, el amplificador
    deja de aceptar escrituras durante el resto de la sesion y responde con
-   silencio absoluto. Un SYNC_BEGIN nuevo la destraba. Por eso este modulo NO
-   lee el preset: solo escribe, que es todo lo que la funcion necesita. */
+   silencio absoluto. Un SYNC_BEGIN nuevo la destraba. La regla nunca fue "no
+   leer el preset" sino "no dejar la sesion trabada": leerPreset(), mas abajo,
+   destraba ella misma antes de devolver el control, asi que quien la llama no
+   tiene que saber nada de esto. */
 async function abrir(dev) {
   dispositivo = dev
   reensamblador = crearReensamblador()
@@ -179,10 +240,13 @@ async function desconectar() {
   const dev = dispositivo
   dispositivo = null
   for (const p of pendientes.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
+  for (const p of pendientesNodo.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
+  for (const p of pendientesPreset.splice(0)) { clearTimeout(p.temporizador); p.rechazar(new Error('se corto la conexion')) }
   // La sesion siguiente empieza limpia: ningun ACK de la anterior puede
   // sobrevivir al cierre, asi que arrastrar deudas viejas solo lograria
   // reportar como no confirmadas escrituras nuevas que si funcionaron.
   descartar.clear()
+  descartarNodo.clear()
   if (dev) {
     // El listener se saca ANTES del SYNC_END: mientras ese await esta en
     // vuelo el listener seguiria atado, y un ACK que llegara justo en esa
@@ -369,6 +433,85 @@ export const ampli = {
          que falla suele ser el equipo yendose, y desconectar() limpia el mapa
          entero. */
       anotarDeuda(nodo, parametro)
+      throw err
+    }
+    return promesa
+  },
+
+  /* Lee el preset activo completo. Llega en varios paquetes: el
+     reensamblador ya los junta.
+
+     Pedir el preset TRABA las escrituras del resto de la sesion -- medido
+     contra el equipo -- y un SYNC_BEGIN nuevo las destraba. La regla nunca
+     fue "no leer" sino "no dejar la sesion trabada", asi que destrabar es
+     responsabilidad de esta funcion y no de quien la llama. Va en un
+     `finally` para que tambien destrabe cuando la lectura falla o se cae por
+     el timeout: sin esto, toda escritura posterior a la primera lectura de
+     preset se perderia en silencio, indistinguible de un equipo
+     desconectado. */
+  async leerPreset() {
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    reensamblador.reiniciar()
+    try {
+      let entrada
+      const promesa = new Promise((resolver, rechazar) => {
+        const temporizador = setTimeout(() => {
+          const i = pendientesPreset.indexOf(entrada)
+          if (i >= 0) pendientesPreset.splice(i, 1)
+          rechazar(new Error('El amplificador no mandó el preset'))
+        }, ESPERA_PRESET)
+        entrada = { resolver, rechazar, temporizador }
+        pendientesPreset.push(entrada)
+      })
+      await dispositivo.sendReport(0, empaquetar(mensajePedirPreset()))
+      return await promesa
+    } finally {
+      // Destraba, pase lo que pase. No lanza: si el equipo ya se fue, no hay
+      // nada que destrabar y no tiene sentido que ese sendReport tape el
+      // error real de la lectura.
+      try { await dispositivo?.sendReport(0, empaquetar(SYNC_BEGIN)) } catch { /* se fue el equipo */ }
+    }
+  },
+
+  /* Cambia la unidad de una ranura -- incluido `amp`, que es como se cambia
+     el modelo de amplificador. Espera la confirmacion del equipo y devuelve
+     el FenderId que el equipo dice que quedo puesto, no el que se pidio: son
+     iguales cuando todo sale bien, pero es la respuesta del equipo la que
+     cuenta.
+
+     Igual que las perillas: cada SYNC_BEGIN habilita una sola operacion, asi
+     que se reenvia antes de cada pedido. Y la misma limitacion de fondo que
+     ponerParametro -- sin identificador de correlacion, un ACK atrasado de un
+     intento abandonado podria confirmar falsamente el siguiente -- asi que
+     lleva la misma defensa de deuda (anotarDeudaNodo), no solo el ACK
+     feliz. */
+  async reemplazarUnidad(nodo, fenderId) {
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    reensamblador.reiniciar()
+    await dispositivo.sendReport(0, empaquetar(SYNC_BEGIN))
+    // Mismo motivo que en ponerParametro: el equipo se puede desenchufar
+    // durante el await de arriba.
+    if (!dispositivo) throw new Error('El amplificador no está conectado.')
+    let entrada
+    const promesa = new Promise((resolver, rechazar) => {
+      const temporizador = setTimeout(() => {
+        const i = pendientesNodo.indexOf(entrada)
+        if (i >= 0) pendientesNodo.splice(i, 1)
+        anotarDeudaNodo(nodo)
+        rechazar(new Error(`El amplificador no confirmó el cambio de ${nodo}`))
+      }, ESPERA_ACK)
+      entrada = { nodo, resolver, rechazar, temporizador }
+      pendientesNodo.push(entrada)
+    })
+    try {
+      await dispositivo.sendReport(0, empaquetar(mensajeReemplazarNodo(nodo, fenderId)))
+    } catch (err) {
+      // Mismo motivo que en ponerParametro: se saca por referencia, no por
+      // nodo, y se le anota la deuda antes de relanzar.
+      const i = pendientesNodo.indexOf(entrada)
+      if (i >= 0) pendientesNodo.splice(i, 1)
+      clearTimeout(entrada.temporizador)
+      anotarDeudaNodo(nodo)
       throw err
     }
     return promesa
