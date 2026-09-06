@@ -114,8 +114,31 @@ export const SYNC_BEGIN = codificarMensaje(113, [...campoVarint(1, 0), ...campoV
 export const SYNC_END   = codificarMensaje(113, [...campoVarint(1, 1), ...campoVarint(2, 0)])
 export const HEARTBEAT  = codificarMensaje(201, campoVarint(1, 1))
 
-export const mensajePonerParametro = (nodo, parametro, valor) =>
-  codificarMensaje(34, [...campoTexto(1, nodo), ...campoTexto(2, parametro), ...campoFloat(3, valor)])
+/* SetDspUnitParameter tiene un oneof: el valor va en el campo 3 (float), 4
+   (string) o 6 (bool) según el tipo del parámetro. El campo 5 (sint32) no se
+   implementa: ningún parámetro del catálogo lo usa y llevaría codificación
+   zigzag que no tenemos forma de verificar contra el equipo real.
+   La mayoría de los parámetros son números (campo 3, sin cambios); cuatro
+   parámetros del catálogo son texto (TOUCH WAH.mode, TOUCH WAH.type,
+   COMPRESSOR.type, FUZZ.tone, con valores como "High Up" o "loose") y se
+   mandan por el campo 4. Ningún parámetro booleano existe todavía en el
+   catálogo, pero el campo 6 queda implementado igual porque el oneof lo define. */
+export const mensajePonerParametro = (nodo, parametro, valor) => {
+  const campoValor =
+    typeof valor === 'string' ? campoTexto(4, valor)
+    : typeof valor === 'boolean' ? campoVarint(6, valor ? 1 : 0)
+    : campoFloat(3, valor)
+  return codificarMensaje(34, [...campoTexto(1, nodo), ...campoTexto(2, parametro), ...campoValor])
+}
+
+export const mensajePedirPreset = () => codificarMensaje(104, campoVarint(1, 1))
+
+/* Cambia qué unidad ocupa una ranura. Verificado contra el equipo: la ranura
+   cambia de verdad y responde con replaceNodeStatus (40), que devuelve la
+   ranura y el FenderId que quedó puesto. `amp` también es una ranura: así se
+   cambia el modelo de amplificador. */
+export const mensajeReemplazarNodo = (nodo, fenderId) =>
+  codificarMensaje(39, [...campoTexto(1, nodo), ...campoTexto(2, fenderId)])
 
 const texto = b => new TextDecoder().decode(b)
 
@@ -132,11 +155,20 @@ export function interpretar(mensaje) {
       // garantizado, y equivocarse aquí asignaría mal nodo/parámetro/valor
       // sin lanzar nada.
       const busca = n => dentro.find(c => c.num === n)
+      // El valor del oneof viene en el campo 3 (float), 4 (string) o 6 (bool)
+      // según qué tipo de parámetro se confirma. A lo sumo uno de los tres
+      // está presente.
+      const campoFlotante = busca(3), campoTexto2 = busca(4), campoBool = busca(6)
+      const valor =
+        campoFlotante ? campoFlotante.f
+        : campoTexto2?.bytes ? texto(campoTexto2.bytes)
+        : campoBool ? !!campoBool.v
+        : undefined
       return {
         tipo: 'ackParametro',
         nodo: busca(1)?.bytes ? texto(busca(1).bytes) : null,
         parametro: busca(2)?.bytes ? texto(busca(2).bytes) : null,
-        valor: busca(3)?.f,
+        valor,
       }
     }
     case 100: {
@@ -148,6 +180,26 @@ export function interpretar(mensaje) {
       return { tipo: 'firmware', texto: busca(1)?.bytes ? texto(busca(1).bytes) : '' }
     }
     case 113: return { tipo: 'sync' }
+    case 32: {
+      const crudo = dentro.find(c => c.bytes)
+      if (!crudo) return { tipo: 'desconocido' }
+      try {
+        return { tipo: 'presetActivo', preset: JSON.parse(texto(crudo.bytes)) }
+      } catch {
+        // Este parseo corre dentro del manejador de 'inputreport'. Un JSON
+        // cortado no puede subir como excepción desde ahí: se descarta, y la
+        // operación que esperaba el preset falla por su propio timeout.
+        return { tipo: 'desconocido' }
+      }
+    }
+    case 40: {
+      const busca = n => dentro.find(c => c.num === n)
+      return {
+        tipo: 'ackNodo',
+        nodo: busca(1)?.bytes ? texto(busca(1).bytes) : null,
+        fenderId: busca(2)?.bytes ? texto(busca(2).bytes) : null,
+      }
+    }
     default: return { tipo: 'desconocido' }
   }
 }

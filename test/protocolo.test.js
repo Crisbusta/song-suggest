@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   campoVarint, campoBytes, campoTexto, campoFloat, codificarMensaje, empaquetar,
   leerCampos, crearReensamblador, SYNC_BEGIN, mensajePonerParametro, interpretar,
+  mensajePedirPreset, mensajeReemplazarNodo,
 } from '../public/fender-protocolo.js'
 
 const hex = u8 => [...u8].map(b => b.toString(16).padStart(2, '0')).join(' ')
@@ -155,4 +156,70 @@ test('empaquetar acepta los 62 bytes que caben y rechaza el 63', () => {
   assert.equal(p[1], 62, 'el largo declarado')
   assert.equal(p[63], 0xab, 'el último byte de la carga cae en el último del reporte')
   assert.throws(() => empaquetar(new Uint8Array(63)), /no cabe/)
+})
+
+test('reemplazar un nodo codifica byte a byte lo que el equipo acepto', () => {
+  // Verificado contra el amplificador el 2026-09-05: con estos bytes la ranura
+  // mod paso a FLANGER y el cambio se confirmo releyendo el preset.
+  assert.equal(hex(mensajeReemplazarNodo('mod', 'DUBS_TriangleFlanger')),
+    '08 00 ba 02 1b 0a 03 6d 6f 64 12 14 44 55 42 53 5f 54 72 69 61 6e 67 6c 65 46 6c 61 6e 67 65 72')
+})
+
+test('pedir el preset codifica lo mismo que uso la sonda', () => {
+  assert.equal(hex(mensajePedirPreset()), '08 00 c2 06 02 08 01')
+})
+
+test('interpreta la confirmacion de un nodo reemplazado', () => {
+  const respuesta = codificarMensaje(40, [...campoTexto(1, 'mod'), ...campoTexto(2, 'DUBS_TriangleFlanger')])
+  assert.deepEqual(interpretar(respuesta), {
+    tipo: 'ackNodo', nodo: 'mod', fenderId: 'DUBS_TriangleFlanger',
+  })
+})
+
+test('interpreta el preset activo y lo entrega parseado', () => {
+  const json = JSON.stringify({ info: { displayName: 'EMPTY' }, audioGraph: { nodes: [{ nodeId: 'amp', FenderId: 'DUBS_LinearGain' }] } })
+  const respuesta = codificarMensaje(32, campoTexto(1, json))
+  const r = interpretar(respuesta)
+  assert.equal(r.tipo, 'presetActivo')
+  assert.equal(r.preset.audioGraph.nodes[0].FenderId, 'DUBS_LinearGain')
+})
+
+test('un preset con JSON roto no revienta el manejador de inputreport', () => {
+  const respuesta = codificarMensaje(32, campoTexto(1, '{esto no es json'))
+  assert.deepEqual(interpretar(respuesta), { tipo: 'desconocido' })
+})
+
+test('mensajePonerParametro manda un parametro de texto por el campo 4, no como flotante', () => {
+  // TOUCH WAH.mode es uno de los cuatro parametros de texto del catalogo:
+  // sin esta rama, 'High Up' se mandaria como NaN por el campo 3 (float).
+  assert.equal(hex(mensajePonerParametro('TOUCH WAH', 'mode', 'High Up')),
+    '08 00 92 02 1a 0a 09 54 4f 55 43 48 20 57 41 48 12 04 6d 6f 64 65 22 07 48 69 67 68 20 55 70')
+})
+
+test('mensajePonerParametro manda un parametro booleano como varint por el campo 6', () => {
+  assert.equal(hex(mensajePonerParametro('amp', 'bright', true)),
+    '08 00 92 02 0f 0a 03 61 6d 70 12 06 62 72 69 67 68 74 30 01')
+  assert.equal(hex(mensajePonerParametro('amp', 'bright', false)),
+    '08 00 92 02 0f 0a 03 61 6d 70 12 06 62 72 69 67 68 74 30 00')
+})
+
+test('interpretar reconoce el ACK de un parametro de texto (campo 4)', () => {
+  const ack = codificarMensaje(35, [
+    ...campoTexto(1, 'TOUCH WAH'), ...campoTexto(2, 'mode'), ...campoTexto(4, 'High Up'),
+  ])
+  const r = interpretar(ack)
+  assert.deepEqual(r, { tipo: 'ackParametro', nodo: 'TOUCH WAH', parametro: 'mode', valor: 'High Up' })
+})
+
+test('interpretar reconoce el ACK de un parametro booleano (campo 6)', () => {
+  const ack = codificarMensaje(35, [
+    ...campoTexto(1, 'amp'), ...campoTexto(2, 'bright'), ...campoVarint(6, 1),
+  ])
+  const r = interpretar(ack)
+  assert.deepEqual(r, { tipo: 'ackParametro', nodo: 'amp', parametro: 'bright', valor: true })
+
+  const ackFalso = codificarMensaje(35, [
+    ...campoTexto(1, 'amp'), ...campoTexto(2, 'bright'), ...campoVarint(6, 0),
+  ])
+  assert.deepEqual(interpretar(ackFalso), { tipo: 'ackParametro', nodo: 'amp', parametro: 'bright', valor: false })
 })
