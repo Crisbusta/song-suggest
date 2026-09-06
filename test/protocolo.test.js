@@ -189,6 +189,28 @@ test('un preset con JSON roto no revienta el manejador de inputreport', () => {
   assert.deepEqual(interpretar(respuesta), { tipo: 'desconocido' })
 })
 
+test('interpreta el preset activo junto con la ranura y el estado editado', () => {
+  const json = JSON.stringify({ info: { displayName: 'EMPTY' } })
+  const respuesta = codificarMensaje(32, [
+    ...campoTexto(1, json), ...campoVarint(2, 1), ...campoVarint(3, 1),
+  ])
+  const r = interpretar(respuesta)
+  assert.equal(r.tipo, 'presetActivo')
+  assert.equal(r.preset.info.displayName, 'EMPTY')
+  assert.equal(r.ranura, 1)
+  assert.equal(r.editado, true)
+})
+
+test('el preset activo sin ranura ni editado no inventa una ranura 0', () => {
+  const json = JSON.stringify({ info: { displayName: 'EMPTY' } })
+  const respuesta = codificarMensaje(32, campoTexto(1, json))
+  const r = interpretar(respuesta)
+  assert.equal(r.tipo, 'presetActivo')
+  assert.equal(r.preset.info.displayName, 'EMPTY')
+  assert.equal(r.ranura, null)
+  assert.equal(r.editado, null)
+})
+
 test('mensajePonerParametro manda un parametro de texto por el campo 4, no como flotante', () => {
   // TOUCH WAH.mode es uno de los cuatro parametros de texto del catalogo:
   // sin esta rama, 'High Up' se mandaria como NaN por el campo 3 (float).

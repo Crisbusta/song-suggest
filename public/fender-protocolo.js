@@ -181,10 +181,19 @@ export function interpretar(mensaje) {
     }
     case 113: return { tipo: 'sync' }
     case 32: {
-      const crudo = dentro.find(c => c.bytes)
-      if (!crudo) return { tipo: 'desconocido' }
+      // Por número de campo, no por posición: mismo criterio que el caso 35.
+      const busca = n => dentro.find(c => c.num === n)
+      const crudo = busca(1)
+      if (!crudo?.bytes) return { tipo: 'desconocido' }
       try {
-        return { tipo: 'presetActivo', preset: JSON.parse(texto(crudo.bytes)) }
+        const preset = JSON.parse(texto(crudo.bytes))
+        // La ranura (campo 2) no se defaultea a 0: un mensaje truncado que la
+        // omita debe devolver null, nunca una ranura inventada -- esto
+        // eventualmente alimenta la única operación irreversible del
+        // proyecto (guardar sobre una ranura).
+        const ranura = busca(2)?.v ?? null
+        const editado = busca(3) ? !!busca(3).v : null
+        return { tipo: 'presetActivo', preset, ranura, editado }
       } catch {
         // Este parseo corre dentro del manejador de 'inputreport'. Un JSON
         // cortado no puede subir como excepción desde ahí: se descarta, y la
