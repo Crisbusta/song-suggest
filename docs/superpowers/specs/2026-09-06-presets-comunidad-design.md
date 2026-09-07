@@ -20,6 +20,13 @@ sobre su catálogo de 9.974 canciones:
 | Las 8 más repetidas cubren | **54,6%** |
 | Modelos de amplificador nunca usados | 6 de 20 |
 
+> **Nota de la revisión final de rama (2026-09-07).** Esta tabla describe el
+> comportamiento **de antes de esta rama** (sólo `sugerirAjustes`, sin presets
+> de comunidad ni cadena de efectos), y motivó la rama en vez de sostener
+> ninguna decisión vigente. Remedirla hoy exigiría revertir `sugerirAjustes` a
+> como estaba: no se remidió por eso. Quien la lea no debe tomarla por una
+> descripción del sistema actual — ver §5 para la cobertura de hoy.
+
 Tres causas, todas medidas:
 
 1. **Se usa un solo tag y se descarta el resto.** Cada canción tiene 9,6 tags de
@@ -29,6 +36,13 @@ Tres causas, todas medidas:
 2. **El ajuste acústico pisa el género por completo.** 1.641 canciones (16,5%)
    tienen track representativo acústico y todas terminan en CHAMPION gain 1, sea
    cual sea el género. Es la combinación más repetida del catálogo.
+
+   > **Nota de la revisión final de rama (2026-09-07).** Esta cifra es de antes
+   > de la rama, sobre el universo de 9.974 canciones citado al abrir esta
+   > sección (1.641/9.974 = 16,5%). Remedida hoy contra el `songs.db` real da
+   > números distintos según el universo: **1.641 sobre 9.788**, o **1.624
+   > sobre 9.753** (esta segunda es la que usa §6.4 más abajo) — ninguno de los
+   > dos es 9.974, el mismo cruce de universos que documenta la nota de §6.4.
 3. **La tabla es de grano grueso a propósito.** `rock` (7.407 canciones) y
    `pop/rock` (2.735) están excluidos porque no dicen nada del tono. La decisión
    es correcta, pero deja el peso sobre pocos tags.
@@ -105,6 +119,14 @@ Medido sobre las dos hojas:
   el reverb del panel: 36 de las 39 filas que usan la 6ª traen además su propio
   bloque de reverb. Ver §3.1.1.
 
+  > **Corrección de la revisión final de rama (2026-09-07).** Los dos
+  > denominadores de este párrafo estaban mal medidos (las 56 filas que usan
+  > la 6ª y la 7ª sí están bien). Son **76 filas con amplificador** (77 filas
+  > de datos de la hoja 1, menos 1 sin nombre de unidad — "Super Clean", ver
+  > `docs/presets-comunidad-auditoria.md`), no 75; y **50 de 54** filas que
+  > usan la 6ª traen además su propio bloque de reverb, no 36 de 39 — la
+  > conclusión ("no es el reverb del panel") queda más fuerte, no más débil.
+
 ---
 
 ## 3. Lo que se midió antes de decidir
@@ -153,9 +175,20 @@ Todo lo de esta sección se calculó contra el catálogo real y el CSV real.
 > (esta tabla decía 5; es el mismo recuento de arriba, siempre estable en las
 > repeticiones de esta medición).
 | Presets que nombran una canción concreta que existe en el catálogo | 7 (antes decía 5; ver nota del 2026-09-07 arriba) |
-| Nombres de unidad distintos en ambas hojas | 46 |
-| Nombres que resuelven contra el catálogo con alias explícitos | **41**; los 5 restantes son alias triviales |
+| Nombres de unidad distintos en ambas hojas | 46 (corregido: ver nota de la revisión final de rama, abajo) |
+| Nombres que resuelven contra el catálogo con alias explícitos | **41**; los 5 restantes son alias triviales (corregido: ver nota de la revisión final de rama, abajo) |
 | Filas con época declarada | 71 de 77 |
+
+> **Corrección de la revisión final de rama (2026-09-07).** Las dos filas de
+> arriba sobre nombres de unidad estaban mal medidas:
+> - Nombres de unidad distintos en ambas hojas: **55 crudos** (tal como
+>   aparecen en el CSV) / **51 normalizados** (mayúscula y espacios), no 46.
+> - De esos, **17 resuelven vía la tabla `ALIAS`** de `lib/lt25-nombres.js`,
+>   **33 calzan exacto** contra un nombre del catálogo, y **1 no resuelve**
+>   (`80s`, que aparece en la columna de delay de una fila y queda como
+>   aviso). La cifra anterior ("41 con alias explícitos, 5 triviales") tenía
+>   la relación invertida entre alias y calce exacto. La propia tabla `ALIAS`
+>   tiene 19 entradas: no puede sostener por sí sola una cifra de 41.
 
 Y cubre donde el usuario toca (medido 2026-09-07): Metallica 171 canciones,
 Megadeth 96, Nirvana 94, Deftones 76, Black Sabbath 58, Arctic Monkeys 57,
@@ -177,6 +210,12 @@ valor, Sustain 2 y 2, CHORUS 3 y 3, FLANGER 4 y 4, 5-BAND EQ 5 y 5.
 Esa igualdad se convierte en un test permanente: si alguien reordena el catálogo
 o edita el CSV, salta.
 
+> **Corrección de la revisión final de rama (2026-09-07).** El denominador "20"
+> no es reproducible tal cual: son **17 unidades distintas** de la hoja 2 (44
+> instancias entre las 10 filas), no 20. Remedido, el invariante se cumple
+> igual al 100% — **17 de 17** — y los cinco ejemplos citados (COMPRESSOR,
+> Sustain, CHORUS, FLANGER, 5-BAND EQ) reproducen exacto.
+
 ### 3.1.1 La hoja 1 y sus dos columnas de más
 
 La misma comprobación se corrió sobre la hoja 1, con un resultado que decide
@@ -194,6 +233,15 @@ En las cuatro ranuras de efectos la decodificación posicional se cumple **sin u
 sola excepción** — usar menos columnas de las disponibles es legítimo, significa
 "sólo especifiqué estas perillas". La anomalía está aislada en el bloque de
 amplificador.
+
+> **Corrección de la revisión final de rama (2026-09-07).** El split entre
+> "menos" e "iguales" de delay, reverb y amp estaba mal medido (stomp 58/6/0 y
+> mod 1/50/0 sí están bien). Remedido: **delay 5/30/0 · reverb 7/61/0 · amp
+> 1/21/54**. Los totales de delay (35) y reverb (68) sí cerraban antes; lo que
+> estaba mal era cómo se repartían entre "menos" e "iguales". La conclusión que
+> decide esta sección —MÁS columnas que perillas da 0 en las cuatro ranuras de
+> efectos, y sólo el amplificador tiene filas con más columnas que perillas—
+> se sostiene igual.
 
 **Decisión: del bloque de amplificador se usan las cinco primeras columnas
 —`gain`, `volume`, `treb`, `mid`, `bass`, en el orden del catálogo— y las dos
@@ -213,9 +261,18 @@ convertibles hoy y 20 no** — son los que declaran una curva distinta para el
 cable y para la escala de pantalla, y cuya conversión sigue sin medirse contra el
 equipo (ver `2026-09-05-editor-lt25-design.md` §3.3).
 
+> **Corrección de la revisión final de rama (2026-09-07).** El "114/94/20" no
+> reproduce: son **159/130/29** contando todos los parámetros continuos de las
+> 41 unidades que los dos CSV usan, o **153/124/29** contando sólo los que la
+> planilla efectivamente escribe (celda con valor, no en blanco). En cualquiera
+> de los dos universos, el denominador de los no convertibles es **29**, no 20.
+> La lista nombrada más abajo es exacta salvo un ítem: no son "los ocho
+> `volume` de amplificador", son **17** (los 12 de efectos que sí están bien
+> listados, más estos 17 de amplificador, cierran los 29).
+
 No están repartidos al azar:
 
-- Los ocho `volume` de amplificador. Irrelevante: ya se decidió no mandarlos.
+- Los `volume` de amplificador (17, no ocho). Irrelevante: ya se decidió no mandarlos.
 - **La ranura de modulación es la más golpeada**: `CHORUS.level`, `CHORUS.rateHz`,
   `FLANGER.level`, `FLANGER.rate`, `TREMOLO.level`, `VIBRATONE.level`,
   `VIBRATONE.rotor`, `PHASER.rate`. Y el CHORUS aparece en casi todas las filas
@@ -293,7 +350,10 @@ Los presets por banda son los que suenan a la banda; los tonos por género son
 los que evitan que el resto caiga en la nada.
 
 > Una versión anterior decía **41,7%**. Bajó al aplicar §6.4: 504 canciones con
-> track acústico dejaron de recibir un preset de banda. Se perdieron bien.
+> track acústico dejaron de recibir algo — **119 de banda y 385 de tono de
+> género** (no las 504 "de banda" que decía una versión anterior de esta nota:
+> §6.4 bloquea las dos rutas, no sólo el preset de banda; ver su propia nota).
+> Se perdieron bien.
 
 La sugerencia viaja con su **procedencia** y con la **incertidumbre que la fuente
 declaró**. Un `{EXPERIMENTAL}` o un `?` de la planilla marcan `preset.incierto`,
@@ -318,10 +378,32 @@ de esa misma banda no es otra canción: es otro instrumento. La invariante que
 servir para lo que vas a tocar"— es más específica que la procedencia del dato,
 así que gana ella.
 
-Medido antes de decidirlo: de 1.624 canciones con track acústico, 504 recibían
-preset de la comunidad y **116 con gain ≥ 6**. Los casos que zanjaron la
-discusión: Rush, "Closer To The Heart", guitarra de **nylon**, recibía BURN a
-**gain 10**; Metallica, "Mama Said", acústica de acero, gain 10.
+**La regla bloquea las dos rutas, no sólo el preset de banda** —
+`buscarPreset(...) ?? presetDeGenero(tags)` completo, en `lib/ampli.js:159-161`
+— y cada ruta tiene su propia razón. La de arriba es la del preset de banda.
+La del tono de género es otra: nadie dialó ese tono para ESTA canción — es un
+mapeo de tags a un tono de la hoja 2, un juicio de esta rama, no un dato que
+alguien haya escrito junto a un género (ver el encabezado de
+`presetDeGenero` en `lib/presets-comunidad.js`) — y ese juicio se hizo mirando
+equipo eléctrico. Sobre una guitarra de nylon o acústica de acero ese juicio
+no se sostiene, igual que no se sostiene el preset de banda: un tono de
+género con distorsión sobre una guitarra acústica tampoco sirve.
+
+Medido antes de decidirlo: de 1.624 canciones con track acústico, 504 dejaban
+de recibir algo del preset de comunidad si se les bloqueaba las dos rutas —
+**119 eran preset de banda y 385 tono de género** — y de las 116 con gain ≥ 6,
+sólo 33 venían de preset de banda. Los casos que zanjaron la discusión: Rush,
+"Closer To The Heart", guitarra de **nylon**, recibía BURN a **gain 10**;
+Metallica, "Mama Said", acústica de acero, gain 10 — los dos son de ese 24%
+de preset de banda, no del 76% de tono de género, pero la razón que cubre el
+otro 76% es la de arriba, no una extrapolación de estos dos casos.
+
+> **Corrección de la revisión final de rama (2026-09-07).** "de 1.624
+> canciones con track acústico" no reproduce contra el universo de 9.746 que
+> usa el resto de esta sección: remedido da **1.621**, no 1.624. El 1.624
+> original corresponde a un universo de 9.753 canciones — numerador y
+> denominador de mediciones distintas, mismo cruce que la nota de §1. "116 con
+> gain ≥ 6" sí reproduce exacto y no se toca.
 
 **Lo que NO se toca:** los tracks eléctricos limpios. La tabla ya les recorta la
 ganancia, y un preset de banda sobre un track limpio es discutible pero no
@@ -422,6 +504,29 @@ segundos. El envío ya avisa mientras corre y ya sobrevive a sortear otra canci�
 3. **Qué son las columnas 6 y 7 del bloque de amplificador** (§3.1.1). Se
    resuelve abriendo la planilla original y mirando si hay una fila de
    encabezado que la exportación aplanó. Hasta entonces se descartan.
-4. **Los 25 presets que no calzan** con ningún artista del catálogo (Fela, PJ
+4. **Los presets que no calzan** con ningún artista del catálogo (Fela, PJ
    Harvey, Sunn O))), Tom Waits…) se importan igual: si algún día el catálogo
    crece, ya están. No cuestan nada y su ausencia sería una pérdida silenciosa.
+
+   > **Corrección de la revisión final de rama (2026-09-07).** Son **27**
+   > filas, no 25 (77 filas de la hoja 1, 50 calzan). Y dos de esas 27 **no**
+   > son ausencia legítima del catálogo: `Ennio Morricone / Spaghetti Western`
+   > y `Nile Rogers / Chi` (truncado en la fuente) cuestan 7 canciones reales
+   > que sí están en el catálogo (Ennio Morricone, Chic). Ver
+   > `docs/presets-comunidad-auditoria.md` §3.3 para el detalle: no se cambia
+   > la regla de `partirClave`, sólo se distingue la categoría.
+5. **El hueco de la unión de escalas, anotado en la revisión final de rama
+   (2026-09-07), sin arreglar a propósito.** `rangoDeclarado` (en
+   `lib/presets-comunidad.js`) acepta, correctamente, la unión de la escala de
+   pantalla (1..10) y la cruda (0..1) del catálogo — verificado: 41 valores
+   legítimos de la planilla viven fuera de 0..10. Pero `paraElAmpli` (en
+   `lib/ampli.js`) y `aCable` siempre convierten como si el valor estuviera en
+   la escala de pantalla, y acotan. Un valor que cae dentro de la unión pero
+   fuera de la escala de pantalla pasa el guardia de rango y se convierte al
+   extremo. Caso real único: Mac DeMarco, `reverb SPRING 65.tone = 0.0`
+   (`data/presets-lt25-bandas.csv:46`) → se manda `0` acotado, 4 canciones —
+   y el resultado coincide con lo que un humano habría querido (tone al
+   mínimo), así que la consecuencia práctica hoy es nula. El arreglo correcto
+   es estructural: saber en qué escala viene cada valor de la planilla, no
+   asumir siempre la de pantalla. Queda deliberadamente sin resolver en esta
+   ronda.

@@ -131,14 +131,27 @@ reglas).
 | Motivo | Canciones |
 |---|---|
 | `cancion` (preset de canción exacta) | 7 |
-| `artista` (preset de artista, con o sin desempate de época) | 867 |
+| `artista` (preset de artista con desempate de época, o único preset del artista) | 867 |
 | `artista (sin desempate de epoca)` | 45 |
 | `artista (desde el preset de otra cancion)` | 13 |
 | `genero` (tono de género, hoja 2) | 2.650 |
 | **Cubiertas (suma de las anteriores)** | **3.582** |
-| Track representativo acústico (excluido del preset de comunidad, cae a reglas) | 1.619 |
+| Track representativo acústico (§6.4 de la spec bloquea el preset de comunidad, cae a reglas) | 1.619 |
 | Sin preset de ningún tipo (incluye las acústicas) | 6.154 |
 | **Universo total** | **9.736** |
+
+> **Corrección de la revisión final de rama (2026-09-07).** Dos etiquetas de
+> esta tabla se corrigieron:
+> - La fila `artista` decía "con o sin desempate de época", pero la fila
+>   siguiente ya separa el caso "sin desempate" (45): la etiqueta se
+>   contradecía con su propia tabla. Los 867 son sólo los que sí desempataron
+>   por época o tenían un único preset genérico.
+> - "Track representativo acústico (excluido del preset de comunidad)" daba a
+>   entender que las 1.619 perdieron algo por la regla de §6.4. No es así: de
+>   esas 1.619, sólo **504** habrían recibido un preset de comunidad si no
+>   existiera la excepción acústica (119 de banda + 385 de tono de género, ver
+>   spec §6.4) — las otras 1.115 no tenían ni preset de artista ni tono de
+>   género que perder, acústicas o no.
 
 **Cobertura: 3.582 de 9.736, 36,8%.** Coincide exacto con la cifra ya
 corregida en la spec §5 ("9.736 sorteables, 3.582 cubiertas, 36,8%") — no hizo
@@ -163,6 +176,38 @@ Sólo para contrastar contra la tabla de la §5 de la spec, que se midió sobre
 
 **Cobertura: 3.667 de 10.011, 36,6%.** También coincide exacto con la spec.
 
+### 3.3 Las 27 filas de la hoja 1 que no calzan con ningún artista: dos categorías
+
+`partirClave` toma el **último** segmento de la clave tras `/` como la banda —
+correcto como regla (§4 de la spec): en `Alex Lifeson / Rush` el guitarrista es
+lo primero y la banda, que es lo que indexa el catálogo, va al final. La spec
+§10 (punto 4) asume que las 27 filas sin calce son todas ausencias legítimas
+del catálogo (Fela, PJ Harvey, Sunn O))), Tom Waits…). **Dos no lo son:**
+
+| Fila del CSV | `partirClave` deriva | El catálogo sí tiene | Canciones perdidas |
+|---|---|---|---|
+| `Ennio Morricone / Spaghetti Western` | "Spaghetti Western" | **Ennio Morricone** (3 canciones) | 3 |
+| `Nile Rogers / Chi` (truncado en la fuente, verificado byte a byte en `data/presets-lt25-bandas.csv:55`) | "Chi" | **Chic** (4 canciones) | 4 |
+
+Estas dos filas calzarían si la clave no viniera truncada (Chic) o si el
+guitarrista, no la banda, fuera el segmento correcto para esta fila puntual
+(Ennio Morricone es su propio nombre artístico, no una banda con guitarrista
+aparte) — pero cambiar la regla para estos dos casos rompería el resto: el
+guitarrista siempre yendo primero y la banda al final es lo que permite leer
+`Alex Lifeson / Rush`, `Keith Richards / Rolling Stones` y las demás 25 filas
+de esta forma. **No se cambia la regla.** Lo que hace falta es no confundir
+esta categoría con la otra: estas 7 canciones no son una ausencia legítima del
+catálogo, son una clave truncada o mal segmentada en la fuente. La fila de
+Ennio Morricone es además el residuo de la discrepancia "51 → 50" de §4 más
+abajo: contando "calza" por cualquier segmento de la clave (no sólo el último)
+esta fila sí cuenta, porque la exploración original que produjo el "51" la
+acreditó por el lado del guitarrista.
+
+(`Stephen O'Malley / Sunn ` también llega truncado desde la fuente —le falta
+el resto de "Sunn O)))"— pero "Sunn" no calza contra ningún artista del
+catálogo de todos modos, así que no cuesta cobertura y no entra en esta
+categoría.)
+
 ## 4. Discrepancias encontradas contra la spec (§3)
 
 La sección de precedencia (§5, "cerca de la línea 248" del diseño) reprodujo
@@ -179,18 +224,50 @@ commit que este documento:
 
 Estas cuatro cifras son de las secciones de la spec que **no** dependen de
 `st.status` ni de la dificultad — dependen sólo de `lib/presets-comunidad.js`
-y de la tabla `songs` completa, y aun así no cerraron contra lo medido hoy. La
-diferencia es consistente con que el catálogo creció un poco entre el
-2026-09-06 (fecha de la spec) y hoy: el conteo de Metallica subió en 2, y el
-conteo "por artista" subió en 4 — mismo orden de magnitud. La caída de 51 a 50
-presets que calzan un artista no se pudo aislar contra una lista de referencia
-de la medición original (no quedó registrada en la spec cuál era el artista
-número 51), así que no se puede afirmar con certeza si es sólo crecimiento del
-catálogo o si además cambió algo en el resolvedor de nombres en una tarea
-posterior a cuando se escribió esa sección. Ver la nota fechada 2026-09-07 que
-se agregó en la spec junto a la tabla de §3, con el detalle completo y la
-regla que decide esto (**el número que manda es el medido, con su filtro y su
-fecha**).
+y de la tabla `songs` completa, y aun así no cerraron contra lo medido hoy.
+
+> **Corrección de la revisión final de rama (2026-09-07): la causa no es que
+> el catálogo creciera.** `enriched = total = 10.011` en el `songs.db` de hoy
+> — no existe un universo `enriched_at IS NOT NULL` más chico que el total que
+> pudiera haber "crecido" hasta él, y las fechas de modificación de los
+> archivos lo confirman. Son **dos cambios de definición de medición**, cada
+> uno aislado y reproducido por separado, más una tercera cifra (5→7) que es
+> una mejora intencional y no una discrepancia:
+>
+> **(a) 1.063 → 1.067 y Metallica 169 → 171: cambio de denominador, no de
+> dato.** Mismo código (`buscarPreset`/`presetDeGenero`), misma base de datos,
+> tres universos distintos:
+>
+> | Universo | Filas | Calzan artista | Cubiertas | Metallica |
+> |---|---|---|---|---|
+> | `songs` completo (esta auditoría, §3.2) | 10.011 | 50 | 1.067 | 171 |
+> | `+ is_junk=0 + is_blank=0` (medición original de la spec §1, "9.974") | 9.974 | 50 | 1.063 | 169 |
+> | `BASE_FROM` completo (§3.1 arriba) | 9.736 | 50 | 1.051 | 166 |
+>
+> Las tres son correctas para su propio universo: la spec midió sobre 9.974 en
+> su momento, esta auditoría sobre 10.011. Las 37 filas de diferencia entre
+> 9.974 y 10.011 aportan exactamente las 4 canciones "por artista" de más y
+> las 2 de Metallica — no un catálogo que creció, un filtro distinto aplicado
+> al mismo catálogo.
+>
+> **(b) 5 → 7 presets que nombran una canción: cambio de parseo, y es una
+> mejora, no un error.** Repitiendo el conteo con el parseo de antes de la
+> Task 3 —que no despoja `{…}`/`(…)` de la clave— da exactamente 5. Los dos
+> presets que aparecen con el parseo actual son `Pearl Jam - Yellow Ledbetter
+> {EXPERIMENTAL}` y `Radiohead - Creep {EXPERIMENTAL}`: sin despojar la marca,
+> el título queda pegado a ella y no calza contra el catálogo. La cifra "5" se
+> escribió en el commit de diseño, antes de que existiera `partirClave`.
+>
+> **(c) 51 → 50: cambio de regla de conteo, y la única que revela una pérdida
+> real.** Contando un preset como "calza" si **cualquier** segmento de la
+> clave calza un artista (no sólo el último) da exactamente 51, y el extra es
+> uno solo: `Ennio Morricone / Spaghetti Western`. La exploración original que
+> produjo el "51" acreditó esa fila por el lado del guitarrista;
+> `partirClave` se queda con la banda (regla correcta: es la que hace que
+> `Alex Lifeson / Rush` indexe por Rush, no por Lifeson — ver el comentario de
+> `partirClave` en `lib/presets-comunidad.js`). El 50 es la cifra honesta bajo
+> la regla que el código implementa, y las 3
+> canciones de Ennio Morricone son el residuo real: ver §3.3 arriba.
 
 ## 5. Cómo se generaron estos números
 

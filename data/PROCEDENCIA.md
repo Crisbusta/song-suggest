@@ -15,9 +15,22 @@ términos la planilla permite redistribuirse.
 
 **Es opinión, no medición.** Son los ajustes que a alguien le funcionaron, no el
 tono de la grabación. La planilla marca su propia incertidumbre en varias filas
-(`{EXPERIMENTAL}`, `(INACCURATE)`, `Pearl jam?`) y esas marcas viajan hasta la
-pantalla: no se limpian.
+(`{EXPERIMENTAL}`, `(INACCURATE)`, `Pearl jam?`) y esa incertidumbre viaja
+hasta la pantalla, pero **no** pegada al nombre: `lib/ampli.js` la limpia del
+nombre (`limpiarMarcaDeNombre`) y la manda estructurada en `preset.incierto`,
+que la tarjeta declara explícito ("la propia planilla marca este preset como
+dudoso"). Un lector viendo "GUNS N ROSES?" lo leería como un typo nuestro, no
+como la advertencia de la planilla que es — por eso se separa el dato de su
+presentación en vez de copiar la marca tal cual.
 
 Dos columnas del bloque de amplificador (la 6ª y la 7ª) **no se usan**: los
 veinte modelos declaran cinco perillas y esas columnas traen valores negativos,
 así que no son perillas. Su significado se desconoce. Ver §3.1.1 de la spec.
+
+---
+
+**Pendiente si este repositorio se publica alguna vez:** `public/lt25-unidades.json`
+(138 KB) es un volcado del catálogo DSP del firmware del Fender Mustang LT25,
+versionado sin nota de procedencia propia. Va al mismo análisis de terceros que
+la planilla de esta comunidad — no se resuelve en esta ronda, sólo se deja
+anotado aquí para que no se pierda.

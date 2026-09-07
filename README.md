@@ -79,6 +79,20 @@ por buena ninguna escritura sin confirmación: cada perilla espera el ACK del
 equipo y, si no llega en 2 segundos, se reporta como `sin confirmar` en vez de
 decirte que se aplicó. Si ves eso, vuelve a pulsar el botón.
 
+### De dónde salen los presets por banda y por género
+
+Cuando el catálogo tiene un artista o un género que calza, la sugerencia no
+sale de una tabla propia: sale de una planilla que mantiene la **comunidad de
+usuarios del Fender Mustang LT25** —
+<https://docs.google.com/spreadsheets/d/1KWvjJ6q6Ora2MqmxtUAWjq9Uerp0Ycza5ouuKuol5HQ/edit?gid=1647190216>
+— con los ajustes de amplificador y de las cuatro ranuras de efectos que a
+esas personas les funcionaron para esa banda o ese tono. **Es opinión de esa
+comunidad, no una medición del tono de la grabación**, y la tarjeta lo dice
+explícito junto a cada sugerencia, incluida la incertidumbre que la propia
+planilla marcó en algunas filas. Detalle de qué se citó, cómo y con qué
+límites: `data/PROCEDENCIA.md`. Qué entró de verdad en el import, fila por
+fila: `docs/presets-comunidad-auditoria.md`.
+
 ## El editor del amplificador
 
 El botón **Ampli** de la barra abre el editor: lee el preset activo del equipo
