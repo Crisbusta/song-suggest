@@ -113,12 +113,12 @@ Todo lo de esta sección se calculó contra el catálogo real y el CSV real.
 
 | Comprobación | Resultado |
 |---|---|
-| Presets de la hoja 1 que calzan con un artista del catálogo | **51 de 77** |
-| Canciones que cubren esos 51 | **1.063 (10,7%)** |
+| Presets de la hoja 1 que calzan con un artista del catálogo | **50 de 77** |
+| Canciones que cubren esos 50 | **1.067 (10,7%)** |
 
 > **Corrección del 2026-09-06.** Esta tabla decía antes **1.461 (14,6%)**, y era
 > un error de conteo del autor: sumaba las canciones **por preset** en vez de
-> **por artista**. Metallica tiene dos presets, así que sus 169 canciones se
+> **por artista**. Metallica tiene dos presets, así que sus canciones se
 > contaron dos veces; Rush tiene tres, Nirvana, Radiohead, Arctic Monkeys,
 > Rolling Stones y Pearl Jam dos cada uno. En total, 501 canciones contadas de
 > más. La cifra medida corriendo el calce real sobre el catálogo entero es
@@ -131,13 +131,35 @@ Todo lo de esta sección se calculó contra el catálogo real y el CSV real.
 > valiendo la pena y sigue cubriendo justo donde el usuario toca— pero un
 > número inflado en un documento vinculante es exactamente lo que este proyecto
 > se niega a tolerar en el código, así que tampoco se tolera aquí.
-| Presets que nombran una canción concreta que existe en el catálogo | 5 |
+
+> **Recuento del 2026-09-07 (Task 9, auditoría del import).** Corriendo de
+> nuevo el mismo cálculo contra `lib/presets-comunidad.js` y el `songs.db`
+> real, la tabla de arriba y la corrección anterior quedaron ligeramente
+> desactualizadas: **50 de 77** presets calzan con un artista del catálogo (no
+> 51: `Motoko Kida / Tricot`, `PJ Harvey`, `Julien Baker`, `Billy Bragg`,
+> `Raveonettes` y el resto de los 27 nombres sin match hoy no incluyen ningún
+> otro cambio detectado), y cubren **1.067 canciones, un 10,7%** —7 por canción
+> exacta, **984** por artista (no 980), 61 por artista sin desempate de época y
+> 15 desde el preset de otra canción del mismo artista. El catálogo también se
+> movió un poco: Metallica tiene hoy **171** canciones, no 169 (ver más abajo).
+> El proyecto no encontró un registro de la medición original de esta sección
+> para aislar si la diferencia es sólo el catálogo creciendo con el ETL entre
+> el 2026-09-06 y hoy o si además hubo un ajuste al resolvedor de alias en una
+> tarea posterior — pero el número que manda, por la misma regla que motivó la
+> corrección de arriba, es el medido, con su fecha. **Esto no cambia la cifra
+> de §5** ("cobertura de la cadena completa"), que sigue midiendo exacto contra
+> el catálogo de hoy: ver la nota fechada junto a ella.
+> **Presets que nombran una canción concreta que existe en el catálogo: 7**
+> (esta tabla decía 5; es el mismo recuento de arriba, siempre estable en las
+> repeticiones de esta medición).
+| Presets que nombran una canción concreta que existe en el catálogo | 7 (antes decía 5; ver nota del 2026-09-07 arriba) |
 | Nombres de unidad distintos en ambas hojas | 46 |
 | Nombres que resuelven contra el catálogo con alias explícitos | **41**; los 5 restantes son alias triviales |
 | Filas con época declarada | 71 de 77 |
 
-Y cubre donde el usuario toca: Metallica 169 canciones, Megadeth 96, Nirvana 94,
-Deftones 76, Black Sabbath 58, Arctic Monkeys 57, Radiohead 54.
+Y cubre donde el usuario toca (medido 2026-09-07): Metallica 171 canciones,
+Megadeth 96, Nirvana 94, Deftones 76, Black Sabbath 58, Arctic Monkeys 57,
+Radiohead 54.
 
 ### 3.1 La decodificación posicional de la hoja 2, y su prueba
 
@@ -258,6 +280,14 @@ subconjunto que de verdad se sortea, **3.582 de 9.736, un 36,8%**.
 > que el filtro que lo produjo: el universo se encoge a medida que alguien usa
 > la app (cada canción que descarta sale del denominador), así que una cifra
 > sin decir con qué filtro se midió no es comparable con la próxima medición.
+
+> **Re-verificado el 2026-09-07 (Task 9, auditoría del import), contra el
+> `songs.db` real en la raíz del repo.** Los dos números de este bloque
+> reproducen exacto: sobre las 10.011 filas de `songs` sin ningún filtro,
+> 3.667 cubiertas por la cadena completa (7 + 882 + 45 + 13 + 2.720), 36,6%; y
+> con `BASE_FROM` (dificultad 1-10, `st.status IS NULL`), **9.736 sorteables,
+> 3.582 cubiertas, 36,8%**, mismo desglose por motivo. Detalle completo,
+> avisos del import y descartes en `docs/presets-comunidad-auditoria.md`.
 
 Los presets por banda son los que suenan a la banda; los tonos por género son
 los que evitan que el resto caiga en la nada.
