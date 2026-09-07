@@ -1,49 +1,9 @@
 import { ampli } from './ampli-usb.js'
 import { montarEditor } from './editor.js'
 import { crearCatalogo, RANURAS, VACIA } from './catalogo-lt25.js'
+import { esc, parametrosAmpQueViajan, resumenEnvioAmpli } from './tarjeta.js'
 
 const $ = s => document.querySelector(s)
-
-const esc = s => String(s).replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-
-/* Ronda de revision 4: que parametros del nodo `amp` va a escribir DE VERDAD
-   este envio -- y el UNICO origen para las dos cosas que necesitan saberlo:
-   la frase de la tarjeta (que perillas nombrar) y el salto del envio real
-   (`enviar-ampli`, mas abajo, que recorre `u.valores` para la ranura `amp`).
-
-   Antes cada sitio hacia su propia cuenta. `paraElAmpli()` (lib/ampli.js,
-   con test) solo convierte gain/treb/bass -- por diseno, volume y mid quedan
-   fuera de esa funcion por razones DISTINTAS (volume esta en decibeles y no
-   sabemos su curva; mid simplemente no lo escribe esa funcion aunque su curva
-   SI se sepa) -- y la frase de la tarjeta se quedaba solo con esas tres,
-   mientras el envio de mas abajo recorria la cadena entera y mandaba
-   cualquier perilla de `amp` que no fuera `volume` y no estuviera ya en
-   `paraElAmpli`. Eso incluye `mid`: la planilla lo declara en las 86 filas
-   que traen bloque de amp, el envio lo manda de verdad (curva lineal, igual
-   que gain/treb/bass), y la tarjeta nunca lo decia -- 3.582 canciones con un
-   ajuste de medios invisible.
-
-   `perillasAmpli` son las claves YA convertidas por el servidor (paraElAmpli,
-   escala de cable); lo que la cadena de la planilla trae ADEMAS para esa
-   misma ranura, sin `volume` (el tuyo, no el de la planilla) y sin repetir
-   una clave que perillasAmpli ya cubre, es `extra`. Mutar esta funcion mueve
-   la frase Y el envio juntos: no hay una segunda lista que pueda quedar
-   desincronizada. */
-function parametrosAmpQueViajan(cadena, perillasAmpli) {
-  const yaConvertidas = new Set(Object.keys(perillasAmpli ?? {}))
-  const extra = Object.keys(cadena?.amp?.valores ?? {})
-    .filter(p => p !== 'volume' && !yaConvertidas.has(p))
-  return { yaConvertidas, extra }
-}
-
-// Nombre visible de cada parametro de `amp`, para la frase de la tarjeta.
-// Una clave que este mapa no conoce NO desaparece (ver el `??` de abajo): se
-// nota con su propio nombre crudo antes que perderse en silencio, porque
-// despues de esta ronda el helper de arriba ya no esta limitado a tres
-// pares fijos y una clave nueva algun dia va a llegar sin nombre.
-const NOMBRE_PERILLA_AMPLI = { gain: 'Gain', treb: 'Treble', bass: 'Bass', mid: 'Mid' }
-const nombrePerillaAmpli = clave => NOMBRE_PERILLA_AMPLI[clave] ?? clave
 
 const api = async (ruta, opts) => {
   const r = await fetch(ruta, opts)
@@ -161,17 +121,10 @@ function pintar({ song, matching, hint }) {
        </p>`
     : ''
 
-  /* Ronda de revision 3: "los efectos" (aca y en la frase de mas abajo) no
-     puede depender de `a.cadena` a secas -- "Number Girl / Mukai Shutoku,
-     Ryhthm" (hoy inalcanzable, ningun artista del catalogo calza) trae una
-     cadena con SOLO `amp`, sin ninguna ranura de efectos, y con `a.cadena`
-     a secas la tarjeta diria "los efectos" arriba y "sin efectos: este tono
-     es el ampli pelado" cuatro lineas mas abajo. La condicion correcta es que
-     haya al menos una ranura de efectos, que es lo mismo que ya calculaba
-     cadenaHtml para elegir entre la lista y el aviso -- se comparte, no se
-     duplica. */
-  const ranurasDeEfectos = a?.cadena ? ['stomp', 'mod', 'delay', 'reverb'].filter(r => a.cadena[r]) : []
-  const hayEfectos = ranurasDeEfectos.length > 0
+  // ranurasDeEfectos/hayEfectos/queSeManda: logica pura, ver
+  // tarjeta.js#resumenEnvioAmpli (y su comentario, con el historial completo
+  // de las rondas de revision 2, 3 y 4 que la motivaron).
+  const { ranurasDeEfectos, hayEfectos, queSeManda } = resumenEnvioAmpli(a)
 
   // La cadena que ocupa este tono: todo lo que venga del CSV pasa por esc().
   const cadenaHtml = a?.cadena
@@ -183,56 +136,6 @@ function pintar({ song, matching, hint }) {
   const modeloHtml = a?.modelo != null
     ? `<strong>${esc(a.modelo)}</strong>`
     : `<strong class="sin-dato">no declarado</strong>`
-
-  /* Ronda de revision 2: la frase de "que se manda" tiene que nombrar
-     exactamente lo que viaja, en las DOS ramas -- la ronda 1 solo lo arreglo
-     para la ruta sin cadena.
-
-     - El modelo solo viaja si `a.modelo` no es null: sin fenderId que poner,
-       el paso 1 nunca carga esa ranura y el paso 2 -- que solo corre
-       `if (conUnidad.has('amp'))` -- tampoco corre.
-     - Los efectos solo existen si `hayEfectos` (ver arriba).
-     - El Volume NO VIAJA NUNCA: `paraElAmpli()` solo emite gain/treb/bass.
-       Decirlo es informacion util -- el boton no te va a mover el volumen que
-       tenias puesto -- no una disculpa, y por eso se dice siempre, nombrado,
-       en vez de dejar que el lector lo infiera de una ausencia.
-     - Las perillas de los efectos NO se prometen aqui: cuales se pudieron
-       convertir de verdad solo se sabe al enviar (Task 7 ya lo dice en la
-       linea de estado). La tarjeta promete lo que puede prometer antes de
-       apretar el boton, no mas.
-
-     Ronda de revision 3: "las perillas de Gain, Treble y Bass" prometia las
-     tres como bloque fijo, y 168 canciones alcanzables rompen eso en una sola
-     perilla (155 Metallica sin bass, 6 Santana sin treble, 7 mas sin gain).
-     Igual que el Reverb, amp.volume y el Volume antes, el arreglo no es
-     escribir a mano una lista mejor: esta pieza se DERIVA de `a.paraElAmpli`,
-     el MISMO objeto que usa el envio (paraElAmpli() omite la clave que llega
-     en null, que es justo por lo que existe la omision), asi que la promesa
-     no puede desviarse del envio -- las dos leen el mismo dato. Si queda una
-     perilla, la frase dice una; si quedan dos, dos; si no queda ninguna, la
-     pieza entera desaparece (el `> 0` explicito corta eso, en vez de
-     imprimir "las perillas de ." colgando).
-
-     Ronda de revision 4: `paraElAmpli` no es TODO lo que este envio manda al
-     nodo `amp` -- `mid` viaja por la cadena (Step 3 del envio), no por aqui,
-     y se habia escapado de esta cuenta por eso mismo. Ahora la pieza sale de
-     `parametrosAmpQueViajan`, el mismo helper que usa el salto del Step 3 mas
-     abajo: no puede desviarse porque las dos lecturas son la misma llamada. */
-  const conjuncion = piezas => piezas.length <= 1
-    ? (piezas[0] ?? '')
-    : `${piezas.slice(0, -1).join(', ')} y ${piezas[piezas.length - 1]}`
-  const enviaModelo = a?.modelo != null
-  const { yaConvertidas, extra } = parametrosAmpQueViajan(a?.cadena, a?.paraElAmpli)
-  const nombresPerillasQueViajan = [...yaConvertidas, ...extra].map(nombrePerillaAmpli)
-  const piezasEnvio = [
-    enviaModelo && 'el <strong>modelo</strong>',
-    hayEfectos && 'los <strong>efectos</strong>',
-    nombresPerillasQueViajan.length > 0
-      && `las perillas de ${conjuncion(nombresPerillasQueViajan.map(n => `<strong>${n}</strong>`))}`,
-  ].filter(Boolean)
-  const queSeManda = piezasEnvio.length
-    ? `Al ampli se mandan ${conjuncion(piezasEnvio)}.`
-    : 'Sin modelo declarado, esta canción no manda nada al ampli por sí sola.'
 
   // Nombrada distinto del modulo `ampli` importado arriba: un `const ampli`
   // aqui lo taparia dentro de su propio inicializador (TDZ) justo donde el
@@ -298,7 +201,7 @@ function pintar({ song, matching, hint }) {
     ${bloqueAmpli}
     ${preview}
     <p class="enlaces">
-      <a href="${song.url}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
+      <a href="${esc(song.url)}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
       ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
   // Reinicia la animacion de entrada en cada tirada.
@@ -1018,7 +921,7 @@ async function pintarListas() {
       }
       const filas = songs.map(s => `
         <li>
-          <a href="${s.url}" target="_blank" rel="noopener">${esc(s.artist)} — ${esc(s.title)}</a>
+          <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.artist)} — ${esc(s.title)}</a>
           <span class="dif">dif ${s.difficulty}</span>
           ${clave === 'liked'
             ? `<button data-quitar-like="${s.songId}">Quitar like</button>`

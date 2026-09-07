@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { PRESETS_BANDA, PRESETS_TONO, auditoria, buscarPreset, presetDeGenero, MAPEO_TONO_GENERO } from '../lib/presets-comunidad.js'
+import { PRESETS_BANDA, PRESETS_TONO, auditoria, buscarPreset, presetDeGenero, MAPEO_TONO_GENERO, DECADAS, decadaCorta, numeroConSufijoDeclarado } from '../lib/presets-comunidad.js'
 import { resolverUnidad } from '../lib/lt25-nombres.js'
 import { parsearCsv, numeroCsv } from '../lib/csv.js'
 
@@ -206,6 +206,29 @@ test('un valor con unidad declarada por el catalogo se rescata, no se descarta n
     'el "290ms" se rescato: no deberia quedar como aviso')
 })
 
+// dlyTime de DUBS_TapeDelayLite (ECHO) es el unico controlId de los dos CSV
+// con una unidad declarada ("ms") que una celda real llega a calzar -- ver el
+// test de arriba. Su guardia (que el sufijo de texto calce LETRA POR LETRA
+// con esa unidad, ni mas angosto ni mas ancho) se verifico a mano en la Task
+// 3 y nunca se fijo: la suite completa sobrevive sin el m[2] === unidad si
+// solo se prueba con "290ms". Se fija aca, llamando la funcion directo.
+test('numeroConSufijoDeclarado: el guardia de unidad no es ni mas angosto ni mas ancho de lo medido', () => {
+  const rescata = celda => numeroConSufijoDeclarado(celda, 'DUBS_TapeDelayLite', 'dlyTime')
+
+  // Acepta: numero + la unidad declarada, con o sin espacio, coma decimal.
+  assert.equal(rescata('290ms'), 290)
+  assert.equal(rescata('290 ms'), 290)
+  assert.equal(rescata('1,5ms'), 1.5)
+
+  // Rechaza: unidad que no calza con la declarada ("ms").
+  assert.equal(rescata('290Hz'), null)
+  // Rechaza: sin numero, solo la unidad.
+  assert.equal(rescata('ms'), null)
+  // Rechaza: basura despues de la unidad (el regex es ancla a inicio Y fin).
+  assert.equal(rescata('290ms extra'), null)
+  assert.equal(rescata('290ms.'), null)
+})
+
 test('auditoria().avisos: cada uno es rastreable (archivo, linea, ranura, motivo) y nada se pierde ahi tampoco', () => {
   const { avisos } = auditoria()
   assert.ok(avisos.length > 0)
@@ -301,6 +324,28 @@ test('un artista sin preset no devuelve uno parecido', () => {
   assert.equal(buscarPreset({ artist: '', title: '', tags: [] }), null)
 })
 
+test('un artista sin preset no devuelve uno parecido, ni por substring de un preset real', () => {
+  // 'Los Prisioneros' de arriba no comparte ni una letra con ningun preset:
+  // no demuestra nada sobre substring, prefijo o distancia de edicion. Este
+  // test si lo demuestra: "Nile Rogers / Chi" (data/presets-lt25-bandas.csv
+  // linea 55, truncado en la fuente) deja "Chi" como preset GENERICO en
+  // porArtista. Si porArtista alguna vez resolviera por substring, "Red Hot
+  // Chili Peppers" calzaria (contiene "chi" en "Chili") y le devolveria a
+  // Red Hot Chili Peppers el tono de otro artista sin que nadie lo pidiera.
+  assert.ok(PRESETS_BANDA.some(p => p.artista === 'Chi'), 'el preset "Chi" deberia existir en la planilla')
+  assert.equal(buscarPreset({ artist: 'Red Hot Chili Peppers', title: 'x', tags: [] }), null)
+
+  // Un nombre que normaliza a cadena vacia (todo el alfabeto cirilico se cae
+  // en la limpieza de norm()) es el caso mas caro de todos: si la resolucion
+  // por substring alguna vez se implementara sin cuidar este caso, una
+  // cadena vacia es substring de CUALQUIER clave y calzaria con el primer
+  // preset generico de la lista -- unas 90 canciones de artistas en
+  // cirilico (Кино, Ария, ...) recibirian el tono de quien sea que quede
+  // primero en porArtista.
+  assert.equal(buscarPreset({ artist: 'Кино', title: 'x', tags: [] }), null)
+  assert.equal(buscarPreset({ artist: 'Ария', title: 'x', tags: [] }), null)
+})
+
 test('sin fila generica, otra cancion del mismo artista sirve de respaldo (y lo dice)', () => {
   // The Police solo tiene una fila en la planilla, "The Police - Every
   // Breath You Take" (data/presets-lt25-bandas.csv linea 74) -- no hay
@@ -348,4 +393,29 @@ test('gana el tag mas especifico, no el primero de la lista de la cancion', () =
 test('un genero sin mapeo no inventa un tono', () => {
   assert.equal(presetDeGenero(['reggaeton']), null)
   assert.equal(presetDeGenero([]), null)
+})
+
+// --- DECADAS / decadaCorta -------------------------------------------------
+//
+// Ningun artista real con 2+ presets genericos tiene hoy una Era en 10s/20s
+// (verificado sobre los dos CSV), asi que sin exportar DECADAS y decadaCorta
+// esto no se puede fijar con un test que pase por buscarPreset: la suite
+// completa sobrevive igual si se quitan las dos decadas cortas de la lista,
+// o si se quita decadaCorta entero (la canonicalizacion 2000s<->00s tampoco
+// la ejercita ningun artista real de hoy). Se testea directo.
+
+test('DECADAS incluye las decadas cortas 10s y 20s, no solo las largas 2000s/2010s', () => {
+  assert.ok(DECADAS.includes('10s'), 'falta 10s: 311 canciones del catalogo y 10 filas del CSV la usan')
+  assert.ok(DECADAS.includes('20s'), 'falta 20s: 64 canciones del catalogo y 2 filas del CSV la usan')
+})
+
+test('decadaCorta reduce la forma larga (2000s/2010s) y la corta (00s/10s/20s) al mismo par de digitos', () => {
+  assert.equal(decadaCorta('00s'), '00')
+  assert.equal(decadaCorta('2000s'), '00')
+  assert.equal(decadaCorta('10s'), '10')
+  assert.equal(decadaCorta('2010s'), '10')
+  assert.equal(decadaCorta('20s'), '20')
+  // Sin la decada de los 2020 en forma larga en ningun CSV, no hay "2020s"
+  // que canonicalizar -- pero la forma corta sola ya tiene que sobrevivir.
+  assert.notEqual(decadaCorta('20s'), decadaCorta('00s'))
 })

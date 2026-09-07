@@ -159,8 +159,12 @@ test('NO manda volumen, medios ni reverb', () => {
   // volume esta en decibeles con rango desconocido: mandarlo como 0-1 puede
   // ser un salto de volumen brutal. mid no lo produce la tabla. reverb vive
   // en otro nodo. Los tres estan fuera por decision de diseno, no por olvido.
-  const r = paraElAmpli({ gain: 5, volume: 9, treble: 5, bass: 5, reverb: 9 })
+  // mid va CON valor declarado a proposito: si la entrada no trae la clave,
+  // a01(undefined) la omite sola y el test pasaria aunque paraElAmpli SI
+  // convirtiera mid -- eso no defenderia nada.
+  const r = paraElAmpli({ gain: 5, volume: 9, treble: 5, mid: 7, bass: 5, reverb: 9 })
   assert.deepEqual(Object.keys(r).sort(), ['bass', 'gain', 'treb'])
+  assert.ok(!('mid' in r), 'mid no deberia salir de paraElAmpli aunque la entrada lo declare')
 })
 
 test('sin sugerencia no hay nada que convertir', () => {
