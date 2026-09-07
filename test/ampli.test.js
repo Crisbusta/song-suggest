@@ -348,6 +348,31 @@ test('lo que la planilla no dice queda en null, no en un valor inventado', () =>
   assert.equal(m.gain, 10)
 })
 
+test('el mid del preset de la comunidad viaja cuando la planilla lo declara', () => {
+  /* Ronda de revision 4: `mid` es el quinto valor del bloque `amp` (gain,
+     volume, treb, mid, bass) y hasta ahora `desdeElPreset` lo tiraba --
+     nunca llegaba a la sugerencia, asi que ni se dibujaba en la tarjeta ni
+     se nombraba en la frase de "que se manda", aunque el Step 3 del envio
+     SI lo convertia y lo mandaba de verdad (viaja por la cadena, no por
+     paraElAmpli). Fila real: "Carlos Santana" (bandas.csv linea 14) declara
+     mid 7.0 y NO declara treble -- la misma fila sirve para las dos cosas. */
+  const r = sugerirAjustes({ tags: [], instrument: 'Distortion Guitar', tuning: null,
+    artist: 'Carlos Santana', title: 'Oye Como Va' })
+  assert.equal(r.fuente, 'comunidad')
+  assert.equal(r.mid, 7)
+  assert.equal(r.treble, null, 'la planilla no escribio treble en esa fila')
+})
+
+test('el mid no existe en la ruta de reglas: el filtro de la tarjeta lo deja fuera solo', () => {
+  // La tabla REGLAS nunca declara mid (el comentario de paraElAmpli ya lo
+  // decia: "mid no lo produce la tabla de reglas: se queda en el default del
+  // modelo"). No se agrega `mid: null` a mano: queda ausente, y `v != null`
+  // en la tarjeta trata ausente igual que null.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(r.fuente, 'reglas')
+  assert.equal(r.mid, undefined)
+})
+
 test('el reverb del panel nunca se inventa: la planilla no lo trae', () => {
   const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Distortion Guitar',
     tuning: null, artist: 'Metallica', title: 'Enter Sandman' })

@@ -7,6 +7,44 @@ const $ = s => document.querySelector(s)
 const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
+/* Ronda de revision 4: que parametros del nodo `amp` va a escribir DE VERDAD
+   este envio -- y el UNICO origen para las dos cosas que necesitan saberlo:
+   la frase de la tarjeta (que perillas nombrar) y el salto del envio real
+   (`enviar-ampli`, mas abajo, que recorre `u.valores` para la ranura `amp`).
+
+   Antes cada sitio hacia su propia cuenta. `paraElAmpli()` (lib/ampli.js,
+   con test) solo convierte gain/treb/bass -- por diseno, volume y mid quedan
+   fuera de esa funcion por razones DISTINTAS (volume esta en decibeles y no
+   sabemos su curva; mid simplemente no lo escribe esa funcion aunque su curva
+   SI se sepa) -- y la frase de la tarjeta se quedaba solo con esas tres,
+   mientras el envio de mas abajo recorria la cadena entera y mandaba
+   cualquier perilla de `amp` que no fuera `volume` y no estuviera ya en
+   `paraElAmpli`. Eso incluye `mid`: la planilla lo declara en las 86 filas
+   que traen bloque de amp, el envio lo manda de verdad (curva lineal, igual
+   que gain/treb/bass), y la tarjeta nunca lo decia -- 3.582 canciones con un
+   ajuste de medios invisible.
+
+   `perillasAmpli` son las claves YA convertidas por el servidor (paraElAmpli,
+   escala de cable); lo que la cadena de la planilla trae ADEMAS para esa
+   misma ranura, sin `volume` (el tuyo, no el de la planilla) y sin repetir
+   una clave que perillasAmpli ya cubre, es `extra`. Mutar esta funcion mueve
+   la frase Y el envio juntos: no hay una segunda lista que pueda quedar
+   desincronizada. */
+function parametrosAmpQueViajan(cadena, perillasAmpli) {
+  const yaConvertidas = new Set(Object.keys(perillasAmpli ?? {}))
+  const extra = Object.keys(cadena?.amp?.valores ?? {})
+    .filter(p => p !== 'volume' && !yaConvertidas.has(p))
+  return { yaConvertidas, extra }
+}
+
+// Nombre visible de cada parametro de `amp`, para la frase de la tarjeta.
+// Una clave que este mapa no conoce NO desaparece (ver el `??` de abajo): se
+// nota con su propio nombre crudo antes que perderse en silencio, porque
+// despues de esta ronda el helper de arriba ya no esta limitado a tres
+// pares fijos y una clave nueva algun dia va a llegar sin nombre.
+const NOMBRE_PERILLA_AMPLI = { gain: 'Gain', treb: 'Treble', bass: 'Bass', mid: 'Mid' }
+const nombrePerillaAmpli = clave => NOMBRE_PERILLA_AMPLI[clave] ?? clave
+
 const api = async (ruta, opts) => {
   const r = await fetch(ruta, opts)
   if (!r.ok) {
@@ -84,12 +122,13 @@ function pintar({ song, matching, hint }) {
     </div>`
 
   const a = song.ampli
-  /* Cinco perillas de pantalla, pero no las cinco viven en el mismo trato con
+  /* Seis perillas de pantalla, pero no las seis viven en el mismo trato con
      el boton. Lo que la planilla no declaro llega en null (comunidad) y no se
-     dibuja como si valiera algo -- de ahi el filtro. Reverb ni siquiera entra
-     a este filtro: se trata aparte, ver mas abajo. */
+     dibuja como si valiera algo -- de ahi el filtro (Mid en ruta de reglas
+     llega `undefined`, que el mismo `!= null` deja fuera solo). Reverb ni
+     siquiera entra a este filtro: se trata aparte, ver mas abajo. */
   const perillas = a
-    ? [['Gain', a.gain], ['Volume', a.volume], ['Treble', a.treble], ['Bass', a.bass]]
+    ? [['Gain', a.gain], ['Volume', a.volume], ['Treble', a.treble], ['Bass', a.bass], ['Mid', a.mid]]
         .filter(([, v]) => v != null)
         .map(([n, v]) => perilla(n, v)).join('')
     : ''
@@ -172,14 +211,19 @@ function pintar({ song, matching, hint }) {
      no puede desviarse del envio -- las dos leen el mismo dato. Si queda una
      perilla, la frase dice una; si quedan dos, dos; si no queda ninguna, la
      pieza entera desaparece (el `> 0` explicito corta eso, en vez de
-     imprimir "las perillas de ." colgando). */
+     imprimir "las perillas de ." colgando).
+
+     Ronda de revision 4: `paraElAmpli` no es TODO lo que este envio manda al
+     nodo `amp` -- `mid` viaja por la cadena (Step 3 del envio), no por aqui,
+     y se habia escapado de esta cuenta por eso mismo. Ahora la pieza sale de
+     `parametrosAmpQueViajan`, el mismo helper que usa el salto del Step 3 mas
+     abajo: no puede desviarse porque las dos lecturas son la misma llamada. */
   const conjuncion = piezas => piezas.length <= 1
     ? (piezas[0] ?? '')
     : `${piezas.slice(0, -1).join(', ')} y ${piezas[piezas.length - 1]}`
   const enviaModelo = a?.modelo != null
-  const NOMBRE_PERILLA_AMPLI = { gain: 'Gain', treb: 'Treble', bass: 'Bass' }
-  const nombresPerillasQueViajan = Object.keys(a?.paraElAmpli ?? {})
-    .map(k => NOMBRE_PERILLA_AMPLI[k]).filter(Boolean)
+  const { yaConvertidas, extra } = parametrosAmpQueViajan(a?.cadena, a?.paraElAmpli)
+  const nombresPerillasQueViajan = [...yaConvertidas, ...extra].map(nombrePerillaAmpli)
   const piezasEnvio = [
     enviaModelo && 'el <strong>modelo</strong>',
     hayEfectos && 'los <strong>efectos</strong>',
@@ -502,6 +546,14 @@ $('#tarjeta').addEventListener('click', async e => {
        los dos lados, asi que `aCable` es (d - 1) / 9, que es literalmente lo
        que calcula `paraElAmpli`. */
     const perillasAmpli = sugerencia.paraElAmpli ?? {}
+    /* Ronda de revision 4: `extraAmp` es lo que la cadena de la planilla
+       aporta para la ranura `amp` MAS ALLA de `perillasAmpli` -- hoy `mid`,
+       que `paraElAmpli` no convierte pero que se manda igual (curva lineal,
+       ver arriba). Mismo `parametrosAmpQueViajan` que arma la frase de la
+       tarjeta: si esto cambia, la frase y el salto de mas abajo cambian
+       juntos, no pueden desviarse. */
+    const { extra: extraAmp } = parametrosAmpQueViajan(cadena, perillasAmpli)
+    const extraAmpSet = new Set(extraAmp)
 
     // Se informa lo que el amplificador CONFIRMO, no lo que se intento: el
     // equipo ignora en silencio lo que no entiende.
@@ -847,8 +899,9 @@ $('#tarjeta').addEventListener('click', async e => {
            TUYO -- se leyo antes de cambiar el modelo y se devolvio arriba, no
            el de la planilla --, y las que ya viajaron por `paraElAmpli`, que
            dan el mismo numero y no vale la pena mandar dos veces (son 2 s cada
-           una en el peor caso). */
-        if (ranura === 'amp' && (parametro === 'volume' || Object.hasOwn(perillasAmpli, parametro))) continue
+           una en el peor caso). `extraAmpSet` (arriba, via `parametrosAmpQueViajan`)
+           ya excluye las dos: solo queda mandar lo que SI esta ahi (hoy `mid`). */
+        if (ranura === 'amp' && !extraAmpSet.has(parametro)) continue
 
         /* Una perilla que no viaja cae en una de dos bolsas segun si la unidad
            de esa ranura la cargo este envio: si la cargamos nosotros, la
@@ -895,8 +948,14 @@ $('#tarjeta').addEventListener('click', async e => {
        planilla trae su unidad --, pero `fenderIdDeModelo` devuelve null a
        proposito antes que inventar un identificador, asi que esto esta a un
        nombre de modelo mal escrito de distancia. */
-    if (!conUnidad.has('amp') && Object.keys(perillasAmpli).length) {
-      partes.push(`no supe qué modelo poner, así que ${Object.keys(perillasAmpli).map(p => `amp.${p}`).join(', ')} no se mandaron`)
+    /* Ronda de revision 4: sin unidad de amp, lo que no se manda no es solo
+       `perillasAmpli` -- `extraAmpSet` (mid) tampoco viaja, por la misma
+       razon (este bucle exige `conUnidad.has(ranura)` para CUALQUIER ranura,
+       amp incluida). Antes de este cambio ese mid perdido no aparecia en
+       ningun lado del mensaje. */
+    const ampSinMandar = [...Object.keys(perillasAmpli), ...extraAmpSet]
+    if (!conUnidad.has('amp') && ampSinMandar.length) {
+      partes.push(`no supe qué modelo poner, así que ${ampSinMandar.map(p => `amp.${p}`).join(', ')} no se mandaron`)
     }
     if (problemasRanura.length) partes.push(`unidades: ${problemasRanura.join(', ')}`)
     if (confirmados.length) partes.push(`${confirmados.join(', ')} confirmados por el ampli`)
@@ -918,7 +977,7 @@ $('#tarjeta').addEventListener('click', async e => {
 
     const mal = malModelo || fallidos.length > 0 || problemasRanura.length > 0
       || porDefecto.size > 0
-      || (!conUnidad.has('amp') && Object.keys(perillasAmpli).length > 0)
+      || (!conUnidad.has('amp') && ampSinMandar.length > 0)
     estado.className = mal ? 'envio-estado mal' : 'envio-estado ok'
     estado.textContent = partes.join(' · ')
     // pintarBotonEnviar recalcula segun ampli.conectado() y actual, en vez de
