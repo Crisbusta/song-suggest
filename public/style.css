@@ -340,3 +340,19 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 #dialogo-guardar menu button:disabled { opacity: .35; cursor: default; }
 #guardar-confirmar { background: #e2585b; color: var(--texto); font-weight: 600; }
 #guardar-confirmar:hover:not(:disabled) { background: color-mix(in srgb, #e2585b 85%, white); }
+
+/* --- La cadena de efectos en la tarjeta ---------------------------------- */
+.cadena { list-style: none; margin: var(--e2) 0 0; padding: 0; display: grid; gap: var(--e1); }
+.cadena li { display: flex; gap: var(--e2); align-items: baseline; font-size: var(--t-chico); }
+.cadena li span { font-size: var(--t-micro); color: var(--tenue); text-transform: uppercase;
+  letter-spacing: .08em; min-width: 4.5rem; }
+.sin-efectos { color: var(--tenue); font-size: var(--t-micro); }
+
+/* --- El Reverb sugerido, aparte de las perillas que el boton si manda ---- */
+/* No va en `.perilla`: ese numero no viaja al ampli y el envio VACIA la
+   ranura reverb, al reves que Gain/Treble/Bass, que si se escriben. Ponerlo
+   en la misma fila lo presentaria como si fuera lo mismo. */
+.reverb-aparte {
+  margin: var(--e2) 0 0; padding: var(--e2); border-radius: var(--radio);
+  background: var(--relieve); font-size: var(--t-chico); color: var(--tenue);
+}

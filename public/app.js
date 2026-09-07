@@ -84,14 +84,45 @@ function pintar({ song, matching, hint }) {
     </div>`
 
   const a = song.ampli
-  /* El Reverb sugerido y el envio se contradicen, y hay que decirlo. En el
-     Mustang LT25 el reverb NO es una perilla del panel: es la unidad de la
-     ranura `reverb`. Cuando la sugerencia sale de la tabla de reglas hay un
-     numero de Reverb del 1 al 10 pero no hay cadena, asi que esa ranura se
-     manda vacia -- o sea que el boton pone el reverb en NADA justo debajo de
-     una fila que dice "Reverb 4". Antes ese numero simplemente no viajaba;
-     ahora se niega, y eso ya no se puede callar. */
+  /* Cinco perillas de pantalla, pero no las cinco viven en el mismo trato con
+     el boton. Lo que la planilla no declaro llega en null (comunidad) y no se
+     dibuja como si valiera algo -- de ahi el filtro. Reverb ni siquiera entra
+     a este filtro: se trata aparte, ver mas abajo. */
+  const perillas = a
+    ? [['Gain', a.gain], ['Volume', a.volume], ['Treble', a.treble], ['Bass', a.bass]]
+        .filter(([, v]) => v != null)
+        .map(([n, v]) => perilla(n, v)).join('')
+    : ''
+
+  /* El Reverb sugerido y el envio se contradicen, y hay que decirlo -- pero no
+     poniendolo en la misma fila que Gain/Treble/Bass, que el boton SI escribe.
+     En el Mustang LT25 el reverb no es una perilla del panel: es la unidad de
+     la ranura `reverb`. Cuando la sugerencia sale de la tabla de reglas hay un
+     numero de Reverb del 1 al 10 pero no hay cadena, asi que el boton manda esa
+     ranura vacia -- despues de apretarlo no hay ni unidad de reverb que ajustar
+     a mano. El numero no se tira (es consejo real de la tabla), pero se saca de
+     la fila de perillas: lo deshonesto no es el numero, es presentarlo al lado
+     de los que si viajan, como si fuera lo mismo. Volume, en cambio, SI va en
+     la fila: tampoco se manda (esta en decibeles, sin curva conocida), pero el
+     envio no le contradice nada -- el ampli conserva el volumen que tenia. */
   const reverbSeVacia = a && a.reverb != null && !a.cadena?.reverb
+  const reverbHtml = reverbSeVacia
+    ? `<p class="reverb-aparte">
+         Reverb <strong>${a.reverb}</strong> de 10 es la sugerencia, pero el botón no la
+         manda: en este ampli el reverb es la unidad de la ranura <strong>reverb</strong>,
+         y este tono la deja vacía. Si la quieres, elige tú una unidad de reverb en
+         el ampli.
+       </p>`
+    : ''
+
+  // La cadena que ocupa este tono: todo lo que venga del CSV pasa por esc().
+  const cadenaHtml = a?.cadena
+    ? `<ul class="cadena">${['stomp', 'mod', 'delay', 'reverb']
+        .filter(r => a.cadena[r])
+        .map(r => `<li><span>${r}</span> <strong>${esc(a.cadena[r].nombre)}</strong></li>`)
+        .join('') || '<li class="sin-efectos">sin efectos: este tono es el ampli pelado</li>'}</ul>`
+    : ''
+
   // Nombrada distinto del modulo `ampli` importado arriba: un `const ampli`
   // aqui lo taparia dentro de su propio inicializador (TDZ) justo donde el
   // Step 1 necesita llamar a `ampli.soportado()`.
@@ -100,25 +131,18 @@ function pintar({ song, matching, hint }) {
          <summary>Ajustes para tu Mustang LT25</summary>
          <div class="ampli-cuerpo">
            <p class="modelo"><span>Modelo</span><strong>${esc(a.modelo)}</strong></p>
-           ${perilla('Gain', a.gain)}
-           ${perilla('Volume', a.volume)}
-           ${perilla('Treble', a.treble)}
-           ${perilla('Bass', a.bass)}
-           ${perilla('Reverb', a.reverb)}
+           ${perillas}
+           ${cadenaHtml}
+           ${reverbHtml}
            <p class="descargo">
-             Punto de partida, no el tono del disco.
-             Deducido de: ${a.motivos.map(esc).join(', ')}.<br>
-             Al ampli se mandan el <strong>modelo</strong>, las <strong>unidades de
-             las cinco ranuras</strong> y las perillas que este tono declara.
-             <strong>Las ranuras que este tono no usa quedan vacías</strong>, para que
-             no se te mezcle con la canción anterior: eso borra lo que hayas dialado
-             a mano ahí.
-             ${reverbSeVacia
-               ? `El <strong>Reverb</strong> de arriba entra en ese trato: en este ampli
-                  el reverb es la unidad de la ranura <strong>reverb</strong>, que este
-                  tono no usa, así que se manda vacía y ese número queda sólo como
-                  sugerencia para que lo pongas tú en el editor.`
-               : ''}
+             ${a.fuente === 'comunidad'
+               ? `${esc(a.procedencia)}.${a.incierto ? ' <strong>La propia planilla marca este preset como dudoso.</strong>' : ''}
+                  Es lo que a alguien le funcionó, no el tono de la grabación.`
+               : `Punto de partida, no el tono del disco. Deducido de: ${a.motivos.map(esc).join(', ')}.`}
+             <br>
+             Al ampli se mandan el <strong>modelo</strong>, los <strong>efectos</strong> y sus
+             perillas. Las ranuras que este tono no usa quedan vacías, así que no se te
+             mezcla con la canción anterior.
              Cargar una unidad deja el resto de sus perillas en los valores por
              defecto de esa unidad; tu volumen se lee antes y se devuelve, y si no
              se puede, se te avisa y el modelo no se toca.
