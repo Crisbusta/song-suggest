@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizarArtista, construirIndice, expandirArtistas } from '../lib/artistas.js'
+import { normalizarArtista, construirIndice, expandirArtistas, buscarArtistas } from '../public/artistas.js'
 
 test('normalizarArtista baja caja, quita tildes y puntuacion', () => {
   assert.equal(normalizarArtista('Mötley Crüe'), 'motley crue')
@@ -98,4 +98,57 @@ test('expandirArtistas sin bandas elegidas devuelve vacio', () => {
   const i = construirIndice([{ artist: 'Rush', c: 40 }])
   assert.deepEqual(expandirArtistas(i, []), [])
   assert.deepEqual(expandirArtistas(i, undefined), [])
+})
+
+test('buscarArtistas calza por fragmento en cualquier parte del nombre', () => {
+  const i = construirIndice([
+    { artist: 'Metallica', c: 166 }, { artist: 'Megadeth', c: 95 }, { artist: 'Tool', c: 12 },
+  ])
+  assert.deepEqual(buscarArtistas(i, 'me').map(a => a.nombre), ['Metallica', 'Megadeth'])
+  assert.deepEqual(buscarArtistas(i, 'tal').map(a => a.nombre), ['Metallica'])
+})
+
+test('buscarArtistas pone primero lo que empieza con lo escrito', () => {
+  const i = construirIndice([
+    { artist: 'Iron Maiden', c: 60 }, { artist: 'Maiden United', c: 2 },
+  ])
+  assert.deepEqual(buscarArtistas(i, 'maiden').map(a => a.nombre), ['Maiden United', 'Iron Maiden'])
+})
+
+test('buscarArtistas desempata por cantidad de canciones', () => {
+  const i = construirIndice([
+    { artist: 'Metal Church', c: 4 }, { artist: 'Metallica', c: 166 },
+  ])
+  assert.deepEqual(buscarArtistas(i, 'metal').map(a => a.nombre), ['Metallica', 'Metal Church'])
+})
+
+test('buscarArtistas ignora tildes y caja al escribir', () => {
+  const i = construirIndice([{ artist: 'Mötley Crüe', c: 27 }])
+  assert.equal(buscarArtistas(i, 'motley').length, 1)
+  assert.equal(buscarArtistas(i, 'MOTLEY').length, 1)
+})
+
+test('buscarArtistas encuentra por cualquiera de las escrituras', () => {
+  const i = construirIndice([{ artist: 'Motörhead', c: 23 }, { artist: 'Motorhead', c: 2 }])
+  const r = buscarArtistas(i, 'motorhead')
+  assert.equal(r.length, 1)
+  assert.equal(r[0].canciones, 25)
+})
+
+test('buscarArtistas con la caja vacia no sugiere nada', () => {
+  const i = construirIndice([{ artist: 'Rush', c: 40 }])
+  assert.deepEqual(buscarArtistas(i, ''), [])
+  assert.deepEqual(buscarArtistas(i, '   '), [])
+})
+
+test('buscarArtistas respeta el limite', () => {
+  const i = construirIndice(
+    Array.from({ length: 20 }, (_, n) => ({ artist: `Banda ${n}`, c: 20 - n })))
+  assert.equal(buscarArtistas(i, 'banda').length, 8)
+  assert.equal(buscarArtistas(i, 'banda', 3).length, 3)
+})
+
+test('buscarArtistas no sugiere lo que ya esta elegido', () => {
+  const i = construirIndice([{ artist: 'Rush', c: 40 }, { artist: 'Rushmore', c: 2 }])
+  assert.deepEqual(buscarArtistas(i, 'rush', 8, ['Rush']).map(a => a.nombre), ['Rushmore'])
 })

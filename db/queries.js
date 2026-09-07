@@ -1,6 +1,12 @@
 import { describeTuning } from '../lib/tuning.js'
 import { sugerirAjustes, paraElAmpli } from '../lib/ampli.js'
-import { construirIndice, expandirArtistas, claveDeArtista } from '../lib/artistas.js'
+/* Vive en `public/` y no en `lib/` porque el navegador tambien lo necesita
+   -- el buscador de bandas filtra la lista en el cliente -- y el servidor
+   estatico solo sirve desde ahi. Tener una copia en cada lado seria peor:
+   agrupar escrituras y buscar tienen que coincidir exactamente entre lo que se
+   ofrece y lo que se filtra, y dos copias se desvian. Mismo criterio que
+   `public/catalogo-lt25.js`, que tambien es puro y lo importan los tests. */
+import { construirIndice, expandirArtistas, claveDeArtista } from '../public/artistas.js'
 
 export const MODES = ['surprise', 'riffs', 'acoustic', 'solos']
 
@@ -118,7 +124,7 @@ function construirHint(db, mode, min, max, matching, fa = { sql: '', params: [],
      aunque queden canciones de las otras: si no, el filtro se aplica mas
      angosto de lo que el usuario cree y nada se lo indica. */
   const faltan = fa.desconocidas.length
-    ? `${listar(fa.desconocidas)} no ${fa.desconocidas.length === 1 ? 'esta' : 'estan'} en el catalogo.`
+    ? `${listar(fa.desconocidas)} no ${fa.desconocidas.length === 1 ? 'está' : 'están'} en el catálogo.`
     : null
 
   if (matching >= 10) return faltan

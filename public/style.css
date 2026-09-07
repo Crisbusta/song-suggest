@@ -357,3 +357,59 @@ nav button.activo { color: var(--acento); font-weight: 600; }
   margin: var(--e2) 0 0; padding: var(--e2); border-radius: var(--radio);
   background: var(--relieve); font-size: var(--t-chico); color: var(--tenue);
 }
+
+/* --- Filtro por bandas ---------------------------------------------------- */
+
+.bandas { grid-column: 1 / -1; display: grid; gap: var(--e2); }
+.bandas > label { font-size: var(--t-micro); color: var(--tenue);
+  text-transform: uppercase; letter-spacing: .08em; }
+
+/* El desplegable se posiciona contra este contenedor, no contra los controles,
+   para que no empuje la tarjeta hacia abajo al aparecer. */
+.banda-buscador { position: relative; }
+#banda-q { width: 100%; box-sizing: border-box; padding: var(--e2);
+  background: var(--relieve); color: var(--texto);
+  border: 1px solid var(--borde); border-radius: var(--radio);
+  font: inherit; font-size: var(--t-base); }
+#banda-q:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+
+.banda-sug { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + var(--e1));
+  margin: 0; padding: var(--e1); list-style: none; max-height: 15rem; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio);
+  box-shadow: 0 .5rem 1.5rem #0009; }
+.banda-sug li { display: flex; justify-content: space-between; gap: var(--e3);
+  align-items: baseline; padding: var(--e2); border-radius: var(--radio);
+  font-size: var(--t-base); cursor: pointer; }
+/* `aria-selected` marca la fila que recorren las flechas; el hover es aparte
+   para que el teclado y el mouse no se peleen la misma clase. */
+.banda-sug li:hover, .banda-sug li[aria-selected="true"] { background: var(--relieve); }
+.banda-sug .cuantas { font-size: var(--t-micro); color: var(--tenue);
+  font-variant-numeric: tabular-nums; }
+.banda-sug .vacio { color: var(--tenue); cursor: default; }
+.banda-sug .vacio:hover { background: none; }
+
+.banda-ayuda { margin: 0; font-size: var(--t-micro); color: var(--tenue); }
+
+.banda-fichas { display: flex; flex-wrap: wrap; gap: var(--e2); margin: 0; padding: 0; list-style: none; }
+.banda-fichas:empty { display: none; }
+.banda-fichas li { display: flex; align-items: center; gap: var(--e2);
+  padding: var(--e1) var(--e1) var(--e1) var(--e2);
+  background: var(--relieve); border: 1px solid var(--borde);
+  border-radius: 999px; font-size: var(--t-chico); }
+.banda-fichas button { display: grid; place-items: center; width: 1.375rem; height: 1.375rem;
+  padding: 0; border: 0; border-radius: 999px; background: none;
+  color: var(--tenue); font-size: var(--t-base); line-height: 1; cursor: pointer; }
+.banda-fichas button:hover { background: var(--borde); color: var(--texto); }
+.banda-fichas button:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+
+.banda-atajos { display: grid; gap: var(--e1); font-size: var(--t-micro); color: var(--tenue); }
+.banda-atajos:empty { display: none; }
+.banda-atajos p { margin: 0; }
+.banda-atajos button { padding: 0; border: 0; background: none; color: var(--acento);
+  font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.banda-atajos button:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .banda-sug { animation: aparece .12s var(--curva); }
+}
+@keyframes aparece { from { opacity: 0; transform: translateY(-.25rem); } }

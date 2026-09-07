@@ -2,8 +2,19 @@ import { ampli } from './ampli-usb.js'
 import { montarEditor } from './editor.js'
 import { crearCatalogo, RANURAS, VACIA } from './catalogo-lt25.js'
 import { esc, parametrosAmpQueViajan, resumenEnvioAmpli } from './tarjeta.js'
+import { buscarArtistas, claveDeArtista } from './artistas.js'
 
 const $ = s => document.querySelector(s)
+
+/* Estado del filtro por bandas. Vive aca arriba y no junto a su bloque de mas
+   abajo por una razon concreta: la lista de artistas se pide con un `fetch`, y
+   durante esa espera los listeners de los sliders ya estan registrados. Si
+   `bandas` se declarara despues, mover un slider en ese instante entraria a
+   `sortear()` con la variable en su zona muerta y reventaria. Declarada aca,
+   ese sorteo temprano simplemente no manda ninguna banda, que es lo correcto. */
+let indiceArtistas = []
+let bandas = []          // los nombres visibles elegidos, en orden de eleccion
+let sugerido = -1        // fila resaltada del desplegable, para las flechas
 
 const api = async (ruta, opts) => {
   const r = await fetch(ruta, opts)
@@ -238,6 +249,7 @@ async function sortear() {
     minDifficulty: $('#min').value,
     maxDifficulty: $('#max').value,
   })
+  for (const b of bandas) params.append('artist', b)
   try {
     pintar(await api(`/api/roll?${params}`))
   } catch (err) {
@@ -264,6 +276,12 @@ const marcar = async cuerpo => {
     body: JSON.stringify({ songId: actual.songId, ...cuerpo }),
   })
   pintarStats()
+  /* Descartar una cancion la saca del universo sorteable, asi que el numero
+     que el buscador muestra al lado de cada banda deja de ser cierto -- y ese
+     numero existe justamente para ser una promesa que el boton puede cumplir.
+     Se refresca sin esperar: la lista es para la proxima vez que escribas, no
+     para el sorteo que viene en curso. */
+  refrescarArtistas()
 }
 
 // Los sliders no se pisan entre ellos.
@@ -898,9 +916,150 @@ $('#tarjeta').addEventListener('click', async e => {
   }
 })
 
+
+/* --- Filtro por bandas ----------------------------------------------------
+   El indice completo se pide UNA vez y se filtra en el navegador. Son ~2.300
+   entradas: mandarlas de una es mas simple y mas rapido que una peticion por
+   tecla, y para una app local de una persona no hay razon para lo segundo.
+
+   Se refresca despues de cada marcado, porque descartar la ultima cancion de
+   una banda la saca del universo sorteable y su numero dejaria de ser cierto. */
+/* Refresco en segundo plano: si falla, se conserva la lista que ya habia en
+   vez de dejar el buscador vacio. Una lista un poco vieja sirve; ninguna, no.
+   Y a diferencia de la carga inicial, aca no se toca el texto de ayuda: el
+   usuario no pidio esto y no tiene nada que hacer al respecto. */
+function refrescarArtistas() {
+  api('/api/artists')
+    .then(({ artists }) => { indiceArtistas = artists; pintarAtajos() })
+    .catch(() => {})
+}
+
+async function cargarArtistas() {
+  try {
+    indiceArtistas = (await api('/api/artists')).artists
+  } catch {
+    /* Sin lista no hay buscador, pero el resto de la app funciona igual: se
+       deja dicho en vez de dejar una caja muda que no responde al escribir. */
+    indiceArtistas = []
+    $('#banda-ayuda').textContent = 'No pude cargar la lista de bandas. El sorteo sigue funcionando sin este filtro.'
+  }
+}
+
+function pintarSugerencias() {
+  const caja = $('#banda-sug')
+  const q = $('#banda-q').value
+  const hits = buscarArtistas(indiceArtistas, q, 8, bandas)
+  sugerido = hits.length ? 0 : -1
+
+  if (!q.trim()) { caja.hidden = true; caja.innerHTML = ''; return }
+
+  caja.hidden = false
+  caja.innerHTML = hits.length
+    ? hits.map((a, i) => `
+        <li role="option" aria-selected="${i === 0}" data-nombre="${esc(a.nombre)}">
+          <span>${esc(a.nombre)}</span>
+          <span class="cuantas">${a.canciones}</span>
+        </li>`).join('')
+    : `<li class="vacio">Ninguna banda del catálogo se llama así.</li>`
+}
+
+function moverSugerencia(paso) {
+  const filas = [...$('#banda-sug').querySelectorAll('li[data-nombre]')]
+  if (!filas.length) return
+  sugerido = (sugerido + paso + filas.length) % filas.length
+  filas.forEach((f, i) => f.setAttribute('aria-selected', String(i === sugerido)))
+  filas[sugerido].scrollIntoView({ block: 'nearest' })
+}
+
+function cerrarSugerencias() {
+  $('#banda-sug').hidden = true
+  $('#banda-sug').innerHTML = ''
+  sugerido = -1
+}
+
+function agregarBanda(nombre) {
+  // La comparacion es por clave y no por texto: elegir "Motorhead" cuando ya
+  // esta "Motörhead" seria la misma banda dos veces y un filtro sin efecto.
+  const clave = claveDeArtista(nombre)
+  if (!bandas.some(b => claveDeArtista(b) === clave)) bandas.push(nombre)
+  $('#banda-q').value = ''
+  cerrarSugerencias()
+  pintarBandas()
+  sortear()
+}
+
+function quitarBanda(nombre) {
+  bandas = bandas.filter(b => b !== nombre)
+  pintarBandas()
+  sortear()
+}
+
+function pintarBandas() {
+  $('#banda-fichas').innerHTML = bandas.map(b => `
+    <li>${esc(b)}<button type="button" data-quitar="${esc(b)}"
+        aria-label="Quitar ${esc(b)}">&times;</button></li>`).join('')
+
+  $('#banda-ayuda').textContent = bandas.length
+    ? 'El sorteo se limita a estas bandas.'
+    : 'Sin ninguna elegida, sortea de todo el catálogo.'
+
+  pintarAtajos()
+}
+
+/* Los atajos salen de lo que ya hiciste: `shown_count` y `liked` viven en
+   `song_state` desde antes. Solo aparecen cuando aportan algo -- una banda que
+   ya elegiste no se ofrece de nuevo. */
+function pintarAtajos() {
+  const caja = $('#banda-atajos')
+  const puestas = new Set(bandas.map(claveDeArtista))
+  const libres = indiceArtistas.filter(a => !puestas.has(a.clave))
+
+  const fila = (rotulo, lista) => lista.length
+    ? `<p>${rotulo}: ${lista.map(a =>
+        `<button type="button" data-agregar="${esc(a.nombre)}">${esc(a.nombre)}</button>`
+      ).join(' · ')}</p>`
+    : ''
+
+  caja.innerHTML = fila('Con más canciones', libres.slice(0, 5))
+}
+
+$('#banda-q').addEventListener('input', pintarSugerencias)
+$('#banda-q').addEventListener('focus', pintarSugerencias)
+
+$('#banda-q').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); moverSugerencia(1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); moverSugerencia(-1) }
+  else if (e.key === 'Escape') cerrarSugerencias()
+  else if (e.key === 'Enter') {
+    e.preventDefault()
+    const fila = $('#banda-sug').querySelector('li[aria-selected="true"][data-nombre]')
+    if (fila) agregarBanda(fila.dataset.nombre)
+  }
+})
+
+// El `mousedown` va antes del `blur` de la caja, asi que el clic alcanza a
+// registrarse; con `click` el desplegable ya se habria cerrado.
+$('#banda-sug').addEventListener('mousedown', e => {
+  const fila = e.target.closest('li[data-nombre]')
+  if (fila) { e.preventDefault(); agregarBanda(fila.dataset.nombre) }
+})
+
+$('#banda-q').addEventListener('blur', () => setTimeout(cerrarSugerencias, 0))
+
+$('#banda-fichas').addEventListener('click', e => {
+  const b = e.target.closest('button[data-quitar]')
+  if (b) quitarBanda(b.dataset.quitar)
+})
+
+$('#banda-atajos').addEventListener('click', e => {
+  const b = e.target.closest('button[data-agregar]')
+  if (b) agregarBanda(b.dataset.agregar)
+})
+
 sincronizarRangos('min')
 sortear()
 pintarStats()
+cargarArtistas().then(pintarAtajos)
 
 const LISTAS = [
   ['learned', 'Aprendidas'],

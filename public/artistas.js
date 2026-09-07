@@ -99,3 +99,47 @@ export function expandirArtistas(indice, elegidos) {
   }
   return [...fuera]
 }
+
+/* Busca en el indice lo que el usuario esta escribiendo.
+
+   Aca SI se calza por fragmento, al reves que `expandirArtistas` de arriba y
+   que `resolverUnidad` en lt25-nombres.js. No es una inconsistencia: la regla
+   de no adivinar existe porque ahi el programa RESUELVE solo y el usuario no
+   ve lo que eligio por el, asi que un calce parecido se le cuela sin que nada
+   lo diga. Un buscador es lo contrario -- muestra los candidatos y el usuario
+   toca el que queria -- y ahi lo peligroso seria lo estricto: obligar a
+   escribir "Mötley Crüe" con dieresis para encontrarlo.
+
+   LIMITE CONOCIDO: no hay transliteracion. Escribir "kino" en un teclado
+   latino encuentra `Kino` (3 canciones) y NO `Кино` (29), porque son cadenas
+   distintas -- y agruparlas seria peor, porque son bandas distintas. Con un
+   teclado latino esos ~90 temas en cirilico del catalogo quedan practicamente
+   inalcanzables desde el buscador. Se arregla con un mapa de transliteracion,
+   que es su propio trabajo y tiene su propio riesgo de calces falsos.
+
+   El orden pone primero lo que EMPIEZA con lo escrito y luego lo de mas
+   canciones: escribir "metal" tiene que ofrecer Metallica antes que Metal
+   Church, y escribir "maiden" tiene que ofrecer Maiden United antes que Iron
+   Maiden, aunque Iron Maiden tenga mas canciones. */
+export function buscarArtistas(indice, consulta, limite = 8, yaElegidas = []) {
+  const q = normalizarArtista(consulta)
+  if (q === '') return []
+
+  const fuera = new Set((yaElegidas ?? []).map(claveDeArtista))
+
+  return (indice ?? [])
+    .filter(g => !fuera.has(g.clave))
+    .map(g => {
+      // Se busca en TODAS las escrituras: "motorhead" tiene que encontrar el
+      // grupo cuyo nombre visible es "Motörhead".
+      const posicion = g.variantes.reduce((mejor, v) => {
+        const i = normalizarArtista(v).indexOf(q)
+        return i === -1 ? mejor : (mejor === -1 ? i : Math.min(mejor, i))
+      }, -1)
+      return { g, posicion }
+    })
+    .filter(({ posicion }) => posicion !== -1)
+    .sort((a, b) => (a.posicion - b.posicion) || (b.g.canciones - a.g.canciones))
+    .slice(0, limite)
+    .map(({ g }) => g)
+}
