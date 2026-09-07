@@ -122,12 +122,23 @@ function pintar({ song, matching, hint }) {
        </p>`
     : ''
 
+  /* Ronda de revision 3: "los efectos" (aca y en la frase de mas abajo) no
+     puede depender de `a.cadena` a secas -- "Number Girl / Mukai Shutoku,
+     Ryhthm" (hoy inalcanzable, ningun artista del catalogo calza) trae una
+     cadena con SOLO `amp`, sin ninguna ranura de efectos, y con `a.cadena`
+     a secas la tarjeta diria "los efectos" arriba y "sin efectos: este tono
+     es el ampli pelado" cuatro lineas mas abajo. La condicion correcta es que
+     haya al menos una ranura de efectos, que es lo mismo que ya calculaba
+     cadenaHtml para elegir entre la lista y el aviso -- se comparte, no se
+     duplica. */
+  const ranurasDeEfectos = a?.cadena ? ['stomp', 'mod', 'delay', 'reverb'].filter(r => a.cadena[r]) : []
+  const hayEfectos = ranurasDeEfectos.length > 0
+
   // La cadena que ocupa este tono: todo lo que venga del CSV pasa por esc().
   const cadenaHtml = a?.cadena
-    ? `<ul class="cadena">${['stomp', 'mod', 'delay', 'reverb']
-        .filter(r => a.cadena[r])
-        .map(r => `<li><span>${r}</span> <strong>${esc(a.cadena[r].nombre)}</strong></li>`)
-        .join('') || '<li class="sin-efectos">sin efectos: este tono es el ampli pelado</li>'}</ul>`
+    ? `<ul class="cadena">${hayEfectos
+        ? ranurasDeEfectos.map(r => `<li><span>${r}</span> <strong>${esc(a.cadena[r].nombre)}</strong></li>`).join('')
+        : '<li class="sin-efectos">sin efectos: este tono es el ampli pelado</li>'}</ul>`
     : ''
 
   const modeloHtml = a?.modelo != null
@@ -138,12 +149,10 @@ function pintar({ song, matching, hint }) {
      exactamente lo que viaja, en las DOS ramas -- la ronda 1 solo lo arreglo
      para la ruta sin cadena.
 
-     - El modelo (y por lo tanto Gain/Treble/Bass, que dependen de la misma
-       ranura `amp`) solo viaja si `a.modelo` no es null: sin fenderId que
-       poner, el paso 1 nunca carga esa ranura y el paso 2 -- que solo corre
-       `if (conUnidad.has('amp'))` -- tampoco corre. Es la misma condicion, no
-       dos.
-     - Los efectos solo existen con `a.cadena`.
+     - El modelo solo viaja si `a.modelo` no es null: sin fenderId que poner,
+       el paso 1 nunca carga esa ranura y el paso 2 -- que solo corre
+       `if (conUnidad.has('amp'))` -- tampoco corre.
+     - Los efectos solo existen si `hayEfectos` (ver arriba).
      - El Volume NO VIAJA NUNCA: `paraElAmpli()` solo emite gain/treb/bass.
        Decirlo es informacion util -- el boton no te va a mover el volumen que
        tenias puesto -- no una disculpa, y por eso se dice siempre, nombrado,
@@ -151,15 +160,31 @@ function pintar({ song, matching, hint }) {
      - Las perillas de los efectos NO se prometen aqui: cuales se pudieron
        convertir de verdad solo se sabe al enviar (Task 7 ya lo dice en la
        linea de estado). La tarjeta promete lo que puede prometer antes de
-       apretar el boton, no mas. */
+       apretar el boton, no mas.
+
+     Ronda de revision 3: "las perillas de Gain, Treble y Bass" prometia las
+     tres como bloque fijo, y 168 canciones alcanzables rompen eso en una sola
+     perilla (155 Metallica sin bass, 6 Santana sin treble, 7 mas sin gain).
+     Igual que el Reverb, amp.volume y el Volume antes, el arreglo no es
+     escribir a mano una lista mejor: esta pieza se DERIVA de `a.paraElAmpli`,
+     el MISMO objeto que usa el envio (paraElAmpli() omite la clave que llega
+     en null, que es justo por lo que existe la omision), asi que la promesa
+     no puede desviarse del envio -- las dos leen el mismo dato. Si queda una
+     perilla, la frase dice una; si quedan dos, dos; si no queda ninguna, la
+     pieza entera desaparece (el `> 0` explicito corta eso, en vez de
+     imprimir "las perillas de ." colgando). */
   const conjuncion = piezas => piezas.length <= 1
     ? (piezas[0] ?? '')
     : `${piezas.slice(0, -1).join(', ')} y ${piezas[piezas.length - 1]}`
   const enviaModelo = a?.modelo != null
+  const NOMBRE_PERILLA_AMPLI = { gain: 'Gain', treb: 'Treble', bass: 'Bass' }
+  const nombresPerillasQueViajan = Object.keys(a?.paraElAmpli ?? {})
+    .map(k => NOMBRE_PERILLA_AMPLI[k]).filter(Boolean)
   const piezasEnvio = [
     enviaModelo && 'el <strong>modelo</strong>',
-    a?.cadena && 'los <strong>efectos</strong>',
-    enviaModelo && 'las perillas de <strong>Gain</strong>, <strong>Treble</strong> y <strong>Bass</strong>',
+    hayEfectos && 'los <strong>efectos</strong>',
+    nombresPerillasQueViajan.length > 0
+      && `las perillas de ${conjuncion(nombresPerillasQueViajan.map(n => `<strong>${n}</strong>`))}`,
   ].filter(Boolean)
   const queSeManda = piezasEnvio.length
     ? `Al ampli se mandan ${conjuncion(piezasEnvio)}.`
@@ -183,7 +208,7 @@ function pintar({ song, matching, hint }) {
                : `Punto de partida, no el tono del disco. Deducido de: ${a.motivos.map(esc).join(', ')}.`}
              <br>
              ${queSeManda} El <strong>Volume</strong> no viaja: el botón no toca el volumen.
-             ${a.cadena
+             ${hayEfectos
                ? ' Qué perillas de los efectos se pudieron convertir de verdad queda dicho en el estado del envío, no aquí.'
                : ''}
              Las ranuras que este tono no usa quedan vacías cada vez que envías,
