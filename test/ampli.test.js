@@ -544,10 +544,19 @@ test('una cancion marcada {EXPERIMENTAL} no arrastra la marca a la procedencia',
   assert.ok(!r.procedencia.includes('{EXPERIMENTAL}'), `no debe quedar la marca en: ${r.procedencia}`)
 })
 
-test('un artista con un "?" pegado sigue calzando igual: la marca no se toca antes de matchear', () => {
-  // El helper de limpieza vive DENTRO de procedenciaDe, para el texto; el
-  // nombre que usa buscarPreset (normalizado con norm()) no pasa por ahi, y el
-  // calce sigue funcionando exactamente igual que antes del fix.
+test('el calce no depende de la limpieza de marcas: lo protege norm(), no este helper', () => {
+  /* ATENCION al leer esto como "cobertura de limpiarMarcaDeNombre": no lo es.
+     La fila 68 ("SLASH / GUNS N ROSES?") sigue calzando y trayendo su modelo,
+     pero lo que lo protege es `norm()` en presets-comunidad.js, que reduce
+     CUALQUIER caracter fuera de [a-z0-9 ] tanto del lado de la planilla como
+     del lado de la consulta, por construccion y antes de que existiera este
+     modulo. limpiarMarcaDeNombre vive DENTRO de procedenciaDe, solo para la
+     frase que se muestra, y nunca toca preset.artista antes de que
+     buscarPreset lo indexe o lo compare -- asi que mutarlo (quitarlo, volverlo
+     identidad, moverlo antes del indexado) no puede mover esta aserción, y
+     verificado que no la mueve. Lo que SI la moveria es romper `norm()`
+     mismo (probado a mano neutralizandolo: sale rojo). Se deja como
+     documentacion del invariante real, no como guardia del helper de arriba. */
   const r = sugerirAjustes({ tags: [], instrument: 'Distortion Guitar', tuning: null,
     artist: 'Guns N Roses', title: 'Paradise City' })
   assert.equal(r.modelo, '70S ROCK', 'la fila 68 sigue calzando y trayendo su modelo')

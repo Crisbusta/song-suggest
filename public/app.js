@@ -104,14 +104,21 @@ function pintar({ song, matching, hint }) {
      la fila de perillas: lo deshonesto no es el numero, es presentarlo al lado
      de los que si viajan, como si fuera lo mismo. Volume, en cambio, SI va en
      la fila: tampoco se manda (esta en decibeles, sin curva conocida), pero el
-     envio no le contradice nada -- el ampli conserva el volumen que tenia. */
+     envio no le contradice nada -- el ampli conserva el volumen que tenia.
+
+     Ronda de revision 1: la invitacion a elegir una unidad de reverb a mano
+     no puede callar que el PROXIMO envio la vuelve a vaciar -- si no, la
+     tarjeta pide una accion sin avisar que ese mismo boton la deshace. Se dice
+     aca, pegado a la invitacion, no solo en `.descargo` tres lineas mas abajo:
+     quien lee "elige tu una unidad" tiene que leer la contra en la misma
+     frase, no confiar en que la conecte con un parrafo aparte. */
   const reverbSeVacia = a && a.reverb != null && !a.cadena?.reverb
   const reverbHtml = reverbSeVacia
     ? `<p class="reverb-aparte">
          Reverb <strong>${a.reverb}</strong> de 10 es la sugerencia, pero el botón no la
          manda: en este ampli el reverb es la unidad de la ranura <strong>reverb</strong>,
-         y este tono la deja vacía. Si la quieres, elige tú una unidad de reverb en
-         el ampli.
+         y este tono la deja vacía. Puedes elegir tú una unidad de reverb en el
+         ampli, pero el próximo envío te la vuelve a vaciar otra vez.
        </p>`
     : ''
 
@@ -123,6 +130,16 @@ function pintar({ song, matching, hint }) {
         .join('') || '<li class="sin-efectos">sin efectos: este tono es el ampli pelado</li>'}</ul>`
     : ''
 
+  /* Ronda de revision 1: "los efectos" solo existe cuando `a.cadena` existe --
+     en la ruta de reglas es null y las cuatro ranuras que no son el ampli se
+     vacian, asi que prometer efectos ahi es prometer algo que no hay. Y el
+     "sus" perillas volvia a Gain/Treble/Bass a la sombra de "los efectos"; se
+     recupera la frase vieja ("las perillas que este tono declara") para ese
+     caso, que es la unica cosa que SI viaja siempre. */
+  const modeloHtml = a?.modelo != null
+    ? `<strong>${esc(a.modelo)}</strong>`
+    : `<strong class="sin-dato">no declarado</strong>`
+
   // Nombrada distinto del modulo `ampli` importado arriba: un `const ampli`
   // aqui lo taparia dentro de su propio inicializador (TDZ) justo donde el
   // Step 1 necesita llamar a `ampli.soportado()`.
@@ -130,7 +147,7 @@ function pintar({ song, matching, hint }) {
     ? `<details class="ampli">
          <summary>Ajustes para tu Mustang LT25</summary>
          <div class="ampli-cuerpo">
-           <p class="modelo"><span>Modelo</span><strong>${esc(a.modelo)}</strong></p>
+           <p class="modelo"><span>Modelo</span>${modeloHtml}</p>
            ${perillas}
            ${cadenaHtml}
            ${reverbHtml}
@@ -140,9 +157,12 @@ function pintar({ song, matching, hint }) {
                   Es lo que a alguien le funcionó, no el tono de la grabación.`
                : `Punto de partida, no el tono del disco. Deducido de: ${a.motivos.map(esc).join(', ')}.`}
              <br>
-             Al ampli se mandan el <strong>modelo</strong>, los <strong>efectos</strong> y sus
-             perillas. Las ranuras que este tono no usa quedan vacías, así que no se te
-             mezcla con la canción anterior.
+             ${a.cadena
+               ? `Al ampli se mandan el <strong>modelo</strong>, los <strong>efectos</strong> y sus perillas.`
+               : `Al ampli se mandan el <strong>modelo</strong> y las <strong>perillas</strong> que este tono declara.`}
+             Las ranuras que este tono no usa quedan vacías cada vez que envías,
+             así que no se te mezcla con la canción anterior: <strong>eso borra lo que
+             hayas dialado a mano en esas ranuras.</strong>
              Cargar una unidad deja el resto de sus perillas en los valores por
              defecto de esa unidad; tu volumen se lee antes y se devuelve, y si no
              se puede, se te avisa y el modelo no se toca.

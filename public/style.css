@@ -241,6 +241,7 @@ nav button.activo { color: var(--acento); font-weight: 600; }
   font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .06em; color: var(--tenue);
 }
 .ampli .modelo strong { font-size: var(--t-medio); letter-spacing: .02em; }
+.ampli .modelo strong.sin-dato { font-weight: 400; font-style: italic; color: var(--tenue); }
 .perilla { display: flex; align-items: center; gap: var(--e3); font-size: var(--t-chico); }
 .perilla .nombre { color: var(--tenue); min-width: 4rem; }
 .perilla .barra { display: flex; gap: 2px; }
