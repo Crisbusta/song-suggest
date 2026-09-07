@@ -163,6 +163,12 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 .tarjeta a:hover { text-decoration-color: var(--acento); }
 .vacio { color: var(--tenue); text-align: center; padding: var(--e5) 0; }
 .hint { color: var(--tenue); font-size: var(--t-chico); min-height: 1.5rem; margin: 0 0 var(--e3); }
+/* Por esta misma linea llegan dos cosas muy distintas: el conteo de canciones
+   (y el aviso inocuo de un envio abandonado a mitad) y el unico canal que
+   tenemos para decir que el amplificador quedo hasta 16 dB mas arriba. En el
+   mismo gris, aprender que la linea es inofensiva es aprender a no leer el
+   aviso que importa. Mismo rojo que .envio-estado.mal, que ya dice eso. */
+.hint.mal { color: #e2585b; }
 
 /* --- Acciones ------------------------------------------------------------ */
 .acciones { display: flex; flex-wrap: wrap; gap: var(--e2); }

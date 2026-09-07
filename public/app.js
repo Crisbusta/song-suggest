@@ -22,6 +22,10 @@ let actual = null
 
 function pintar({ song, matching, hint }) {
   actual = song
+  // El aviso rojo del ampli (ver `abandonar()`) vive en este mismo nodo, que
+  // es permanente: sin reponer la clase, un `mal` pegado teñiria de rojo el
+  // conteo de canciones de la tirada siguiente.
+  $('#hint').className = 'hint'
   $('#hint').textContent = hint ?? ''
   // matching describe el filtro, no la cancion: se muestra con los controles.
   $('#calzan').textContent = matching === 1
@@ -80,6 +84,14 @@ function pintar({ song, matching, hint }) {
     </div>`
 
   const a = song.ampli
+  /* El Reverb sugerido y el envio se contradicen, y hay que decirlo. En el
+     Mustang LT25 el reverb NO es una perilla del panel: es la unidad de la
+     ranura `reverb`. Cuando la sugerencia sale de la tabla de reglas hay un
+     numero de Reverb del 1 al 10 pero no hay cadena, asi que esa ranura se
+     manda vacia -- o sea que el boton pone el reverb en NADA justo debajo de
+     una fila que dice "Reverb 4". Antes ese numero simplemente no viajaba;
+     ahora se niega, y eso ya no se puede callar. */
+  const reverbSeVacia = a && a.reverb != null && !a.cadena?.reverb
   // Nombrada distinto del modulo `ampli` importado arriba: un `const ampli`
   // aqui lo taparia dentro de su propio inicializador (TDZ) justo donde el
   // Step 1 necesita llamar a `ampli.soportado()`.
@@ -101,6 +113,12 @@ function pintar({ song, matching, hint }) {
              <strong>Las ranuras que este tono no usa quedan vacías</strong>, para que
              no se te mezcle con la canción anterior: eso borra lo que hayas dialado
              a mano ahí.
+             ${reverbSeVacia
+               ? `El <strong>Reverb</strong> de arriba entra en ese trato: en este ampli
+                  el reverb es la unidad de la ranura <strong>reverb</strong>, que este
+                  tono no usa, así que se manda vacía y ese número queda sólo como
+                  sugerencia para que lo pongas tú en el editor.`
+               : ''}
              Cargar una unidad deja el resto de sus perillas en los valores por
              defecto de esa unidad; tu volumen se lee antes y se devuelve, y si no
              se puede, se te avisa y el modelo no se toca.
@@ -183,6 +201,7 @@ async function sortear() {
   } catch (err) {
     actual = null
     $('#tarjeta').innerHTML = '<p class="vacio">No pude hablar con el servidor.</p>'
+    $('#hint').className = 'hint'
     $('#hint').textContent = `Error: ${err.message}. ¿Sigue corriendo \`npm start\`?`
     for (const id of ['aprendida', 'descartada', 'despues', 'like']) $(`#${id}`).disabled = true
   }
@@ -309,6 +328,7 @@ if (ampli.soportado()) {
       if (ampli.conectado()) await ampli.desconectar()
       else await ampli.conectar()
     } catch (err) {
+      $('#hint').className = 'hint'
       $('#hint').textContent = err.message
     } finally {
       $botonAmpli.disabled = false
@@ -346,12 +366,15 @@ $('#tarjeta').addEventListener('click', async e => {
 
        Cuanto puede durar: con el equipo respondiendo, del orden de dos o tres
        segundos. En el peor caso -- el equipo enchufado pero mudo, con TODAS
-       las esperas venciendo -- son unos 70 s: 4 s la lectura del preset, 4 s
+       las esperas venciendo -- son unos 64 s: 4 s la lectura del preset, 4 s
        por cada una de las cinco ranuras, y 2 s por perilla (la cadena mas
-       larga de la planilla declara 22). Antes de mandar la cadena completa
-       ese peor caso eran 16 s. No se corta a la mitad por su cuenta: cada
-       escritura que vence se informa, y abandonar en silencio a la tercera
-       seria decidir por el usuario que el resto no vale la pena. */
+       larga de la planilla declara 22, de las que este envio se salta
+       `amp.volume` y las que ya viajaron por `paraElAmpli`). Antes de mandar
+       la cadena completa ese peor caso eran 16 s. No se corta a la mitad por
+       su cuenta: cada escritura que vence se informa, y abandonar en silencio
+       a la tercera seria decidir por el usuario que el resto no vale la pena
+       -- pero el estado dice por que ranura va, para que un envio trabado no
+       se vea igual que una pagina colgada. */
     const ocupado = $('#envio-estado')
     if (ocupado) {
       ocupado.className = 'envio-estado'
@@ -392,15 +415,30 @@ $('#tarjeta').addEventListener('click', async e => {
     // una perilla sin confirmar y una unidad que no cargo no se arreglan
     // igual, y mezclarlas en una sola lista las hace ilegibles.
     const problemasRanura = []
-    /* Y dos silencios, que tampoco son el mismo:
+    /* Lo que NO se manda. La regla no cambia -- lo que no se sabe convertir no
+       se envia, la perilla se queda en el default de la unidad, que es dato
+       real del equipo -- pero hay dos motivos distintos y, sobre todo, dos
+       CONSECUENCIAS muy distintas:
+
        - `sinCurva`: la perilla tiene curva de pantalla propia y este proyecto
          todavia no la midio contra el equipo. Es el caso comun y esperado.
        - `sinConversion`: el catalogo no declara esa perilla para esa unidad, o
          no es un control continuo, o la conversion no dio un numero finito.
-       Ninguno se manda -- lo que no se sabe convertir no se envia, la perilla
-       se queda en el default de la unidad, que es dato real del equipo -- y
-       ninguno se calla. */
+
+       Y cortando esos dos, `porDefecto`: las perillas que no viajaron pero
+       cuya unidad la cargo ESTE envio. No es lo mismo dejar quieto un `rate`
+       de una unidad que ya estaba puesta que cargar un OVERDRIVE y dejarle el
+       `level` y el `gain` a media carrera cuando el preset pedia la salida
+       baja: eso es un estado del equipo que el usuario no pidio, que no puede
+       deducir, y que se oye. Va aparte y en rojo; el resto queda en gris,
+       donde corresponde. */
     const sinCurva = [], sinConversion = []
+    // ranura -> { nombre, perillas: [] }
+    const porDefecto = new Map()
+    const anotarPorDefecto = (ranura, u, parametro) => {
+      if (!porDefecto.has(ranura)) porDefecto.set(ranura, { nombre: u.nombre, perillas: [] })
+      porDefecto.get(ranura).perillas.push(parametro)
+    }
 
     /* El catalogo se carga ANTES de tocar el equipo. Si falla, no se escribe
        nada: la alternativa seria dejar las cinco ranuras reemplazadas y sin
@@ -439,9 +477,21 @@ $('#tarjeta').addEventListener('click', async e => {
        MISMA escala para `volume`: -60..0 dB con curva t20r. Es el hecho que
        sostiene toda esta parte, asi que queda escrito.
 
-       Cargar una unidad en las otras cuatro ranuras NO toca ese volumen: cada
-       replaceNode trae los defaults de SU nodo. Por eso la proteccion es del
-       nodo `amp` y solo bloquea al `amp`, no al envio entero. */
+       Cargar una unidad en las otras cuatro ranuras NO toca el PARAMETRO
+       `volume` del nodo `amp`: cada replaceNode trae los defaults de SU nodo.
+       Por eso esta proteccion es del nodo `amp` y solo bloquea al `amp`, no
+       al envio entero.
+
+       Y hasta ahi llega, que es lo que hay que decir claro: proteger el
+       parametro `volume` NO es proteger lo que sale por el parlante. Cargar
+       un OVERDRIVE delante del ampli sube el nivel aunque el `volume` se haya
+       devuelto perfecto, y las perillas que lo gobiernan (`level`, `gain` de
+       OVERDRIVE y VARIFUZZ, `level` de los moduladores) son justo de las que
+       este proyecto todavia no sabe convertir: no se mandan, y la unidad
+       recien cargada se queda en SU valor por defecto -- media carrera, no la
+       salida baja que el preset pedia. Eso no se puede arreglar sin medir las
+       curvas, pero si se puede DECIR, y va en rojo y aparte: ver `porDefecto`
+       mas abajo. */
     let notaModelo = '', malModelo = false
 
     // La misma lectura resuelve las dos preguntas: que unidad hay en cada
@@ -469,6 +519,10 @@ $('#tarjeta').addEventListener('click', async e => {
     // Ranuras cuya unidad quedo donde queremos: son las unicas a las que se
     // les pueden escribir perillas sin arriesgar dialar a ciegas otra unidad.
     const conUnidad = new Set()
+    // Ranuras cuya unidad la cargo ESTE envio (no las que ya estaban puestas).
+    // Son las que traen los defaults de fabrica de la unidad, y por eso una
+    // perilla que no se pudo convertir pesa distinto ahi: ver `porDefecto`.
+    const reemplazadas = new Set()
 
     /* Lo que va en cada ranura. Las que la cadena no menciona van a EMPTY, que
        es la decision de la spec 6.2: el boton promete el tono de ESTA cancion,
@@ -487,6 +541,17 @@ $('#tarjeta').addEventListener('click', async e => {
        esa ranura se deja como esta. */
     const objetivo = ranura => cadena?.[ranura]?.fenderId
       ?? (ranura === 'amp' ? (sugerencia.fenderId ?? null) : VACIA)
+
+    /* Como se nombra una unidad que el equipo dice que cargo y nosotros no
+       pedimos. Con el catalogo a mano sale su nombre de pantalla; sin el -- una
+       sugerencia de la tabla de reglas no lo necesita, asi que no se carga --
+       queda el FenderId crudo, que es feo pero cierto.
+
+       El `id &&` no es defensa de manual: si el equipo confirma sin decir CUAL
+       unidad quedo, `cat.nombre(undefined)` devuelve `undefined` y el `??` no
+       se dispara, porque `??` mira el resultado y no el argumento. El mensaje
+       diria "quedo en undefined". */
+    const nombreDeUnidad = id => id ? (cat?.nombre(id) ?? id) : 'una unidad que no identificó'
 
     async function cambiarAmpli(quiere) {
       // Sin un volumen que devolver NO se cambia el modelo. El equipo se
@@ -509,20 +574,19 @@ $('#tarjeta').addEventListener('click', async e => {
         // el que se pidio: es la misma regla que sigue el editor.
         const puesto = await ampli.reemplazarUnidad('amp', quiere)
         // Si el equipo dice que cargo OTRA unidad, no es un exito: el usuario
-        // pidio un modelo y tiene otro. Se muestra el identificador crudo
-        // porque el nombre de pantalla de una unidad que no pedimos no lo
-        // tenemos aca, y en rojo, porque no es lo que se pidio.
+        // pidio un modelo y tiene otro, y va en rojo.
         const distinto = puesto !== quiere
         notaModelo = distinto
-          ? `el ampli cargo ${puesto}, no ${sugerencia.modelo}`
+          ? `el ampli cargo ${nombreDeUnidad(puesto)}, no ${sugerencia.modelo}`
           : `modelo ${sugerencia.modelo}`
         malModelo = distinto
         conUnidad.add('amp')
+        reemplazadas.add('amp')
         /* El volumen se devuelve AQUI, pegado al cambio de modelo, y no al
            final de las cinco ranuras como dice el orden de la spec 6.1:
-           hacerlo despues dejaria una ventana de hasta 12 s (delay y reverb,
-           con sus timeouts) con el equipo sonando al volumen por defecto del
-           modelo nuevo. */
+           hacerlo despues dejaria una ventana de hasta 8 s (delay y reverb, a
+           4 s de timeout cada uno) con el equipo sonando al volumen por
+           defecto del modelo nuevo. */
         try {
           await ampli.ponerParametro('amp', 'volume', volumen)
         } catch {
@@ -539,8 +603,11 @@ $('#tarjeta').addEventListener('click', async e => {
         notaModelo = 'no pude confirmar el cambio de modelo, revisa el volumen del ampli'
         malModelo = true
         // Misma duda, misma suposicion: las perillas del ampli se escriben
-        // igual, porque se llaman igual cargue el modelo que cargue.
+        // igual, porque se llaman igual cargue el modelo que cargue. Y por la
+        // misma suposicion cuenta como reemplazada: si cargo, quedo en sus
+        // defaults.
         conUnidad.add('amp')
+        reemplazadas.add('amp')
       }
     }
 
@@ -548,12 +615,12 @@ $('#tarjeta').addEventListener('click', async e => {
       algoEscrito = true
       try {
         const puesta = await ampli.reemplazarUnidad(ranura, quiere)
-        if (puesta === quiere) { conUnidad.add(ranura); return }
+        if (puesta === quiere) { conUnidad.add(ranura); reemplazadas.add(ranura); return }
         /* El equipo dice que cargo OTRA unidad. A diferencia del ampli, aqui
            las perillas NO se escriben: los controlId de un delay y de un
            chorus no son los mismos, pero algunos si se repiten (`level`), asi
            que escribirlos seria dialar a ciegas una unidad que nadie pidio. */
-        problemasRanura.push(`${ranura} quedó en ${cat?.nombre(puesta) ?? puesta}`)
+        problemasRanura.push(`${ranura} quedó en ${nombreDeUnidad(puesta)}`)
       } catch {
         // Sin confirmacion no se afirma nada, ni que cargo ni que no cargo, y
         // por eso mismo tampoco se le escriben perillas: no sabemos a que
@@ -590,23 +657,44 @@ $('#tarjeta').addEventListener('click', async e => {
        El segundo aviso es nuevo con la cadena completa: aunque el volumen este
        a salvo, abandonar a mitad deja el equipo con unas ranuras de esta
        cancion y otras de la anterior. Eso no suena a nada en particular, y
-       callarlo dejaria al usuario buscando de donde salio ese tono. */
+       callarlo dejaria al usuario buscando de donde salio ese tono.
+
+       Y por eso mismo los dos NO pueden verse igual. `#hint` es gris tenue, y
+       ese segundo aviso es frecuente e inofensivo: quien aprenda que la linea
+       gris despues de sortear no dice nada urgente va a pasar de largo la de
+       los 16 dB, que llega por el mismo canal. El aviso del volumen se pinta
+       con la clase `mal`, el mismo rojo que ya usa `.envio-estado.mal`. La
+       clase se REPONE en las dos ramas, no solo en una: `#hint` es un nodo
+       permanente, asi que un `mal` que quede pegado tiñe de rojo el proximo
+       conteo de canciones. */
     const abandonar = () => {
       if (actual === cancion) return false
-      if (malModelo) $('#hint').textContent = notaModelo
-      else if (algoEscrito) {
+      if (malModelo) {
+        $('#hint').className = 'hint mal'
+        $('#hint').textContent = notaModelo
+      } else if (algoEscrito) {
+        $('#hint').className = 'hint'
         $('#hint').textContent = 'sorteaste otra canción a mitad del envío: el ampli quedó con la cadena a medias'
       }
       return true
     }
 
+    /* El estado dice por donde va. No mide nada -- cuanto tarda de verdad solo
+       lo dice el equipo -- pero con cinco ranuras y hasta 22 perillas un
+       `enviando…` congelado se ve igual que una pagina colgada, y aqui no hay
+       forma de cancelar. Si la tarjeta ya se reemplazo, `estado` es un nodo
+       desprendido y esto es un no-op legal; el corte real lo hace
+       `abandonar()`. */
+    const avanzando = t => { estado.textContent = `enviando… (${t})` }
+
     // 1. Las cinco unidades.
-    for (const ranura of RANURAS) {
+    for (const [i, ranura] of RANURAS.entries()) {
       // Si ya sorteamos otra cancion, `b` y `estado` son nodos desprendidos:
       // escribirles es un no-op legal que no avisa de nada, asi que hay que
       // cortar aqui y no seguir escribiendole al ampli la cadena de una
       // cancion que ya no esta en pantalla.
       if (abandonar()) return
+      avanzando(`unidades ${i + 1}/${RANURAS.length}: ${ranura}`)
       const quiere = objetivo(ranura)
       if (!quiere) continue
       if (cargadas?.[ranura] === quiere) {
@@ -631,6 +719,7 @@ $('#tarjeta').addEventListener('click', async e => {
     if (conUnidad.has('amp')) {
       for (const [parametro, valor] of Object.entries(perillasAmpli)) {
         if (abandonar()) return
+        avanzando(`amp.${parametro}`)
         algoEscrito = true
         try { await ampli.ponerParametro('amp', parametro, valor); confirmados.push(`amp.${parametro}`) }
         catch { fallidos.push(`amp.${parametro}`) }
@@ -664,22 +753,33 @@ $('#tarjeta').addEventListener('click', async e => {
            el de la planilla --, y las que ya viajaron por `paraElAmpli`, que
            dan el mismo numero y no vale la pena mandar dos veces (son 2 s cada
            una en el peor caso). */
-        if (ranura === 'amp' && (parametro === 'volume' || parametro in perillasAmpli)) continue
+        if (ranura === 'amp' && (parametro === 'volume' || Object.hasOwn(perillasAmpli, parametro))) continue
+
+        /* Una perilla que no viaja cae en una de dos bolsas segun si la unidad
+           de esa ranura la cargo este envio: si la cargamos nosotros, la
+           perilla no "se quedo como estaba", quedo en el default de fabrica de
+           una unidad que el usuario no tenia puesta. Ver `porDefecto`. */
+        const noViaja = (lista) => {
+          if (reemplazadas.has(ranura)) anotarPorDefecto(ranura, u, parametro)
+          else lista.push(`${ranura}.${parametro}`)
+        }
+
         const d = descriptorDe(u.fenderId, parametro)
-        if (!d) { sinConversion.push(`${ranura}.${parametro}`); continue }
+        if (!d) { noViaja(sinConversion); continue }
         // `crudo` es exactamente el marcador de "la curva de pantalla de esta
         // perilla no se midio todavia": su `aCable` devuelve el valor tal cual
         // y mandarlo seria tratar un numero de pantalla como si fuera de cable.
-        if (d.crudo) { sinCurva.push(`${ranura}.${parametro}`); continue }
+        if (d.crudo) { noViaja(sinCurva); continue }
         // Una lista o un interruptor no traen `aCable`: su valor de pantalla
         // es un indice, no un punto de una curva. Hoy la planilla no declara
         // ninguno, pero el dia que lo haga esto no puede reventar ni --peor--
         // contarse como una escritura que el ampli no confirmo.
-        if (typeof d.aCable !== 'function') { sinConversion.push(`${ranura}.${parametro}`); continue }
+        if (typeof d.aCable !== 'function') { noViaja(sinConversion); continue }
         const cable = d.aCable(valorPantalla)
         // Un valor no finito no se manda: JSON.stringify convierte NaN en null
         // y el equipo lo ignora en silencio, que es justo lo que no queremos.
-        if (!Number.isFinite(cable)) { sinConversion.push(`${ranura}.${parametro}`); continue }
+        if (!Number.isFinite(cable)) { noViaja(sinConversion); continue }
+        avanzando(`${ranura}.${parametro}`)
         algoEscrito = true
         try { await ampli.ponerParametro(ranura, parametro, cable); confirmados.push(`${ranura}.${parametro}`) }
         catch { fallidos.push(`${ranura}.${parametro}`) }
@@ -694,16 +794,36 @@ $('#tarjeta').addEventListener('click', async e => {
        intento se dice con su motivo en vez de desaparecer del mensaje. */
     const partes = []
     if (notaModelo) partes.push(notaModelo)
+    /* Que no haya modelo que poner no puede terminar en un mensaje vacio y
+       verde despues de haberle vaciado cuatro ranuras al equipo. Hoy no se
+       llega aca -- la tabla de reglas siempre resuelve un FenderId y la
+       planilla trae su unidad --, pero `fenderIdDeModelo` devuelve null a
+       proposito antes que inventar un identificador, asi que esto esta a un
+       nombre de modelo mal escrito de distancia. */
+    if (!conUnidad.has('amp') && Object.keys(perillasAmpli).length) {
+      partes.push(`no supe qué modelo poner, así que ${Object.keys(perillasAmpli).map(p => `amp.${p}`).join(', ')} no se mandaron`)
+    }
     if (problemasRanura.length) partes.push(`unidades: ${problemasRanura.join(', ')}`)
     if (confirmados.length) partes.push(`${confirmados.join(', ')} confirmados por el ampli`)
     if (fallidos.length) partes.push(`sin confirmar: ${fallidos.join(', ')}`)
-    // Estos dos no van en rojo: no es que algo haya fallado, es que hay datos
-    // que este proyecto todavia no sabe convertir y lo dice en vez de callarlo.
+    /* En rojo, y con la unidad por delante: la unidad se cargo recien y estas
+       perillas quedaron en SU valor por defecto, no en el que pedia el tono.
+       Cuando la que no viaja es la salida de un drive, eso se oye. */
+    if (porDefecto.size) {
+      const detalle = [...porDefecto].map(([ranura, { nombre, perillas }]) =>
+        `${nombre} en ${ranura} (${perillas.join(', ')})`).join(', ')
+      partes.push(`cargué estas unidades pero no sé convertir algunas de sus perillas, que quedaron en el valor por defecto de la unidad: ${detalle}`)
+    }
+    // Estos dos no van en rojo: la unidad de esa ranura ya estaba puesta, asi
+    // que nada cambio ahi. No fallo nada; hay datos que este proyecto todavia
+    // no sabe convertir, y se dicen en vez de callarse.
     if (sinCurva.length) partes.push(`sin mandar (falta medir su curva): ${sinCurva.join(', ')}`)
     if (sinConversion.length) partes.push(`sin mandar (el catálogo no dice cómo convertirlo): ${sinConversion.join(', ')}`)
     if (!partes.length) partes.push('no había nada que mandar')
 
     const mal = malModelo || fallidos.length > 0 || problemasRanura.length > 0
+      || porDefecto.size > 0
+      || (!conUnidad.has('amp') && Object.keys(perillasAmpli).length > 0)
     estado.className = mal ? 'envio-estado mal' : 'envio-estado ok'
     estado.textContent = partes.join(' · ')
     // pintarBotonEnviar recalcula segun ampli.conectado() y actual, en vez de
