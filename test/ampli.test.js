@@ -513,3 +513,42 @@ test('un 0 de verdad no se confunde con una perilla ausente', () => {
   assert.ok('gain' in r)
   assert.equal(r.gain, 0)
 })
+
+// --- La procedencia no arrastra las marcas de la planilla --------------------
+//
+// La planilla marca lo dudoso pegando "?", "{EXPERIMENTAL}" o "(INACCURATE)" al
+// propio nombre (marcaIncierta en presets-comunidad.js). Esa incertidumbre ya
+// viaja estructurada en `preset.incierto` -- Step 3 de la tarjeta la dice con
+// una frase propia -- asi que la marca en el nombre es redundante, y encima
+// engañosa: se lee como un typo nuestro. Filas reales de
+// data/presets-lt25-bandas.csv, no inventadas.
+
+test('un artista marcado con "?" no arrastra el signo a la procedencia', () => {
+  // Fila 68: "SLASH / GUNS N ROSES?" -> preset generico de Guns N' Roses,
+  // motivo 'artista'. Antes del fix: "preset de la comunidad para GUNS N ROSES?"
+  const r = sugerirAjustes({ tags: [], instrument: 'Distortion Guitar', tuning: null,
+    artist: 'Guns N Roses', title: 'Paradise City' })
+  assert.equal(r.fuente, 'comunidad')
+  assert.equal(r.procedencia, 'preset de la comunidad para GUNS N ROSES')
+  assert.ok(!r.procedencia.includes('?'), `no debe quedar un "?" en: ${r.procedencia}`)
+})
+
+test('una cancion marcada {EXPERIMENTAL} no arrastra la marca a la procedencia', () => {
+  // Fila 60: "Pearl Jam - Yellow Ledbetter {EXPERIMENTAL}" -> motivo 'cancion',
+  // que usa preset.clave crudo. Antes del fix la marca viajaba intacta.
+  const r = sugerirAjustes({ tags: [], instrument: 'Distortion Guitar', tuning: null,
+    artist: 'Pearl Jam', title: 'Yellow Ledbetter' })
+  assert.equal(r.fuente, 'comunidad')
+  assert.ok(r.incierto, 'la planilla si marco esta fila como dudosa')
+  assert.equal(r.procedencia, 'preset de la comunidad para Pearl Jam - Yellow Ledbetter')
+  assert.ok(!r.procedencia.includes('{EXPERIMENTAL}'), `no debe quedar la marca en: ${r.procedencia}`)
+})
+
+test('un artista con un "?" pegado sigue calzando igual: la marca no se toca antes de matchear', () => {
+  // El helper de limpieza vive DENTRO de procedenciaDe, para el texto; el
+  // nombre que usa buscarPreset (normalizado con norm()) no pasa por ahi, y el
+  // calce sigue funcionando exactamente igual que antes del fix.
+  const r = sugerirAjustes({ tags: [], instrument: 'Distortion Guitar', tuning: null,
+    artist: 'Guns N Roses', title: 'Paradise City' })
+  assert.equal(r.modelo, '70S ROCK', 'la fila 68 sigue calzando y trayendo su modelo')
+})
