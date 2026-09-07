@@ -45,7 +45,17 @@ function hidratar(db, fila) {
   const tags = db.prepare('SELECT tag FROM tags WHERE song_id = ?')
     .all(fila.song_id).map(r => r.tag)
   const tuning = describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null)
-  const sugerencia = sugerirAjustes({ tags, instrument: fila.instrument, tuning })
+  /* `artist` y `title` no son opcionales aunque el parametro lo sea: son lo
+     unico con lo que sugerirAjustes puede buscar un preset de la comunidad.
+     Sin ellos la busqueda nunca recibe un artista, jamas encuentra nada, y
+     todo el camino de los presets queda inerte -- con la suite entera en
+     verde, porque los tests de sugerirAjustes la llaman directo y no pasan por
+     aqui. Ese es exactamente el agujero que cubre el test de roll.test.js que
+     sortea una cancion de Metallica y exige fuente 'comunidad'. */
+  const sugerencia = sugerirAjustes({
+    tags, instrument: fila.instrument, tuning,
+    artist: fila.artist, title: fila.title,
+  })
   return {
     songId: fila.song_id,
     artist: fila.artist,

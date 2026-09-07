@@ -61,23 +61,57 @@ Para que aparezca el botón:
 
 Qué manda la tarjeta y qué no:
 
-- Solo **`gain`, `treb` y `bass`** (los nombres son los del amplificador, para
-  que calcen con lo que ves en el equipo).
+- **El botón sí cambia el modelo de amplificador.** Cada envío reemplaza la
+  unidad de la ranura `amp` por la que la canción sugiere (si la declara).
+  Sigue pudiéndose cambiar a mano en la rueda del equipo o en el editor —
+  pero el botón ya no lo deja quieto.
+- **Y manda la cadena de efectos completa: las cinco ranuras** (`stomp`,
+  `mod`, `amp`, `delay`, `reverb`), no sólo tres perillas. Las que la canción
+  usa cargan su propia unidad con sus valores; las que no usa **quedan
+  vacías** — esto pasa en cada envío, tenga o no la canción presets de la
+  comunidad.
+- **Contra que hay que asumir:** vaciar las ranuras que la canción no usa
+  **borra lo que hayas dialado a mano ahí**. Si sorteas surf y dejas puesto un
+  slapback a mano, y después sorteas thrash, ese slapback no sobrevive al
+  envío siguiente. Es a propósito: un tono a medias entre dos canciones no es
+  el tono de ninguna.
+- Del amplificador viajan `gain`, `treb`, `bass` y, cuando el preset lo
+  declara, `mid` (los nombres son los del amplificador, para que calcen con
+  lo que ves en el equipo).
 - El **volumen queda fuera de la sugerencia a propósito**: el equipo lo recibe
   en dB, así que mandarle un 0.4 como si fuera "4 de 10" puede ser un salto
-  brutal de nivel. Ese lo pones tú, que sabes en qué pieza estás tocando. (El
-  editor sí te lo deja mover — ver más abajo —; lo que no hace nadie es
-  adivinarlo por ti.)
-- El **modelo de amplificador no lo toca la tarjeta**: eso lo eliges en la
-  rueda del equipo, o en el editor.
-- **La tarjeta no graba nada.** Sus tres valores se escriben sobre el preset
-  activo y no se guardan en ninguna ranura: reseleccionar el preset en la
-  rueda deja el ampli como estaba.
+  brutal de nivel. El botón no lo toca — se lee antes de cambiar de modelo y
+  se devuelve tal cual, así que cambiar de modelo no te mueve el volumen que
+  tenías. Ese lo pones tú, que sabes en qué pieza estás tocando. (El editor sí
+  te lo deja mover — ver más abajo —; lo que no hace nadie es adivinarlo por
+  ti.)
+- **La tarjeta no graba nada.** Todo se escribe sobre el preset activo, en
+  memoria del equipo, y no se guarda en ninguna ranura: reseleccionar el
+  preset en la rueda deja el ampli como estaba.
+- Las perillas cuya curva todavía no se sabe convertir **no se mandan**: la
+  perilla queda en el valor por defecto de la unidad, que es dato real del
+  equipo, no un número inventado. Si esa unidad la acaba de cargar este mismo
+  envío, el estado del envío lo avisa **en rojo** — el default de fábrica no
+  es lo que el tono pedía, y en una perilla de drive se nota.
 
 El amplificador ignora en silencio lo que no entiende, así que la app no da
 por buena ninguna escritura sin confirmación: cada perilla espera el ACK del
 equipo y, si no llega en 2 segundos, se reporta como `sin confirmar` en vez de
 decirte que se aplicó. Si ves eso, vuelve a pulsar el botón.
+
+### De dónde salen los presets por banda y por género
+
+Cuando el catálogo tiene un artista o un género que calza, la sugerencia no
+sale de una tabla propia: sale de una planilla que mantiene la **comunidad de
+usuarios del Fender Mustang LT25** —
+<https://docs.google.com/spreadsheets/d/1KWvjJ6q6Ora2MqmxtUAWjq9Uerp0Ycza5ouuKuol5HQ/edit?gid=1647190216>
+— con los ajustes de amplificador y de las cuatro ranuras de efectos que a
+esas personas les funcionaron para esa banda o ese tono. **Es opinión de esa
+comunidad, no una medición del tono de la grabación**, y la tarjeta lo dice
+explícito junto a cada sugerencia, incluida la incertidumbre que la propia
+planilla marcó en algunas filas. Detalle de qué se citó, cómo y con qué
+límites: `data/PROCEDENCIA.md`. Qué entró de verdad en el import, fila por
+fila: `docs/presets-comunidad-auditoria.md`.
 
 ## El editor del amplificador
 
@@ -150,10 +184,13 @@ de DOM no se justificaba para una interfaz de un solo usuario.
 
 Las excepciones son los módulos puros de `public/`, que `test/` importa
 directo desde disco: `fender-protocolo.js` (`test/protocolo.test.js`),
-`catalogo-lt25.js` (`test/catalogo.test.js`) y `despachador.js`
-(`test/despachador.test.js`). Ahí la regla no aplica: es código sin DOM ni
-WebHID de por medio. `ampli-usb.js` y `editor.js` sí quedan sin tests, por lo
-mismo de arriba.
+`catalogo-lt25.js` (`test/catalogo.test.js`), `despachador.js`
+(`test/despachador.test.js`) y `tarjeta.js` (`test/tarjeta.test.js`) — la
+lógica de la tarjeta sin DOM (qué perillas nombra la frase de envío, qué se
+manda al ampli), extraída de `app.js` porque ese archivo sí tiene efectos a
+nivel de módulo y no se puede importar en Node. Ahí la regla no aplica: es
+código sin DOM ni WebHID de por medio. `app.js`, `ampli-usb.js` y
+`editor.js` sí quedan sin tests, por lo mismo de arriba.
 
 El caso más claro es `fender-protocolo.js`, donde lo que se verifica son bytes
 capturados del amplificador real. Además es justo el código donde equivocarse
