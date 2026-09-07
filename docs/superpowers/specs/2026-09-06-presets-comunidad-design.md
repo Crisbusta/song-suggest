@@ -246,7 +246,18 @@ De lo más específico a lo más genérico. Gana el primero que calza:
 de §6.4): 7 por canción exacta, 882 por artista, 45 por artista sin desempate de
 época, 13 desde el preset de otra canción del mismo artista, y **2.720 por tono
 de género** — **3.667 de 10.011 canciones enriquecidas, un 36,6%**. Sobre el
-subconjunto que de verdad se sortea, **3.584 de 9.746, un 36,8%**.
+subconjunto que de verdad se sortea, **3.582 de 9.736, un 36,8%**.
+
+> Corregido en la ronda de revisión 2 de Task 8: una versión anterior decía
+> "3.584 de 9.746". La diferencia no era el rango de dificultad (1-10 en ambos
+> casos) sino que la cuenta vieja no aplicaba la cláusula `st.status IS NULL`
+> de `BASE_FROM` (`db/queries.js`): hay 10 canciones ya triadas por el usuario
+> (4 `queued`, 6 `skipped`, 2 de ellas con preset) que el sorteo real excluye y
+> que esa cuenta incluía. Medido de nuevo con `BASE_FROM` completo, dificultad
+> 1-10: **9.736 sorteables, 3.582 cubiertas, 36,8%**. El número importa menos
+> que el filtro que lo produjo: el universo se encoge a medida que alguien usa
+> la app (cada canción que descarta sale del denominador), así que una cifra
+> sin decir con qué filtro se midió no es comparable con la próxima medición.
 
 Los presets por banda son los que suenan a la banda; los tonos por género son
 los que evitan que el resto caiga en la nada.
@@ -255,9 +266,12 @@ los que evitan que el resto caiga en la nada.
 > track acústico dejaron de recibir un preset de banda. Se perdieron bien.
 
 La sugerencia viaja con su **procedencia** y con la **incertidumbre que la fuente
-declaró**. Un `{EXPERIMENTAL}` de la planilla llega hasta la pantalla; no se
-limpia. "Preset de la comunidad para Metallica (marcado como experimental)" y
-"deducido de tus tags de género" merecen palabras distintas.
+declaró**. Un `{EXPERIMENTAL}` o un `?` de la planilla marcan `preset.incierto`,
+que la tarjeta dice explícito ("la propia planilla marca este preset como
+dudoso"); la marca en sí NO llega a la pantalla pegada al nombre (Task 8, ronda
+de revisión 1: se lee como un typo nuestro, no como la advertencia que es).
+"Preset de la comunidad para Metallica" con ese aviso aparte, y "deducido de
+tus tags de género", merecen palabras distintas.
 
 ---
 
