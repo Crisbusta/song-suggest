@@ -36,6 +36,7 @@
 | `public/index.html` | El botón de sortear de todo | 4 |
 | `public/style.css` | El estilo del selector y de la marca de "no califica" | 3 |
 | `server.js` | El parámetro `todo=1` de `/api/roll` | 4 |
+| `public/index.html` | El botón de sortear de todo | 4 |
 | `README.md` | Las dos secciones que quedan desactualizadas | 5 |
 
 ---
@@ -59,7 +60,7 @@ Crear `test/pistas.test.js`. El helper `agregarConPistas` inserta una canción c
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { openDb } from '../db/open.js'
-import { roll, listarArtistas, getStats } from '../db/queries.js'
+import { roll, mark, getList, listarArtistas, getStats } from '../db/queries.js'
 
 let siguienteId = 1
 
@@ -174,7 +175,7 @@ test('la pista elegida siempre cumple el filtro con que se sorteo', () => {
     ],
   })
   const r = roll(db, { mode: 'acoustic', minDifficulty: 1, maxDifficulty: 2 })
-  assert.equal(r.song.pistas[r.song.pistaPorDefecto].instrument, 'Acoustic Guitar (steel)')
+  assert.equal(r.song.instrument, 'Acoustic Guitar (steel)')
 })
 
 test('empatadas en views, gana el track_index mas bajo', () => {
@@ -186,11 +187,11 @@ test('empatadas en views, gana el track_index mas bajo', () => {
     ],
   })
   const r = roll(db, {})
-  assert.equal(r.song.pistas[r.song.pistaPorDefecto].name, 'Primera')
+  assert.equal(r.song.trackName, 'Primera')
 })
 ```
 
-**Nota sobre `r.song.pistas`:** estos asserts dependen de la Task 2. En la Task 1 fallan por eso. Es correcto: se implementan en la Task 2 y quedan verdes ahí. Para esta tarea basta con que pasen los que no usan `pistas` — los dos que sí lo usan se dejan escritos y se confirman al final de la Task 2.
+**Por qué estos dos leen `song.instrument` y `song.trackName`:** esta tarea NO toca `hidratar()`, así que la respuesta conserva la forma vieja — lo único que cambia es de qué pista salen los datos. La Task 2 los reescribe a `pistas[pistaPorDefecto]` junto con los de `test/roll.test.js`. **Esta tarea tiene que terminar con la suite entera en verde.**
 
 - [ ] **Step 2: Correr los tests y ver que fallan**
 
@@ -332,7 +333,7 @@ Ojo con el `ORDER BY` del caso `solos`: adentro del `SELECT *` exterior las colu
 - [ ] **Step 7: Correr la suite entera**
 
 Run: `npm test`
-Expected: pasan los tests nuevos de `test/pistas.test.js` salvo los dos que usan `song.pistas` (los arregla la Task 2). `test/roll.test.js` y `test/tarjeta.test.js` pueden fallar por los campos espejo — también es la Task 2. Lo que **no** puede fallar acá: `test/filtro-bandas.test.js`, `test/db.test.js` ni `test/server.test.js`. Si alguno de esos tres falla, el problema está en este cambio, no en el siguiente.
+Expected: **PASS, la suite entera.** Esta tarea no toca `hidratar()`, así que la forma de la respuesta no cambia y ningún test viejo debería notarla — sólo cambia de qué pista salen los datos, y en los fixtures viejos cada canción tiene una sola pista. Cualquier fallo acá es de este cambio, no del siguiente.
 
 - [ ] **Step 8: Commit**
 
@@ -441,8 +442,7 @@ test('la afinacion es la de cada pista, no una sola de la cancion', () => {
 
 /* getList no filtra por nada, asi que no hay filtro contra el cual calificar.
    Todas cuentan, y la pista por defecto es la mas vista a secas. */
-test('en las listas guardadas todas las pistas califican', async () => {
-  const { mark, getList } = await import('../db/queries.js')
+test('en las listas guardadas todas las pistas califican', () => {
   const db = base()
   const songId = agregarConPistas(db, {
     pistas: [{ name: 'A', views: 900 }, { name: 'B', views: 100 }],
@@ -708,7 +708,7 @@ Expected: PASS.
 
 En `public/app.js`, agregar `etiquetaDePista` al import de `./tarjeta.js` (línea 4).
 
-La tarjeta pasa a leer de la pista elegida. Donde hoy usa `s.difficulty`, `s.tuning`, `s.instrument`, `s.trackName` y `s.ampli`, pasa a usar `s.pistas[elegida]`. Mantener una variable de módulo con la pista elegida del sorteo actual, que se reinicia en cada sorteo:
+La tarjeta pasa a leer de la pista elegida. Donde hoy usa `song.difficulty`, `song.tuning`, `song.instrument`, `song.trackName` y `song.ampli`, pasa a usar `song.pistas[pistaElegida]` (la variable de la canción dentro de `pintarTarjeta` se llama `song`). Mantener una variable de módulo con la pista elegida del sorteo actual, que se reinicia en cada sorteo:
 
 ```js
 /* Cual pista se esta mirando. Se reinicia en cada sorteo -- igual que el modo,
@@ -720,11 +720,11 @@ let pistaElegida = 0
 El bloque del selector, que se inserta arriba del bloque de dificultad (la variable `dificultad` de `public/app.js:61`). Sólo aparece con dos pistas o más:
 
 ```js
-  const selectorPistas = s.pistas.length > 1 ? `
+  const selectorPistas = song.pistas.length > 1 ? `
     <div class="pistas">
       <label for="pista">Pista</label>
       <select id="pista">
-        ${s.pistas.map((p, i) => `
+        ${song.pistas.map((p, i) => `
           <option value="${i}"${i === pistaElegida ? ' selected' : ''}${p.califica ? '' : ' class="no-califica"'}>
             ${esc(etiquetaDePista(p))}${p.califica ? '' : ' — fuera del filtro'}
           </option>
@@ -837,7 +837,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 4: El sorteo de todo
 
 **Files:**
-- Modify: `server.js:30-47` (`/api/roll`), `public/index.html`, `public/app.js`, `public/style.css`
+- Modify: `server.js:30-47` (`/api/roll`), `public/index.html`, `public/app.js`
 - Test: `test/server.test.js`
 
 **Interfaces:**
@@ -932,7 +932,7 @@ npm start
 - [ ] **Step 7: Commit**
 
 ```bash
-git add server.js public/index.html public/app.js public/style.css test/server.test.js
+git add server.js public/index.html public/app.js test/server.test.js
 git commit -m "feat: sortear de todo sin perder los filtros puestos
 
 Un boton que ignora modo, dificultad y bandas sin tocar los controles: al
