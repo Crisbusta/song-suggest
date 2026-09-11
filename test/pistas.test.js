@@ -116,7 +116,8 @@ test('la pista elegida siempre cumple el filtro con que se sorteo', () => {
     ],
   })
   const r = roll(db, { mode: 'acoustic', minDifficulty: 1, maxDifficulty: 2 })
-  assert.equal(r.song.instrument, 'Acoustic Guitar (steel)')
+  const elegida = r.song.pistas[r.song.pistaPorDefecto]
+  assert.equal(elegida.instrument, 'Acoustic Guitar (steel)')
 })
 
 test('empatadas en views, gana el track_index mas bajo', () => {
@@ -128,5 +129,87 @@ test('empatadas en views, gana el track_index mas bajo', () => {
     ],
   })
   const r = roll(db, {})
-  assert.equal(r.song.trackName, 'Primera')
+  assert.equal(r.song.pistas[r.song.pistaPorDefecto].name, 'Primera')
+})
+
+test('devuelve TODAS las pistas de guitarra, ordenadas por views', () => {
+  const db = base()
+  agregarConPistas(db, {
+    pistas: [
+      { name: 'Poco vista', views: 10 },
+      { name: 'La mas vista', views: 9000 },
+      { name: 'Media', views: 500 },
+    ],
+  })
+  const { pistas } = roll(db, {}).song
+  assert.deepEqual(pistas.map(p => p.name), ['La mas vista', 'Media', 'Poco vista'])
+  assert.deepEqual(pistas.map(p => p.trackIndex), [1, 2, 0])
+})
+
+/* Las que no califican se muestran igual, marcadas: quien mira la tarjeta
+   tiene que poder ver por que salio esta cancion y cual pista no fue el
+   motivo. */
+test('marca cuales pistas cumplen el filtro y cuales no', () => {
+  const db = base()
+  agregarConPistas(db, {
+    pistas: [
+      { instrument: 'Distortion Guitar', name: 'Dura', difficulty: 9, views: 9000 },
+      { instrument: 'Acoustic Guitar (steel)', name: 'Blanda', difficulty: 2, views: 100 },
+    ],
+  })
+  const { pistas } = roll(db, { mode: 'acoustic', minDifficulty: 1, maxDifficulty: 2 }).song
+  assert.equal(pistas.find(p => p.name === 'Blanda').califica, true)
+  assert.equal(pistas.find(p => p.name === 'Dura').califica, false)
+})
+
+/* El regalo de este diseno: la regla acustica de lib/ampli.js ya estaba
+   escrita y argumentada, solo no recibia nunca la pista correcta. Elegir la
+   acustica de Metallica tiene que dar CHAMPION, no el preset de banda a gain
+   alto. */
+test('cada pista trae su propio tono, derivado de su instrumento', () => {
+  const db = base()
+  const songId = agregarConPistas(db, {
+    artist: 'Metallica',
+    title: 'Fade to Black',
+    pistas: [
+      { instrument: 'Distortion Guitar', name: 'Lead Guitar', difficulty: 2, views: 9000 },
+      { instrument: 'Acoustic Guitar (steel)', name: 'Acoustic', difficulty: 2, views: 100 },
+    ],
+  })
+  db.prepare('INSERT INTO tags (song_id, tag) VALUES (?, ?)').run(songId, 'thrash metal')
+
+  const { pistas } = roll(db, {}).song
+  const acustica = pistas.find(p => p.instrument.startsWith('Acoustic'))
+  const electrica = pistas.find(p => p.instrument === 'Distortion Guitar')
+
+  assert.equal(acustica.ampli.modelo, 'CHAMPION', 'la acustica no usa el preset de banda')
+  assert.equal(acustica.ampli.gain, 1)
+  assert.notEqual(electrica.ampli.modelo, 'CHAMPION')
+  assert.ok(electrica.ampli.gain > acustica.ampli.gain)
+})
+
+test('la afinacion es la de cada pista, no una sola de la cancion', () => {
+  const db = base()
+  agregarConPistas(db, {
+    pistas: [
+      { name: 'Estandar', views: 9000, tuning: '[64,59,55,50,45,40]' },
+      { name: 'Drop D', views: 100, tuning: '[64,59,55,50,45,38]' },
+    ],
+  })
+  const { pistas } = roll(db, {}).song
+  assert.equal(pistas.find(p => p.name === 'Estandar').tuning, null)
+  assert.equal(pistas.find(p => p.name === 'Drop D').tuning, 'Drop D')
+})
+
+/* getList no filtra por nada, asi que no hay filtro contra el cual calificar.
+   Todas cuentan, y la pista por defecto es la mas vista a secas. */
+test('en las listas guardadas todas las pistas califican', () => {
+  const db = base()
+  const songId = agregarConPistas(db, {
+    pistas: [{ name: 'A', views: 900 }, { name: 'B', views: 100 }],
+  })
+  mark(db, { songId, status: 'learned' })
+  const [song] = getList(db, 'learned')
+  assert.ok(song.pistas.every(p => p.califica))
+  assert.equal(song.pistas[song.pistaPorDefecto].name, 'A')
 })

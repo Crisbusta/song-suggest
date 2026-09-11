@@ -113,33 +113,89 @@ function contar(db, mode, min, max, fa = { sql: '', params: [] }) {
 const elegirVideo = (json, feature) =>
   JSON.parse(json ?? '[]').find(v => v.feature === feature)?.videoId ?? null
 
-function hidratar(db, fila) {
+/* Los track_index que cumplen el filtro con el que se sorteo esta cancion.
+
+   Se pregunta al MISMO SQL que decidio el sorteo -- BASE_FROM + MODE_SQL --
+   en vez de reimplementar el predicado en JavaScript. Dos copias de esta
+   regla se desviarian, y la tarjeta terminaria marcando como "califica" una
+   pista por la que el sorteo jamas habria devuelto la cancion. */
+function pistasQueCalifican(db, songId, mode, min, max) {
+  const filas = db.prepare(`
+    SELECT g.track_index ${BASE_FROM}${MODE_SQL[mode]} AND s.song_id = ?
+  `).all(min, max, songId)
+  return new Set(filas.map(f => f.track_index))
+}
+
+/* Todas las pistas de guitarra de una cancion, ordenadas por views, cada una
+   con su propio tono.
+
+   No hay corte de ruido, y es una decision medida, no un olvido: la
+   distribucion de views esta dominada por una pista desbocada, asi que
+   cualquier corte relativo castiga pistas legitimas. Con un corte al 10% del
+   maximo, Fade to Black pierde la ritmica de Hetfield (287.234 views contra
+   los 2.984.809 de Kirk) -- justo lo que alguien querria aprender. Peor: en
+   cada corte evaluado, miles de las pistas cortadas son la mas facil de su
+   cancion, o sea exactamente las que hacen que la cancion entre al filtro.
+   Cortar haria entrar canciones por una pista que despues no se muestra.
+   Ordenar por views hace solo el trabajo: el ruido se hunde al fondo, y el
+   94% de las canciones tiene cuatro pistas o menos.
+
+   `califican` es el conjunto de track_index que cumplen el filtro, o null
+   cuando no hubo filtro (getList): ahi todas califican. */
+function pistasDeLaCancion(db, fila, tags, califican) {
+  const filas = db.prepare(`
+    SELECT track_index, instrument, name, difficulty, views, tuning
+    FROM guitar_tracks WHERE song_id = ?
+    ORDER BY views DESC, track_index ASC
+  `).all(fila.song_id)
+
+  return filas.map(p => {
+    const tuning = describeTuning(p.tuning ? JSON.parse(p.tuning) : null)
+    /* `artist` y `title` no son opcionales: son lo unico con lo que
+       sugerirAjustes puede buscar un preset de la comunidad. Sin ellos la
+       busqueda nunca recibe un artista y todo el camino de los presets queda
+       inerte, con la suite en verde. */
+    const sugerencia = sugerirAjustes({
+      tags, instrument: p.instrument, tuning,
+      artist: fila.artist, title: fila.title,
+    })
+    return {
+      trackIndex: p.track_index,
+      instrument: p.instrument,
+      name: p.name,
+      difficulty: p.difficulty,
+      views: p.views,
+      tuning,
+      califica: califican ? califican.has(p.track_index) : true,
+      // Punto de partida para el ampli, o null si los tags no dan senal util.
+      // paraElAmpli son los mismos valores en la escala que espera el equipo.
+      ampli: sugerencia && { ...sugerencia, paraElAmpli: paraElAmpli(sugerencia) },
+    }
+  })
+}
+
+/* `califican` viene del sorteo (los track_index que cumplen el filtro) o es
+   null desde getList, que no filtra por nada.
+
+   Los campos de la PISTA -- difficulty, instrument, trackName, tuning, ampli
+   -- ya NO viven al nivel de la cancion. Tenerlos en los dos lados serian dos
+   fuentes de verdad para el mismo dato, y la primera vez que el selector y la
+   cabecera se desincronicen no habria forma de saber cual miente. La tarjeta
+   lee siempre de pistas[elegida]. */
+function hidratar(db, fila, califican = null) {
   if (!fila) return null
   const tags = db.prepare('SELECT tag FROM tags WHERE song_id = ?')
     .all(fila.song_id).map(r => r.tag)
-  const tuning = describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null)
-  /* `artist` y `title` no son opcionales aunque el parametro lo sea: son lo
-     unico con lo que sugerirAjustes puede buscar un preset de la comunidad.
-     Sin ellos la busqueda nunca recibe un artista, jamas encuentra nada, y
-     todo el camino de los presets queda inerte -- con la suite entera en
-     verde, porque los tests de sugerirAjustes la llaman directo y no pasan por
-     aqui. Ese es exactamente el agujero que cubre el test de roll.test.js que
-     sortea una cancion de Metallica y exige fuente 'comunidad'. */
-  const sugerencia = sugerirAjustes({
-    tags, instrument: fila.instrument, tuning,
-    artist: fila.artist, title: fila.title,
-  })
+  const pistas = pistasDeLaCancion(db, fila, tags, califican)
   return {
     songId: fila.song_id,
     artist: fila.artist,
     title: fila.title,
-    difficulty: fila.difficulty,
-    instrument: fila.instrument,
-    trackName: fila.track_name,
-    tuning,
-    // Punto de partida para el ampli, o null si los tags no dan senal util.
-    // paraElAmpli son los mismos valores en la escala que espera el equipo.
-    ampli: sugerencia && { ...sugerencia, paraElAmpli: paraElAmpli(sugerencia) },
+    pistas,
+    // Cual viene elegida. El SQL ya decidio cual es (la mas vista de las que
+    // califican); aca solo se traduce ese track_index a su posicion en el
+    // arreglo ya ordenado.
+    pistaPorDefecto: Math.max(0, pistas.findIndex(p => p.trackIndex === fila.track_index)),
     tags,
     officialVideo: elegirVideo(fila.videos, null),
     backingVideo: elegirVideo(fila.videos, 'backing'),
@@ -233,7 +289,11 @@ export function roll(db, opts = {}) {
       .run(fila.song_id)
   }
 
-  return { song: hidratar(db, fila), matching, hint }
+  return {
+    song: hidratar(db, fila, fila && pistasQueCalifican(db, fila.song_id, mode, minDifficulty, maxDifficulty)),
+    matching,
+    hint,
+  }
 }
 
 export const LISTS = ['learned', 'skipped', 'queued', 'liked']
