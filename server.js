@@ -4,7 +4,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDb } from './db/open.js'
-import { roll, mark, getList, getStats } from './db/queries.js'
+import { roll, mark, getList, getStats, listarArtistas } from './db/queries.js'
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url))
 const RAIZ = realpathSync(PUBLIC)   // sin barra final: realpath la quita
@@ -32,12 +32,21 @@ export function createApp(db) {
           const v = Number(url.searchParams.get(n))
           return Number.isInteger(v) && v >= 1 && v <= 10 ? v : def
         }
+        /* Las bandas llegan repetidas en la query (`?artist=Rush&artist=Tool`)
+           y no separadas por coma. No es estilo: medido sobre las canciones
+           sorteables, 21 artistas traen una coma en el nombre -- "Crosby,
+           Stills, Nash & Young", "Earth, Wind & Fire", "Emerson, Lake &
+           Palmer" -- y partir por coma cortaria cada uno en varias bandas que
+           no existen, dejando al usuario sin ninguna de sus canciones. */
         return json(res, 200, roll(db, {
           mode: url.searchParams.get('mode') ?? 'surprise',
           minDifficulty: entero('minDifficulty', 1),
           maxDifficulty: entero('maxDifficulty', 10),
+          artists: url.searchParams.getAll('artist').filter(Boolean),
         }))
       }
+
+      if (ruta === '/api/artists') return json(res, 200, { artists: listarArtistas(db) })
 
       if (ruta === '/api/mark' && req.method === 'POST') {
         const body = await leerCuerpo(req)

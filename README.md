@@ -3,7 +3,8 @@
 Una web local, de un solo usuario, que sortea canciones de guitarra para
 aprender de un catálogo de Songsterr. Nace de un problema simple: con miles
 de tablaturas disponibles, elegir qué aprender es más difícil que aprenderlo.
-`song-suggest` sortea una canción al azar (con filtros de modo y dificultad)
+`song-suggest` sortea una canción al azar (con filtros de modo, dificultad y
+bandas)
 y lleva la cuenta de lo que ya aprendiste, descartaste, dejaste para después
 o te gustó — para no volver a sortear lo mismo. Para cada canción sugiere
 además un punto de partida de perillas para un Fender Mustang LT25, y sabe
@@ -26,6 +27,32 @@ El ETL se puede cortar con Ctrl-C en cualquier momento — es reanudable, y
 retoma donde quedó la próxima vez que corra. Tras las primeras ~300
 canciones enriquecidas la app ya es usable: `npm start` y `npm run etl`
 pueden convivir sobre el mismo `songs.db` sin pisarse (usa WAL).
+
+## Filtrar por bandas
+
+Debajo de los sliders hay una caja donde escribes unas letras y eliges bandas
+del catálogo; cada una queda como una ficha removible, y el sorteo se limita a
+las elegidas. Sin ninguna, sortea de todo. Se combina con el modo y la
+dificultad, y la línea de abajo te dice cuántas canciones calzan con la
+combinación completa.
+
+Tres cosas que conviene saber:
+
+- **Las escrituras se agrupan.** El catálogo escribe 37 artistas de dos formas
+  o más, así que elegir `Кино` trae también las de `КИНО`, y `blink-182` trae
+  las de `Blink-182` y `Blink 182`. Elegir una sola escritura dejaría 55
+  canciones afuera.
+- **No hay transliteración.** Escribir `kino` con teclado latino encuentra
+  `Kino` (3 canciones), no `Кино` (29): son cadenas distintas y probablemente
+  bandas distintas, así que agruparlas sería un error. Con teclado latino los
+  temas en cirílico quedan difíciles de encontrar desde el buscador.
+- **El número al lado de cada banda es sorteable, no total.** Cuenta sobre el
+  mismo universo que el botón: excluye lo que ya descartaste, y se actualiza
+  cuando marcas una canción. Una banda cuya última canción descartas desaparece
+  de la lista.
+
+La elección **no se recuerda** entre recargas, igual que el modo y la
+dificultad.
 
 ## Banderas del ETL
 

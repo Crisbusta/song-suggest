@@ -32,6 +32,19 @@
     </label>
     <label>Dificultad mínima <input id="min" type="range" min="1" max="10" value="1"><output id="min-val">1</output></label>
     <label>Dificultad máxima <input id="max" type="range" min="1" max="10" value="10"><output id="max-val">10</output></label>
+
+    <div class="bandas">
+      <label for="banda-q">Bandas</label>
+      <div class="banda-buscador">
+        <input id="banda-q" type="text" autocomplete="off" spellcheck="false"
+               placeholder="escribe unas letras y elige" aria-describedby="banda-ayuda">
+        <ul id="banda-sug" class="banda-sug" hidden></ul>
+      </div>
+      <p id="banda-ayuda" class="banda-ayuda">Sin ninguna elegida, sortea de todo el catálogo.</p>
+      <ul id="banda-fichas" class="banda-fichas"></ul>
+      <div id="banda-atajos" class="banda-atajos"></div>
+    </div>
+
     <p id="calzan" class="calzan"></p>
   </section>
 
