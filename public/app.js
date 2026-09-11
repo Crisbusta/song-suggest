@@ -1,7 +1,7 @@
 import { ampli } from './ampli-usb.js'
 import { montarEditor } from './editor.js'
 import { crearCatalogo, RANURAS, VACIA } from './catalogo-lt25.js'
-import { esc, parametrosAmpQueViajan, resumenEnvioAmpli } from './tarjeta.js'
+import { esc, etiquetaDePista, parametrosAmpQueViajan, resumenEnvioAmpli } from './tarjeta.js'
 import { buscarArtistas, claveDeArtista } from './artistas.js'
 
 const $ = s => document.querySelector(s)
@@ -29,8 +29,16 @@ const api = async (ruta, opts) => {
 
 let actual = null
 
+/* Cual pista se esta mirando. Se reinicia en cada sorteo -- igual que el modo,
+   la dificultad y las bandas, la eleccion no se recuerda entre sorteos ni
+   entre recargas. */
+let pistaElegida = 0
+
+/* Escribe lo que describe al FILTRO (el contador y el aviso) y delega la
+   tarjeta. Separadas porque hay dos caminos que quieren dibujar la tarjeta sin
+   tocar el contador: cambiar de pista (la cancion es la misma, el filtro no se
+   movio) y el sorteo de todo (la cancion no salio de los controles). */
 function pintar({ song, matching, hint }) {
-  actual = song
   // El aviso rojo del ampli (ver `abandonar()`) vive en este mismo nodo, que
   // es permanente: sin reponer la clase, un `mal` pegado teñiria de rojo el
   // conteo de canciones de la tirada siguiente.
@@ -40,6 +48,14 @@ function pintar({ song, matching, hint }) {
   $('#calzan').textContent = matching === 1
     ? '1 canción calza con estos filtros'
     : `${matching.toLocaleString('es-CL')} canciones calzan con estos filtros`
+  // Cada tirada abre en la pista que eligio el servidor: la mas vista de las
+  // que califican. Lo que se estaba mirando era de la cancion anterior.
+  pistaElegida = song?.pistaPorDefecto ?? 0
+  pintarTarjeta(song)
+}
+
+function pintarTarjeta(song) {
+  actual = song
 
   if (!song) {
     $('#tarjeta').innerHTML = '<p class="vacio">Nada que sortear con estos filtros.</p>'
@@ -52,28 +68,50 @@ function pintar({ song, matching, hint }) {
   $('#like').classList.toggle('marcado', marcado)
   $('#like').textContent = marcado ? '♥' : '♡'
 
+  /* Todo lo que describe QUE se practica -- dificultad, instrumento,
+     afinacion y el tono del ampli -- sale de la pista elegida, no de la
+     cancion: la cancion ya no tiene esos campos, justamente para que la
+     cabecera y el selector no puedan contradecirse. */
+  const pista = song.pistas[pistaElegida]
+
+  /* El selector solo aparece con dos pistas o mas: con una sola no hay nada
+     que elegir. Las que no cumplen el filtro se listan igual, marcadas --
+     quien mira tiene que poder ver por que salio esta cancion. */
+  const selectorPistas = song.pistas.length > 1 ? `
+    <div class="pistas">
+      <label for="pista">Pista</label>
+      <select id="pista">
+        ${song.pistas.map((p, i) => `
+          <option value="${i}"${i === pistaElegida ? ' selected' : ''}${p.califica ? '' : ' class="no-califica"'}>
+            ${esc(etiquetaDePista(p))}${p.califica ? '' : ' — fuera del filtro'}
+          </option>
+        `).join('')}
+      </select>
+    </div>
+  ` : ''
+
   // La dificultad decide si intentas la cancion o no, asi que deja de ser un
   // chip igual a "90s" y pasa a medidor. El numero va al lado porque el color
   // solo no debe cargar el significado.
   const medidor = Array.from({ length: 10 }, (_, i) =>
-    `<i class="${i < song.difficulty ? 'on' : ''}"></i>`).join('')
+    `<i class="${i < pista.difficulty ? 'on' : ''}"></i>`).join('')
 
   const dificultad = `
     <div class="dificultad">
-      <span class="medidor" role="img" aria-label="Dificultad ${song.difficulty} de 10">${medidor}</span>
-      <span class="valor">${song.difficulty}<small>/10</small></span>
-      <span class="instrumento">${esc(song.instrument)}</span>
+      <span class="medidor" role="img" aria-label="Dificultad ${pista.difficulty} de 10">${medidor}</span>
+      <span class="valor">${pista.difficulty}<small>/10</small></span>
+      <span class="instrumento">${esc(pista.instrument)}</span>
     </div>`
 
   // La afinacion es informacion accionable: te dice si hay que reafinar antes
   // de empezar. Sale del monton de chips y se vuelve un aviso propio.
-  const aviso = song.tuning
+  const aviso = pista.tuning
     ? `<p class="aviso-afinacion">
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
            <path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/>
          </svg>
-         ${esc(song.tuning)}
+         ${esc(pista.tuning)}
        </p>`
     : ''
 
@@ -92,7 +130,7 @@ function pintar({ song, matching, hint }) {
       <span class="num">${v}</span>
     </div>`
 
-  const a = song.ampli
+  const a = pista.ampli
   /* Seis perillas de pantalla, pero no las seis viven en el mismo trato con
      el boton. Lo que la planilla no declaro llega en null (comunidad) y no se
      dibuja como si valiera algo -- de ahi el filtro (Mid en ruta de reglas
@@ -206,6 +244,7 @@ function pintar({ song, matching, hint }) {
       <h2>${esc(song.title)}</h2>
       <p class="artista">${esc(song.artist)}</p>
     </div>
+    ${selectorPistas}
     ${dificultad}
     ${aviso}
     ${chips ? `<div class="meta">${chips}</div>` : ''}
@@ -215,6 +254,11 @@ function pintar({ song, matching, hint }) {
       <a href="${esc(song.url)}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
       ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
+  $('#pista')?.addEventListener('change', e => {
+    pistaElegida = Number(e.target.value)
+    pintarTarjeta(actual)   // el mismo objeto: no se le pide nada al servidor
+  })
+
   // Reinicia la animacion de entrada en cada tirada.
   void $('#tarjeta').offsetWidth
   pintarBotonEnviar()
@@ -350,7 +394,7 @@ function catalogo() {
    reves, `{}` tambien es truthy, asi que preguntar por el objeto dejaba el
    boton habilitado para envios que no escribian nada. */
 function hayQueEnviar(cancion) {
-  const a = cancion?.ampli
+  const a = cancion?.pistas[pistaElegida]?.ampli
   if (!a) return false
   return !!a.fenderId || !!a.cadena || Object.keys(a.paraElAmpli ?? {}).length > 0
 }
@@ -454,7 +498,10 @@ $('#tarjeta').addEventListener('click', async e => {
   estado.textContent = 'enviando…'
 
   try {
-    const sugerencia = cancion.ampli
+    /* La pista se lee aqui, en el mismo instante en que se fijo `cancion`:
+       el envio manda el tono que se prometio al apretar el boton, aunque
+       despues se cambie de pista. */
+    const sugerencia = cancion.pistas[pistaElegida].ampli
     // La cadena completa de la planilla, o null cuando la sugerencia salio de
     // la tabla de reglas (que no opina sobre efectos).
     const cadena = sugerencia.cadena ?? null
@@ -1081,7 +1128,7 @@ async function pintarListas() {
       const filas = songs.map(s => `
         <li>
           <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.artist)} — ${esc(s.title)}</a>
-          <span class="dif">dif ${s.difficulty}</span>
+          <span class="dif">dif ${s.pistas[s.pistaPorDefecto].difficulty}</span>
           ${clave === 'liked'
             ? `<button data-quitar-like="${s.songId}">Quitar like</button>`
             : `<button data-deshacer="${s.songId}">Deshacer</button>`}

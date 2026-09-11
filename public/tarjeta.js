@@ -136,3 +136,19 @@ export function resumenEnvioAmpli(a) {
 
   return { ranurasDeEfectos, hayEfectos, piezasEnvio, queSeManda }
 }
+
+/* Como se nombra una pista en el selector.
+
+   El nombre crudo del catalogo es lo mas util cuando existe ("Kirk Hammett |
+   Gibson Flying V | Lead Guitar" dice mas que "Distortion Guitar"), pero el
+   catalogo trae nombres vacios y en otros alfabetos. Sin nombre se cae al
+   instrumento: una opcion en blanco no se puede elegir a proposito.
+
+   La afinacion solo aparece cuando describeTuning devolvio algo -- estandar
+   es null y no se dice, misma regla que la tarjeta ya usaba. */
+export function etiquetaDePista(pista) {
+  const nombre = pista.name?.trim() || pista.instrument
+  return [nombre, `dificultad ${pista.difficulty}`, pista.tuning]
+    .filter(Boolean)
+    .join(' · ')
+}

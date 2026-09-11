@@ -82,11 +82,12 @@ nav button.activo { color: var(--acento); font-weight: 600; }
   font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .06em;
   color: var(--tenue);
 }
-.controles select {
-  margin-left: auto; background: var(--relieve); color: var(--texto);
+.controles select, .pistas select {
+  background: var(--relieve); color: var(--texto);
   border: 1px solid var(--borde); border-radius: var(--radio);
   padding: var(--e1) var(--e2); font: inherit; font-size: var(--t-chico); cursor: pointer;
 }
+.controles select { margin-left: auto; }
 .controles input[type=range] { flex: 1; accent-color: var(--acento); cursor: pointer; }
 .controles output { font-variant-numeric: tabular-nums; color: var(--texto); min-width: 1.5rem; }
 /* matching describe el filtro, no la cancion: vive con los controles. */
@@ -111,6 +112,20 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 }
 .entra { animation: entra .18s var(--curva) both; }
 @keyframes entra { from { opacity: 0; transform: translateY(6px); } }
+
+/* --- Selector de pista: que se practica de esta cancion ------------------ */
+.pistas { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.pistas > label {
+  font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--tenue);
+}
+/* Lo propio de la tarjeta es solo que ocupa el ancho que sobra: el aspecto se
+   comparte con el desplegable de los controles (arriba), porque el mismo
+   control no puede verse de dos maneras distintas en la misma pantalla. */
+.pistas select { flex: 1; min-width: 0; }
+/* Las que no cumplen el filtro se muestran igual -- quien mira tiene que
+   poder ver por que salio esta cancion y cual pista no fue el motivo. */
+.pistas option.no-califica { opacity: .6; }
 
 /* --- Medidor de dificultad: el dato que decide si intentas la cancion ----- */
 .dificultad { display: flex; align-items: center; gap: var(--e3); }

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   esc, parametrosAmpQueViajan, NOMBRE_PERILLA_AMPLI, nombrePerillaAmpli,
-  conjuncion, resumenEnvioAmpli,
+  conjuncion, resumenEnvioAmpli, etiquetaDePista,
 } from '../public/tarjeta.js'
 
 // --- esc ---------------------------------------------------------------
@@ -152,5 +152,37 @@ test('modelo, efectos y perillas juntos se unen con conjuncion, no se listan sue
   assert.equal(
     r.queSeManda,
     'Al ampli se mandan el <strong>modelo</strong>, los <strong>efectos</strong> y las perillas de <strong>Gain</strong>.',
+  )
+})
+
+// --- etiquetaDePista --------------------------------------------------------
+
+test('etiquetaDePista nombra la pista, su dificultad y su afinacion', () => {
+  assert.equal(
+    etiquetaDePista({
+      name: 'Kirk Hammett | Lead Guitar', instrument: 'Distortion Guitar',
+      difficulty: 2, tuning: null,
+    }),
+    'Kirk Hammett | Lead Guitar · dificultad 2'
+  )
+  assert.equal(
+    etiquetaDePista({
+      name: 'Rhythm', instrument: 'Distortion Guitar', difficulty: 4, tuning: 'Drop D',
+    }),
+    'Rhythm · dificultad 4 · Drop D'
+  )
+})
+
+/* El catalogo trae nombres vacios y nombres en otros alfabetos ('Дорожка 1').
+   Sin nombre, el instrumento es lo unico que queda para distinguir la pista:
+   una opcion en blanco en el selector no se puede elegir a proposito. */
+test('sin nombre, la pista se identifica por su instrumento', () => {
+  assert.equal(
+    etiquetaDePista({ name: '', instrument: 'Acoustic Guitar (steel)', difficulty: 3, tuning: null }),
+    'Acoustic Guitar (steel) · dificultad 3'
+  )
+  assert.equal(
+    etiquetaDePista({ name: null, instrument: 'Drums', difficulty: 5, tuning: null }),
+    'Drums · dificultad 5'
   )
 })
