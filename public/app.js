@@ -364,6 +364,24 @@ for (const [id, ev] of [['min', 'min'], ['max', 'max']]) {
 $('#modo').addEventListener('change', sortear)
 $('#otra').addEventListener('click', sortear)
 
+/* Sortea ignorando los filtros SIN tocar los controles: los sliders, el modo y
+   las fichas de bandas quedan donde estan para el proximo sorteo normal.
+
+   Y NO pisa la linea de "cuantas calzan": esa linea describe lo que los
+   controles prometen, y este sorteo no salio de los controles. Pisarla la
+   dejaria describiendo un universo que la proxima vez que pulses Sortear ya no
+   es el tuyo. Por eso se llama a pintarCancion (no a pintar): dibuja la
+   tarjeta y reinicia la pista elegida, pero no toca #calzan ni #hint. */
+$('#todo').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/roll?todo=1')
+    pintarCancion(r.song)
+  } catch (err) {
+    $('#hint').className = 'hint mal'
+    $('#hint').textContent = `Error: ${err.message}. ¿Sigue corriendo \`npm start\`?`
+  }
+})
+
 for (const [id, status] of [['aprendida', 'learned'], ['descartada', 'skipped'], ['despues', 'queued']]) {
   $(`#${id}`).addEventListener('click', async () => { await marcar({ status }); sortear() })
 }

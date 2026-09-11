@@ -86,6 +86,19 @@ test('GET /api/stats responde los cuatro contadores', () => conApp(async url => 
   assert.deepEqual(Object.keys(body).sort(), ['available', 'enriched', 'pending', 'total'])
 }))
 
+/* La cancion que conApp siembra es dificultad 4 y con distorsion, asi que un
+   filtro de acustico 1-2 la deja fuera. Es exactamente el par que hace falta:
+   una consulta que no devuelve nada, y la misma con todo=1 que si. */
+test('/api/roll?todo=1 ignora los filtros que vengan en la query', () => conApp(async url => {
+  const filtrado = await (await fetch(`${url}/api/roll?mode=acoustic&maxDifficulty=2`)).json()
+  assert.equal(filtrado.song, null)
+  assert.equal(filtrado.matching, 0)
+
+  const todo = await (await fetch(`${url}/api/roll?mode=acoustic&maxDifficulty=2&todo=1`)).json()
+  assert.equal(todo.song.title, 'One')
+  assert.equal(todo.matching, 1)
+}))
+
 test('una ruta desconocida devuelve 404', () => conApp(async url => {
   assert.equal((await fetch(`${url}/api/nada`)).status, 404)
 }))
