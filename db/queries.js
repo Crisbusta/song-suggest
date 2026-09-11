@@ -10,28 +10,58 @@ import { construirIndice, expandirArtistas, claveDeArtista } from '../public/art
 
 export const MODES = ['surprise', 'riffs', 'acoustic', 'solos']
 
-// Exclusiones permanentes: ya decidido, basura del catalogo, o sin enriquecer.
+/* Exclusiones permanentes: ya decidido, basura del catalogo, o sin enriquecer.
+
+   El predicado vive en la PISTA (`g`), no en la cancion. Modo y dificultad se
+   evaluan sobre la MISMA fila `g` a proposito: escribirlo como dos
+   existenciales sueltos -- "existe una acustica y existe una facil" -- deja
+   entrar canciones donde ninguna sola pista sirve. Medido sobre el universo
+   sorteable al 2026-09-11: 178 canciones fantasma en acustico + 1-2 (1.881
+   correctas contra 2.059). Ver test/pistas.test.js. */
 const BASE_FROM = `
   FROM songs s
-  JOIN representative_track r ON r.song_id = s.song_id
+  JOIN guitar_tracks g ON g.song_id = s.song_id
   LEFT JOIN song_state st ON st.song_id = s.song_id
   WHERE s.enriched_at IS NOT NULL
     AND s.is_junk = 0 AND s.ai_generated = 0 AND s.is_blank = 0 AND s.is_published = 1
     AND st.status IS NULL
-    AND r.difficulty BETWEEN ? AND ?
+    AND g.difficulty BETWEEN ? AND ?
 `
 
 const MODE_SQL = {
   surprise: '',
-  riffs: ` AND r.instrument IN ('Distortion Guitar','Overdriven Guitar') AND s.fingerstyle = 0`,
-  acoustic: ` AND (s.fingerstyle = 1 OR r.instrument IN ('Acoustic Guitar (nylon)','Acoustic Guitar (steel)'))`,
-  solos: ` AND (r.name LIKE '%Lead%' OR r.name LIKE '%Solo%')`,
+  riffs: ` AND g.instrument IN ('Distortion Guitar','Overdriven Guitar') AND s.fingerstyle = 0`,
+  acoustic: ` AND (s.fingerstyle = 1 OR g.instrument IN ('Acoustic Guitar (nylon)','Acoustic Guitar (steel)'))`,
+  solos: ` AND (g.name LIKE '%Lead%' OR g.name LIKE '%Solo%')`,
 }
 
 const COLUMNS = `
   s.song_id, s.artist, s.title, s.videos,
-  r.difficulty, r.instrument, r.name AS track_name, r.tuning,
+  g.track_index, g.difficulty, g.instrument, g.name AS track_name, g.tuning,
   COALESCE(st.liked, 0) AS liked
+`
+
+/* Una fila por cancion: la pista mas vista DE LAS QUE CALIFICAN.
+
+   Cumple dos cosas a la vez, y las dos importan:
+
+   1. Elige la pista por defecto. Que sea la mas vista de las que CALIFICAN --
+      y no la mas vista a secas -- es lo que evita que pidas "facil" y la
+      tarjeta abra en una pista de dificultad 5.
+   2. Deduplica. Sin esto, una cancion con tres pistas que califican aparece
+      tres veces y `ORDER BY RANDOM()` la elige tres veces mas seguido que a
+      una de una sola pista. El sorteo tiene que ser uniforme por CANCION.
+
+   Desempate por track_index para ser determinista, igual que
+   representative_track. */
+const unaPorCancion = cuerpo => `
+  SELECT * FROM (
+    SELECT ${COLUMNS},
+           ROW_NUMBER() OVER (
+             PARTITION BY s.song_id ORDER BY g.views DESC, g.track_index ASC
+           ) AS rn
+    ${cuerpo}
+  ) WHERE rn = 1
 `
 
 /* La lista que alimenta el buscador de bandas.
@@ -44,7 +74,7 @@ const COLUMNS = `
    lista cuando se queda sin canciones sorteables. */
 export function listarArtistas(db) {
   return construirIndice(db.prepare(`
-    SELECT s.artist, COUNT(*) c ${BASE_FROM} GROUP BY s.artist ORDER BY c DESC
+    SELECT s.artist, COUNT(DISTINCT s.song_id) c ${BASE_FROM} GROUP BY s.artist ORDER BY c DESC
   `).all(1, 10))
 }
 
@@ -70,7 +100,7 @@ function filtroArtistas(indice, elegidas) {
 }
 
 function contar(db, mode, min, max, fa = { sql: '', params: [] }) {
-  return db.prepare(`SELECT COUNT(*) c ${BASE_FROM}${MODE_SQL[mode]}${fa.sql}`)
+  return db.prepare(`SELECT COUNT(DISTINCT s.song_id) c ${BASE_FROM}${MODE_SQL[mode]}${fa.sql}`)
     .get(min, max, ...fa.params).c
 }
 
@@ -180,17 +210,20 @@ export function roll(db, opts = {}) {
   let fila
   if (mode === 'solos') {
     // Sesgo al extremo alto: el tercio superior por dificultad, minimo 20,
-    // para que un rango angosto no deje el sorteo entre dos canciones.
+    // para que un rango angosto no deje el sorteo entre dos canciones. La
+    // dificultad que ordena es la de la PISTA ELEGIDA, ya resuelta por
+    // unaPorCancion.
     const pool = Math.max(20, Math.ceil(matching / 3))
     fila = db.prepare(`
       SELECT * FROM (
-        SELECT ${COLUMNS} ${BASE_FROM}${MODE_SQL.solos}${fa.sql}
-        ORDER BY r.difficulty DESC, s.song_id ASC LIMIT ?
+        ${unaPorCancion(`${BASE_FROM}${MODE_SQL.solos}${fa.sql}`)}
+        ORDER BY difficulty DESC, song_id ASC LIMIT ?
       ) ORDER BY RANDOM() LIMIT 1
     `).get(minDifficulty, maxDifficulty, ...fa.params, pool)
   } else {
     fila = db.prepare(`
-      SELECT ${COLUMNS} ${BASE_FROM}${MODE_SQL[mode]}${fa.sql} ORDER BY RANDOM() LIMIT 1
+      ${unaPorCancion(`${BASE_FROM}${MODE_SQL[mode]}${fa.sql}`)}
+      ORDER BY RANDOM() LIMIT 1
     `).get(minDifficulty, maxDifficulty, ...fa.params)
   }
 
@@ -233,7 +266,7 @@ export function getList(db, list) {
   const filas = db.prepare(`
     SELECT ${COLUMNS}
     FROM songs s
-    JOIN representative_track r ON r.song_id = s.song_id
+    JOIN representative_track g ON g.song_id = s.song_id
     JOIN song_state st ON st.song_id = s.song_id
     WHERE ${filtro}
     ORDER BY st.updated_at DESC
@@ -246,7 +279,7 @@ export function getStats(db) {
   const s = db.prepare(`
     SELECT COUNT(*) total, SUM(enriched_at IS NOT NULL) enriched FROM songs
   `).get()
-  const available = db.prepare(`SELECT COUNT(*) c ${BASE_FROM}`).get(1, 10).c
+  const available = db.prepare(`SELECT COUNT(DISTINCT s.song_id) c ${BASE_FROM}`).get(1, 10).c
   return {
     total: s.total,
     enriched: s.enriched ?? 0,
