@@ -1,7 +1,7 @@
 import { ampli } from './ampli-usb.js'
 import { montarEditor } from './editor.js'
 import { crearCatalogo, RANURAS, VACIA } from './catalogo-lt25.js'
-import { esc, etiquetaDePista, parametrosAmpQueViajan, resumenEnvioAmpli } from './tarjeta.js'
+import { esc, parametrosAmpQueViajan, resumenEnvioAmpli, selectorDePistas } from './tarjeta.js'
 import { buscarArtistas, claveDeArtista } from './artistas.js'
 
 const $ = s => document.querySelector(s)
@@ -48,12 +48,23 @@ function pintar({ song, matching, hint }) {
   $('#calzan').textContent = matching === 1
     ? '1 canción calza con estos filtros'
     : `${matching.toLocaleString('es-CL')} canciones calzan con estos filtros`
-  // Cada tirada abre en la pista que eligio el servidor: la mas vista de las
-  // que califican. Lo que se estaba mirando era de la cancion anterior.
+  pintarCancion(song)
+}
+
+/* Dibuja una cancion DISTINTA. Por aca tiene que entrar todo camino que cambie
+   de cancion sin pasar por los controles -- el sorteo de todo de la Task 4 --
+   y no por `pintarTarjeta` directo: `pistaElegida` es un indice dentro de ESTA
+   cancion, y heredarlo de la anterior no es solo un indice fuera de rango, es
+   la tarjeta describiendo una pista mientras el selector marca otra. Cada
+   tirada abre en la pista que eligio el servidor: la mas vista de las que
+   califican. */
+function pintarCancion(song) {
   pistaElegida = song?.pistaPorDefecto ?? 0
   pintarTarjeta(song)
 }
 
+// Redibuja la tarjeta de la cancion que ya esta en pantalla, con la pista que
+// haya elegida. No toca el contador ni el aviso: el filtro no se movio.
 function pintarTarjeta(song) {
   actual = song
 
@@ -74,21 +85,10 @@ function pintarTarjeta(song) {
      cabecera y el selector no puedan contradecirse. */
   const pista = song.pistas[pistaElegida]
 
-  /* El selector solo aparece con dos pistas o mas: con una sola no hay nada
-     que elegir. Las que no cumplen el filtro se listan igual, marcadas --
-     quien mira tiene que poder ver por que salio esta cancion. */
-  const selectorPistas = song.pistas.length > 1 ? `
-    <div class="pistas">
-      <label for="pista">Pista</label>
-      <select id="pista">
-        ${song.pistas.map((p, i) => `
-          <option value="${i}"${i === pistaElegida ? ' selected' : ''}${p.califica ? '' : ' class="no-califica"'}>
-            ${esc(etiquetaDePista(p))}${p.califica ? '' : ' — fuera del filtro'}
-          </option>
-        `).join('')}
-      </select>
-    </div>
-  ` : ''
+  // El selector: logica pura, ver tarjeta.js#selectorDePistas (que decide
+  // cuando no hay nada que elegir, cual opcion viene marcada y como se dicen
+  // las pistas que no cumplen el filtro).
+  const selectorPistas = selectorDePistas(song.pistas, pistaElegida)
 
   // La dificultad decide si intentas la cancion o no, asi que deja de ser un
   // chip igual a "90s" y pasa a medidor. El numero va al lado porque el color
@@ -257,11 +257,30 @@ function pintarTarjeta(song) {
   $('#pista')?.addEventListener('change', e => {
     pistaElegida = Number(e.target.value)
     pintarTarjeta(actual)   // el mismo objeto: no se le pide nada al servidor
+    /* El `<select>` se destruye a si mismo al redibujar, y el foco se caeria
+       al `<body>`. En Firefox y en el Chrome de Windows las flechas sobre un
+       desplegable cerrado disparan `change` en cada tecla: sin devolver el
+       foco, recorrer las pistas con el teclado se corta en la primera. */
+    $('#pista')?.focus()
   })
 
   // Reinicia la animacion de entrada en cada tirada.
   void $('#tarjeta').offsetWidth
   pintarBotonEnviar()
+  pintarSelectorPistas()
+}
+
+/* El selector se bloquea mientras hay un envio en curso, igual que el boton de
+   enviar. No es cosmetico: cambiar de pista redibuja la tarjeta, y el envio que
+   sigue corriendo (hasta 64 s en el peor caso, ver mas abajo) escribiria su
+   resultado -- incluidos los avisos en rojo, que este proyecto se niega a
+   tragarse -- en un `#envio-estado` que ya no esta en pantalla, dejando el
+   ampli con un tono que la tarjeta no muestra y sin decir nada. El sorteo se
+   salva solo, porque `actual` cambia y `abandonar()` lo detecta; el cambio de
+   pista no, porque la cancion es la misma. */
+function pintarSelectorPistas() {
+  const s = $('#pista')
+  if (s) s.disabled = enviando
 }
 
 // Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
@@ -494,6 +513,7 @@ $('#tarjeta').addEventListener('click', async e => {
   const cancion = actual
   const b = $('#enviar-ampli'), estado = $('#envio-estado')
   b.disabled = true
+  pintarSelectorPistas()
   estado.className = 'envio-estado'
   estado.textContent = 'enviando…'
 
@@ -960,6 +980,7 @@ $('#tarjeta').addEventListener('click', async e => {
     // tirada nueva o revienta a mitad.
     await ampli.cerrarSync()
     enviando = false
+    pintarSelectorPistas()
   }
 })
 

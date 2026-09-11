@@ -152,3 +152,33 @@ export function etiquetaDePista(pista) {
     .filter(Boolean)
     .join(' · ')
 }
+
+/* El selector de pista de la tarjeta: el bloque entero, o vacio cuando no hay
+   nada que elegir.
+
+   Devuelve HTML, igual que `resumenEnvioAmpli` devuelve la frase del pie: lo
+   que decide QUE dice la tarjeta vive aca, con test, y app.js solo lo pega en
+   su sitio. Con una sola pista no se dibuja nada -- ofrecer un desplegable de
+   una opcion es prometer una eleccion que no existe.
+
+   El `esc()` es de esta funcion y no de quien la llama: `name` sale del
+   catalogo, es texto de terceros, y no puede depender de que cada sitio de
+   uso se acuerde.
+
+   Las pistas que no cumplen el filtro se listan igual, marcadas: quien mira
+   tiene que poder ver por que salio esta cancion y cual pista no fue el
+   motivo. */
+export function selectorDePistas(pistas, elegida) {
+  if (pistas.length <= 1) return ''
+  const opciones = pistas.map((p, i) => `
+          <option value="${i}"${i === elegida ? ' selected' : ''}${p.califica ? '' : ' class="no-califica"'}>
+            ${esc(etiquetaDePista(p))}${p.califica ? '' : ' — fuera del filtro'}
+          </option>
+        `).join('')
+  return `
+    <div class="pistas">
+      <label for="pista">Pista</label>
+      <select id="pista">${opciones}</select>
+    </div>
+  `
+}

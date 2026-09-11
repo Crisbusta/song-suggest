@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   esc, parametrosAmpQueViajan, NOMBRE_PERILLA_AMPLI, nombrePerillaAmpli,
-  conjuncion, resumenEnvioAmpli, etiquetaDePista,
+  conjuncion, resumenEnvioAmpli, etiquetaDePista, selectorDePistas,
 } from '../public/tarjeta.js'
 
 // --- esc ---------------------------------------------------------------
@@ -185,4 +185,50 @@ test('sin nombre, la pista se identifica por su instrumento', () => {
     etiquetaDePista({ name: null, instrument: 'Drums', difficulty: 5, tuning: null }),
     'Drums · dificultad 5'
   )
+})
+
+// --- selectorDePistas -------------------------------------------------------
+
+const pistaDe = (o = {}) => ({
+  name: 'Rhythm', instrument: 'Distortion Guitar', difficulty: 3, tuning: null,
+  califica: true, ...o,
+})
+
+/* Con una sola pista no hay nada que elegir: el bloque entero no se dibuja.
+   Es lo que separa "la cancion tiene una pista" de "la cancion tiene una
+   pista y te la ofrezco como si pudieras cambiarla". */
+test('con una sola pista no hay selector', () => {
+  assert.equal(selectorDePistas([pistaDe()], 0), '')
+  assert.equal(selectorDePistas([], 0), '')
+})
+
+test('con dos pistas o mas, el selector marca selected SOLO en la elegida', () => {
+  const html = selectorDePistas([pistaDe({ name: 'A' }), pistaDe({ name: 'B' }), pistaDe({ name: 'C' })], 1)
+  assert.match(html, /<select id="pista">/)
+  assert.match(html, /<option value="1" selected/)
+  assert.equal(html.match(/ selected/g).length, 1, 'una sola opcion puede venir seleccionada')
+  assert.match(html, /<option value="0"[^>]*>\s*A · dificultad 3\s*<\/option>/)
+})
+
+/* Las que no cumplen el filtro se listan igual y se dicen: quien mira tiene
+   que poder ver por que salio esta cancion y cual pista no fue el motivo. */
+test('las pistas que no califican se marcan, y las que califican no', () => {
+  const html = selectorDePistas([
+    pistaDe({ name: 'Sirve', califica: true }),
+    pistaDe({ name: 'No sirve', califica: false }),
+  ], 0)
+  assert.match(html, /<option value="1"[^>]*class="no-califica"[^>]*>\s*No sirve · dificultad 3 — fuera del filtro\s*<\/option>/)
+  assert.match(html, /<option value="0"[^>]*>\s*Sirve · dificultad 3\s*<\/option>/)
+  assert.equal(html.match(/no-califica/g).length, 1)
+  assert.equal(html.match(/fuera del filtro/g).length, 1)
+})
+
+// El nombre de la pista es texto de terceros: sale del catalogo y entra a HTML.
+test('el nombre de la pista se escapa', () => {
+  const html = selectorDePistas([
+    pistaDe({ name: '<img src=x onerror="alert(1)">' }), pistaDe({ name: 'M&M' }),
+  ], 0)
+  assert.ok(!html.includes('<img'), 'no puede quedar una etiqueta cruda del catalogo')
+  assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/)
+  assert.match(html, /M&amp;M/)
 })
