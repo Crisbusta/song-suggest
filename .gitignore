@@ -5,3 +5,4 @@ node_modules/
 .superpowers/
 songs.db-wal
 songs.db-shm
+.playwright-mcp/
