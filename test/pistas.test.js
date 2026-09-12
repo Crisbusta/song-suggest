@@ -213,3 +213,63 @@ test('en las listas guardadas todas las pistas califican', () => {
   assert.ok(song.pistas.every(p => p.califica))
   assert.equal(song.pistas[song.pistaPorDefecto].name, 'A')
 })
+
+/* La conjuncion de arriba pero por el otro lado del predicado: el modo es el
+   que viaja en `MODE_SQL` y la dificultad la que viaja en `BASE_FROM`, asi que
+   cada modo podria desviarse solo. El SQL es generico y hoy los tres se
+   comportan igual; estos dos son seguro contra una regresion, no un bug
+   sospechado. */
+test('riffs: la distorsionada dificil y la facil limpia no hacen una cancion facil con riffs', () => {
+  const db = base()
+  agregarConPistas(db, {
+    title: 'Fantasma con riffs',
+    pistas: [
+      { instrument: 'Distortion Guitar', difficulty: 9, views: 5000 },
+      { instrument: 'Electric Guitar (clean)', difficulty: 1, views: 4000 },
+    ],
+  })
+  const r = roll(db, { mode: 'riffs', minDifficulty: 1, maxDifficulty: 2 })
+  assert.equal(r.matching, 0, 'la distorsionada es dificil y la facil no es distorsionada')
+  assert.equal(r.song, null)
+})
+
+test('riffs: una sola pista distorsionada y facil si califica', () => {
+  const db = base()
+  agregarConPistas(db, {
+    title: 'Sirve con riffs',
+    pistas: [
+      { instrument: 'Electric Guitar (clean)', difficulty: 9, views: 5000 },
+      { instrument: 'Distortion Guitar', difficulty: 2, views: 4000 },
+    ],
+  })
+  const r = roll(db, { mode: 'riffs', minDifficulty: 1, maxDifficulty: 2 })
+  assert.equal(r.matching, 1)
+  assert.equal(r.song.title, 'Sirve con riffs')
+})
+
+test('solos: el Lead dificil y la facil sin solo no hacen un solo facil', () => {
+  const db = base()
+  agregarConPistas(db, {
+    title: 'Fantasma con solo',
+    pistas: [
+      { name: 'Lead Guitar', difficulty: 9, views: 5000 },
+      { name: 'Rhythm Guitar', difficulty: 1, views: 4000 },
+    ],
+  })
+  const r = roll(db, { mode: 'solos', minDifficulty: 1, maxDifficulty: 2 })
+  assert.equal(r.matching, 0, 'el Lead es dificil y la facil no es Lead')
+  assert.equal(r.song, null)
+})
+
+/* Lo que la tarjeta usa de cada pista, y nada mas. `views` ordena las pistas
+   en el servidor y ahi termina su trabajo: mandarla al navegador era un campo
+   que nadie leia. */
+test('cada pista trae exactamente los campos que la tarjeta lee', () => {
+  const db = base()
+  agregarConPistas(db, { pistas: [{ name: 'Unica', views: 900 }] })
+  const { pistas } = roll(db, {}).song
+  assert.deepEqual(
+    Object.keys(pistas[0]).sort(),
+    ['ampli', 'califica', 'difficulty', 'instrument', 'name', 'trackIndex', 'tuning']
+  )
+})

@@ -35,9 +35,13 @@ const MODE_SQL = {
   solos: ` AND (g.name LIKE '%Lead%' OR g.name LIKE '%Solo%')`,
 }
 
+// g.instrument, g.name y g.tuning no viajan: hidratar() no los lee, saca los
+// datos de cada pista de nuevo desde guitar_tracks (pistasDeLaCancion). Queda
+// g.difficulty porque el ORDER BY difficulty de la busqueda en modo solos
+// mas abajo lo necesita.
 const COLUMNS = `
   s.song_id, s.artist, s.title, s.videos,
-  g.track_index, g.difficulty, g.instrument, g.name AS track_name, g.tuning,
+  g.track_index, g.difficulty,
   COALESCE(st.liked, 0) AS liked
 `
 
@@ -164,7 +168,6 @@ function pistasDeLaCancion(db, fila, tags, califican) {
       instrument: p.instrument,
       name: p.name,
       difficulty: p.difficulty,
-      views: p.views,
       tuning,
       califica: califican ? califican.has(p.track_index) : true,
       // Punto de partida para el ampli, o null si los tags no dan senal util.
