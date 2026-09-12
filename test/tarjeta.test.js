@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   esc, parametrosAmpQueViajan, NOMBRE_PERILLA_AMPLI, nombrePerillaAmpli,
   conjuncion, resumenEnvioAmpli, etiquetaDePista, selectorDePistas,
+  urlUltimateGuitar,
 } from '../public/tarjeta.js'
 
 // --- esc ---------------------------------------------------------------
@@ -231,4 +232,43 @@ test('el nombre de la pista se escapa', () => {
   assert.ok(!html.includes('<img'), 'no puede quedar una etiqueta cruda del catalogo')
   assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/)
   assert.match(html, /M&amp;M/)
+})
+
+/* La busqueda de Ultimate Guitar lleva banda y titulo juntos: en este catalogo
+   hay artistas oscuros donde el titulo solo no alcanza. Verificado contra su
+   buscador real -- "iron maiden fear of the dark" y "metallica one" ponen la
+   correcta primera. */
+test('urlUltimateGuitar arma la busqueda con banda y titulo', () => {
+  assert.equal(
+    urlUltimateGuitar('Iron Maiden', 'Fear of the Dark'),
+    'https://www.ultimate-guitar.com/search.php?search_type=title&value=Iron%20Maiden%20Fear%20of%20the%20Dark'
+  )
+})
+
+/* El titulo va TAL CUAL, sin limpiar. Los 944 titulos con parentesis del
+   catalogo son casi todos parentesis de verdad -- "Welcome Home (Sanitarium)",
+   "Snow (Hey Oh)" -- y quitarlos empeoraria la busqueda en vez de mejorarla. */
+test('urlUltimateGuitar no toca los parentesis del titulo', () => {
+  const url = urlUltimateGuitar('Metallica', 'Welcome Home (Sanitarium)')
+  assert.ok(url.includes('Welcome%20Home%20(Sanitarium)'), url)
+})
+
+test('urlUltimateGuitar escapa lo que romperia la URL', () => {
+  const url = urlUltimateGuitar('AC/DC', 'Rock & Roll Ain\'t Noise Pollution')
+  assert.ok(url.includes('AC%2FDC'), 'la barra no puede quedar cruda: ' + url)
+  assert.ok(url.includes('%26'), 'el ampersand tampoco, partiria el query: ' + url)
+})
+
+test('urlUltimateGuitar conserva los acentos escapados, no los borra', () => {
+  const url = urlUltimateGuitar('Maná', 'Corazón Espinado')
+  assert.ok(url.includes('Man%C3%A1'), url)
+  assert.ok(!url.includes('Mana&'), 'no se transliteran: es lo que el buscador espera')
+})
+
+/* Sin uno de los dos no hay busqueda util que ofrecer. Devolver una URL a medias
+   mandaria al usuario a una pagina de resultados vacia con su nombre encima. */
+test('urlUltimateGuitar devuelve null si falta la banda o el titulo', () => {
+  assert.equal(urlUltimateGuitar('', 'One'), null)
+  assert.equal(urlUltimateGuitar('Metallica', ''), null)
+  assert.equal(urlUltimateGuitar(null, null), null)
 })

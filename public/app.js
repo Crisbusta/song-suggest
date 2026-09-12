@@ -1,7 +1,9 @@
 import { ampli } from './ampli-usb.js'
 import { montarEditor } from './editor.js'
 import { crearCatalogo, RANURAS, VACIA } from './catalogo-lt25.js'
-import { esc, parametrosAmpQueViajan, resumenEnvioAmpli, selectorDePistas } from './tarjeta.js'
+import {
+  esc, parametrosAmpQueViajan, resumenEnvioAmpli, selectorDePistas, urlUltimateGuitar,
+} from './tarjeta.js'
 import { buscarArtistas, claveDeArtista } from './artistas.js'
 
 const $ = s => document.querySelector(s)
@@ -255,6 +257,11 @@ function pintarTarjeta(song, sinFiltros = false) {
        </div>`
     : ''
 
+  // Una BUSQUEDA en Ultimate Guitar, no la tab exacta: ver el docblock de
+  // urlUltimateGuitar para por que no puede ser mejor que eso. Es null cuando
+  // falta la banda o el titulo, y entonces el enlace no se dibuja.
+  const urlUG = urlUltimateGuitar(song.artist, song.title)
+
   /* El panel del ampli y un video sonando describen la CANCION, no la pista:
      perderlos en cada cambio de pista le cobraria un clic extra justo a la
      comparacion de tonos que el selector existe para habilitar (ver el
@@ -281,6 +288,7 @@ function pintarTarjeta(song, sinFiltros = false) {
     ${preview}
     <p class="enlaces">
       <a href="${esc(song.url)}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
+      ${urlUG ? ` · <a href="${esc(urlUG)}" target="_blank" rel="noopener">Buscarla en Ultimate Guitar</a>` : ''}
       ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
 
