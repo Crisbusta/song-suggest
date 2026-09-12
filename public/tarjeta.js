@@ -249,7 +249,7 @@ export function listaDePistas(pistas, elegida) {
         </button>`
       }).join('')}
     </section>`).join('')
-  return `<div class="pistas-lista"><p class="pistas-titulo">Pistas · ${pistas.length}<span>teclas 1–${Math.min(9, pistas.length)} para cambiar</span></p><div class="pistas-filas${pistas.length > 6 ? ' con-scroll' : ''}">${contenido}</div></div>`
+  return `<div class="pistas-lista"><p class="pistas-titulo">Pistas · ${pistas.length}<span>teclas 1–${Math.min(9, pistas.length)} para cambiar</span></p><div class="pistas-filas">${contenido}</div></div>`
 }
 
 /* Un enlace a la BUSQUEDA de Ultimate Guitar, no a una tab concreta.
