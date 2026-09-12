@@ -311,17 +311,25 @@ function pintarTarjeta(song, sinFiltros = false) {
   pintarSelectorPistas()
 }
 
-/* El selector se bloquea mientras hay un envio en curso, igual que el boton de
-   enviar. No es cosmetico: cambiar de pista redibuja la tarjeta, y el envio que
-   sigue corriendo (hasta 64 s en el peor caso, ver mas abajo) escribiria su
-   resultado -- incluidos los avisos en rojo, que este proyecto se niega a
-   tragarse -- en un `#envio-estado` que ya no esta en pantalla, dejando el
-   ampli con un tono que la tarjeta no muestra y sin decir nada. El sorteo se
-   salva solo, porque `actual` cambia y `abandonar()` lo detecta; el cambio de
-   pista no, porque la cancion es la misma. */
+/* El selector se bloquea mientras hay un envio EN CURSO SOBRE ESTA TARJETA,
+   igual que el boton de enviar. No es cosmetico: cambiar de pista redibuja la
+   tarjeta, y el envio que sigue corriendo (hasta 64 s en el peor caso, ver mas
+   abajo) escribiria su resultado -- incluidos los avisos en rojo, que este
+   proyecto se niega a tragarse -- en un `#envio-estado` que ya no esta en
+   pantalla, dejando el ampli con un tono que la tarjeta no muestra y sin decir
+   nada. El sorteo se salva solo, porque `actual` cambia y `abandonar()` lo
+   detecta; el cambio de pista no, porque la cancion es la misma.
+
+   Ojo con `enviando` a secas: es cierto mientras CUALQUIER envio esta en
+   curso, y un envio fijo su propia cancion al arrancar (`cancionEnviando`,
+   ver mas abajo) -- si mientras tanto se sortea una cancion nueva, ese envio
+   ya no puede tocarla (`abandonar()` corta apenas `actual !== cancion`). Sin
+   distinguir esto, la tarjeta NUEVA quedaria con el selector deshabilitado
+   hasta 64 s por un envio que no la afecta. Se compara contra `actual`, que
+   ya es la cancion de ESTA tarjeta en el momento en que esto se llama. */
 function pintarSelectorPistas() {
   const s = $('#pista')
-  if (s) s.disabled = enviando
+  if (s) s.disabled = enviando && actual === cancionEnviando
 }
 
 // Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
@@ -531,6 +539,10 @@ if (ampli.soportado()) {
 // ya tiene el listener del preview de YouTube: conviven porque cada uno
 // filtra por su propio objetivo.
 let enviando = false
+// La cancion que ese envio en curso puede afectar. Se compara contra `actual`
+// en `pintarSelectorPistas()` para que una tarjeta nueva, sorteada mientras
+// otro envio sigue corriendo, no herede su bloqueo -- ver el docblock de ahi.
+let cancionEnviando = null
 $('#tarjeta').addEventListener('click', async e => {
   if (e.target.id !== 'enviar-ampli') return
   if (!hayQueEnviar(actual)) return
@@ -572,6 +584,7 @@ $('#tarjeta').addEventListener('click', async e => {
   // `#tarjeta` se reemplaza por completo, pero este envio sigue corriendo
   // sobre los nodos y valores de la cancion original.
   const cancion = actual
+  cancionEnviando = cancion
   const b = $('#enviar-ampli'), estado = $('#envio-estado')
   b.disabled = true
   pintarSelectorPistas()
@@ -1041,6 +1054,7 @@ $('#tarjeta').addEventListener('click', async e => {
     // tirada nueva o revienta a mitad.
     await ampli.cerrarSync()
     enviando = false
+    cancionEnviando = null
     pintarSelectorPistas()
   }
 })
