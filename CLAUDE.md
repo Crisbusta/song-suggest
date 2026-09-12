@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **`AGENTS.md` es un enlace simbólico a este archivo.** Si llegaste por ahí,
+> estás en el sitio correcto: las convenciones son las mismas para cualquier
+> agente. Se mantiene una sola copia a propósito — dos archivos de reglas se
+> desvían, y entonces cada agente obedece una versión distinta.
+
 ## Comandos
 
 ```bash
