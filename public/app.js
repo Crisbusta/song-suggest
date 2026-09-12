@@ -69,21 +69,25 @@ function pintar({ song, matching, hint }) {
    la tarjeta describiendo una pista mientras el selector marca otra. Cada
    tirada abre en la pista que eligio el servidor: la mas vista de las que
    califican. */
-function pintarCancion(song) {
+function pintarCancion(song, sinFiltros = false) {
   pistaElegida = song?.pistaPorDefecto ?? 0
-  pintarTarjeta(song)
+  pintarTarjeta(song, sinFiltros)
 }
 
 // Redibuja la tarjeta de la cancion que ya esta en pantalla, con la pista que
 // haya elegida. No toca el contador ni el aviso: el filtro no se movio.
-function pintarTarjeta(song) {
+// `sinFiltros` distingue el vacio del sorteo de todo (no hay filtro que
+// nombrar) del vacio de un sorteo filtrado -- son dos frases, no una.
+function pintarTarjeta(song, sinFiltros = false) {
   // Capturado ANTES de pisar `actual`: es la comparacion contra la cancion que
   // HABIA en pantalla, no contra la que esta por entrar.
   const mismaCancion = song != null && actual === song
   actual = song
 
   if (!song) {
-    $('#tarjeta').innerHTML = '<p class="vacio">Nada que sortear con estos filtros.</p>'
+    $('#tarjeta').innerHTML = sinFiltros
+      ? '<p class="vacio">No queda ninguna canción por sortear.</p>'
+      : '<p class="vacio">Nada que sortear con estos filtros.</p>'
     for (const id of ['aprendida', 'descartada', 'despues', 'like']) $(`#${id}`).disabled = true
     return
   }
@@ -403,11 +407,18 @@ $('#otra').addEventListener('click', sortear)
    controles prometen, y este sorteo no salio de los controles. Pisarla la
    dejaria describiendo un universo que la proxima vez que pulses Sortear ya no
    es el tuyo. Por eso se llama a pintarCancion (no a pintar): dibuja la
-   tarjeta y reinicia la pista elegida, pero no toca #calzan ni #hint. */
+   tarjeta y reinicia la pista elegida, pero no toca el TEXTO de #calzan ni de
+   #hint -- #hint describe el filtro y este camino no tiene uno.
+
+   La CLASE de #hint es otra historia: un click anterior que fallo pudo haber
+   dejado `hint mal` puesto, y ese rojo sobrevive a un click exitoso si nadie
+   lo repone. Se reponen solo cuando el click SI tuvo error -- el texto que ya
+   estaba (el aviso del filtro) sigue siendo cierto y no se toca. */
 $('#todo').addEventListener('click', async () => {
   try {
     const r = await api('/api/roll?todo=1')
-    pintarCancion(r.song)
+    $('#hint').classList.remove('mal')
+    pintarCancion(r.song, true)
   } catch (err) {
     $('#hint').className = 'hint mal'
     $('#hint').textContent = `Error: ${err.message}. ¿Sigue corriendo \`npm start\`?`
