@@ -54,8 +54,10 @@
   <section class="acciones">
     <!-- Los tres de disposicion y el corazon arrancan deshabilitados: hasta que
          cargue la primera cancion no hay nada que marcar, y pulsarlos reventaria
-         sobre un `actual` null. pintar() los habilita al dibujar. "Otra" no: esa
-         siempre se puede pulsar. -->
+         sobre un `actual` null. pintarTarjeta() los habilita al dibujar (la
+         llaman pintar() y pintarCancion(), asi que "se habilitan al dibujar" es
+         cierto para las dos, pero solo de forma transitiva). "Otra" y "Sortear
+         de todo" no: esos siempre se pueden pulsar. -->
     <button id="aprendida" disabled>Ya la aprendí</button>
     <button id="descartada" disabled>No me tinca</button>
     <button id="despues" disabled>Después</button>

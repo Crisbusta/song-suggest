@@ -36,7 +36,6 @@
 | `public/index.html` | El botón de sortear de todo | 4 |
 | `public/style.css` | El estilo del selector y de la marca de "no califica" | 3 |
 | `server.js` | El parámetro `todo=1` de `/api/roll` | 4 |
-| `public/index.html` | El botón de sortear de todo | 4 |
 | `README.md` | Las dos secciones que quedan desactualizadas | 5 |
 
 ---
