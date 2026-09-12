@@ -4,14 +4,14 @@ Una web local, de un solo usuario, que sortea canciones de guitarra para
 aprender de un catálogo de Songsterr. Nace de un problema simple: con miles
 de tablaturas disponibles, elegir qué aprender es más difícil que aprenderlo.
 `song-suggest` sortea una canción al azar (con filtros de modo, dificultad y
-bandas)
+bandas, que miran las pistas de guitarra de la canción, no sólo la más tocada)
 y lleva la cuenta de lo que ya aprendiste, descartaste, dejaste para después
-o te gustó — para no volver a sortear lo mismo. Para cada canción sugiere
-además un punto de partida de perillas para un Fender Mustang LT25, y sabe
-mandárselo al amplificador por USB (ver [Enviar los ajustes al
-amplificador](#enviar-los-ajustes-al-amplificador)). Y trae un editor del
-amplificador entero, con sus cinco ranuras y todas sus perillas (ver [El editor
-del amplificador](#el-editor-del-amplificador)).
+o te gustó — para no volver a sortear lo mismo. Para la pista que elijas
+practicar sugiere además un punto de partida de perillas para un Fender
+Mustang LT25, y sabe mandárselo al amplificador por USB (ver [Enviar los
+ajustes al amplificador](#enviar-los-ajustes-al-amplificador)). Y trae un
+editor del amplificador entero, con sus cinco ranuras y todas sus perillas
+(ver [El editor del amplificador](#el-editor-del-amplificador)).
 
 Cero dependencias de npm: usa `node:sqlite`, `node:http` y `node:test`,
 todos incluidos en Node. Requiere **Node ≥ 24**.
@@ -54,6 +54,43 @@ Tres cosas que conviene saber:
 La elección **no se recuerda** entre recargas, igual que el modo y la
 dificultad.
 
+## Elegir la pista
+
+Casi ninguna canción tiene una sola guitarra. *Fade to Black* tiene seis pistas:
+dos acústicas para el intro y cuatro con distorsión para lo que viene después.
+La tarjeta te deja elegir cuál practicar, y cambia con ella la dificultad, el
+aviso de afinación y los ajustes que se le mandan al amplificador — elegir la
+acústica de Metallica te da un CHAMPION limpio, no el preset de banda a
+ganancia alta.
+
+**Los filtros miran todas las pistas.** Si pides dificultad 1-2, entra cualquier
+canción que tenga *una* pista de guitarra a ese nivel, aunque la más tocada sea
+más difícil. Eso suma 2.143 canciones al filtro fácil, 1.850 al modo Solos y
+1.064 al Acústico, sobre las 9.734 sorteables. Antes *Fade to Black* no salía en
+modo acústico: teniendo dos pistas acústicas, la app sólo miraba la más vista,
+que es la distorsión.
+
+Tres cosas que conviene saber:
+
+- **La pista que viene elegida es la más vista de las que cumplen tu filtro**,
+  no la más vista a secas. Si pides fácil, la tarjeta abre en una pista fácil.
+- **Se listan todas las pistas, también las que no cumplen el filtro**, marcadas
+  como tales. Así se ve por qué salió esta canción y cuál pista no fue el
+  motivo. No hay corte por popularidad: con uno al 10%, *Fade to Black* perdería
+  la guitarra rítmica de Hetfield.
+- **Marcar la canción como aprendida la marca entera**, hayas tocado el intro o
+  el riff. La cuenta es por canción, no por pista.
+
+La elección **no se recuerda** entre sorteos ni entre recargas, igual que el
+modo, la dificultad y las bandas.
+
+## Sortear de todo
+
+El botón **Sortear de todo** ignora el modo, la dificultad y las bandas por una
+vez, **sin tocar los controles**: al volver, tu configuración sigue donde la
+dejaste. El contador de "cuántas calzan" tampoco se mueve — sigue describiendo
+lo que tus controles prometen, no el sorteo que acabas de hacer.
+
 ## Banderas del ETL
 
 `npm run etl -- <banderas>`
@@ -72,9 +109,10 @@ una corrida completa por accidente.
 
 ## Enviar los ajustes al amplificador
 
-La tarjeta de cada canción trae unos ajustes sugeridos para un **Fender
-Mustang LT25**, y un botón que se los manda al equipo por USB — sin
-intermediarios: el navegador le habla directo por WebHID.
+La tarjeta trae unos ajustes sugeridos para un **Fender Mustang LT25** — los de
+la **pista que tengas elegida**, no los de la canción entera — y un botón que se
+los manda al equipo por USB, sin intermediarios: el navegador le habla directo
+por WebHID.
 
 Para que aparezca el botón:
 
@@ -89,15 +127,15 @@ Para que aparezca el botón:
 Qué manda la tarjeta y qué no:
 
 - **El botón sí cambia el modelo de amplificador.** Cada envío reemplaza la
-  unidad de la ranura `amp` por la que la canción sugiere (si la declara).
-  Sigue pudiéndose cambiar a mano en la rueda del equipo o en el editor —
-  pero el botón ya no lo deja quieto.
+  unidad de la ranura `amp` por la que la pista elegida sugiere (si la
+  declara). Sigue pudiéndose cambiar a mano en la rueda del equipo o en el
+  editor — pero el botón ya no lo deja quieto.
 - **Y manda la cadena de efectos completa: las cinco ranuras** (`stomp`,
-  `mod`, `amp`, `delay`, `reverb`), no sólo tres perillas. Las que la canción
-  usa cargan su propia unidad con sus valores; las que no usa **quedan
-  vacías** — esto pasa en cada envío, tenga o no la canción presets de la
-  comunidad.
-- **Contra que hay que asumir:** vaciar las ranuras que la canción no usa
+  `mod`, `amp`, `delay`, `reverb`), no sólo tres perillas. Las que la pista
+  elegida usa cargan su propia unidad con sus valores; las que no usa
+  **quedan vacías** — esto pasa en cada envío, tenga o no esa pista presets
+  de la comunidad.
+- **Contra que hay que asumir:** vaciar las ranuras que la pista elegida no usa
   **borra lo que hayas dialado a mano ahí**. Si sorteas surf y dejas puesto un
   slapback a mano, y después sorteas thrash, ese slapback no sobrevive al
   envío siguiente. Es a propósito: un tono a medias entre dos canciones no es
@@ -214,7 +252,8 @@ directo desde disco: `fender-protocolo.js` (`test/protocolo.test.js`),
 `catalogo-lt25.js` (`test/catalogo.test.js`), `despachador.js`
 (`test/despachador.test.js`) y `tarjeta.js` (`test/tarjeta.test.js`) — la
 lógica de la tarjeta sin DOM (qué perillas nombra la frase de envío, qué se
-manda al ampli), extraída de `app.js` porque ese archivo sí tiene efectos a
+manda al ampli, cómo se etiqueta y arma el selector de pistas), extraída de
+`app.js` porque ese archivo sí tiene efectos a
 nivel de módulo y no se puede importar en Node. Ahí la regla no aplica: es
 código sin DOM ni WebHID de por medio. `app.js`, `ampli-usb.js` y
 `editor.js` sí quedan sin tests, por lo mismo de arriba.

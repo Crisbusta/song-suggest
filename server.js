@@ -38,6 +38,13 @@ export function createApp(db) {
            Stills, Nash & Young", "Earth, Wind & Fire", "Emerson, Lake &
            Palmer" -- y partir por coma cortaria cada uno en varias bandas que
            no existen, dejando al usuario sin ninguna de sus canciones. */
+        /* El sorteo de todo: ignora modo, dificultad y bandas sin tocar los
+           controles, para que al volver la configuracion siga donde se dejo.
+           No es un modo nuevo en MODES: los modos son criterios de filtrado y
+           este es su ausencia, que es exactamente lo que roll() hace con sus
+           parametros por defecto. */
+        if (url.searchParams.get('todo') === '1') return json(res, 200, roll(db, {}))
+
         return json(res, 200, roll(db, {
           mode: url.searchParams.get('mode') ?? 'surprise',
           minDifficulty: entero('minDifficulty', 1),

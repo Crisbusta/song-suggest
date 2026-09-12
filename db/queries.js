@@ -10,28 +10,62 @@ import { construirIndice, expandirArtistas, claveDeArtista } from '../public/art
 
 export const MODES = ['surprise', 'riffs', 'acoustic', 'solos']
 
-// Exclusiones permanentes: ya decidido, basura del catalogo, o sin enriquecer.
+/* Exclusiones permanentes: ya decidido, basura del catalogo, o sin enriquecer.
+
+   El predicado vive en la PISTA (`g`), no en la cancion. Modo y dificultad se
+   evaluan sobre la MISMA fila `g` a proposito: escribirlo como dos
+   existenciales sueltos -- "existe una acustica y existe una facil" -- deja
+   entrar canciones donde ninguna sola pista sirve. Medido sobre el universo
+   sorteable al 2026-09-11: 178 canciones fantasma en acustico + 1-2 (1.881
+   correctas contra 2.059). Ver test/pistas.test.js. */
 const BASE_FROM = `
   FROM songs s
-  JOIN representative_track r ON r.song_id = s.song_id
+  JOIN guitar_tracks g ON g.song_id = s.song_id
   LEFT JOIN song_state st ON st.song_id = s.song_id
   WHERE s.enriched_at IS NOT NULL
     AND s.is_junk = 0 AND s.ai_generated = 0 AND s.is_blank = 0 AND s.is_published = 1
     AND st.status IS NULL
-    AND r.difficulty BETWEEN ? AND ?
+    AND g.difficulty BETWEEN ? AND ?
 `
 
 const MODE_SQL = {
   surprise: '',
-  riffs: ` AND r.instrument IN ('Distortion Guitar','Overdriven Guitar') AND s.fingerstyle = 0`,
-  acoustic: ` AND (s.fingerstyle = 1 OR r.instrument IN ('Acoustic Guitar (nylon)','Acoustic Guitar (steel)'))`,
-  solos: ` AND (r.name LIKE '%Lead%' OR r.name LIKE '%Solo%')`,
+  riffs: ` AND g.instrument IN ('Distortion Guitar','Overdriven Guitar') AND s.fingerstyle = 0`,
+  acoustic: ` AND (s.fingerstyle = 1 OR g.instrument IN ('Acoustic Guitar (nylon)','Acoustic Guitar (steel)'))`,
+  solos: ` AND (g.name LIKE '%Lead%' OR g.name LIKE '%Solo%')`,
 }
 
+// g.instrument, g.name y g.tuning no viajan: hidratar() no los lee, saca los
+// datos de cada pista de nuevo desde guitar_tracks (pistasDeLaCancion). Queda
+// g.difficulty porque el ORDER BY difficulty de la busqueda en modo solos
+// mas abajo lo necesita.
 const COLUMNS = `
   s.song_id, s.artist, s.title, s.videos,
-  r.difficulty, r.instrument, r.name AS track_name, r.tuning,
+  g.track_index, g.difficulty,
   COALESCE(st.liked, 0) AS liked
+`
+
+/* Una fila por cancion: la pista mas vista DE LAS QUE CALIFICAN.
+
+   Cumple dos cosas a la vez, y las dos importan:
+
+   1. Elige la pista por defecto. Que sea la mas vista de las que CALIFICAN --
+      y no la mas vista a secas -- es lo que evita que pidas "facil" y la
+      tarjeta abra en una pista de dificultad 5.
+   2. Deduplica. Sin esto, una cancion con tres pistas que califican aparece
+      tres veces y `ORDER BY RANDOM()` la elige tres veces mas seguido que a
+      una de una sola pista. El sorteo tiene que ser uniforme por CANCION.
+
+   Desempate por track_index para ser determinista, igual que
+   representative_track. */
+const unaPorCancion = cuerpo => `
+  SELECT * FROM (
+    SELECT ${COLUMNS},
+           ROW_NUMBER() OVER (
+             PARTITION BY s.song_id ORDER BY g.views DESC, g.track_index ASC
+           ) AS rn
+    ${cuerpo}
+  ) WHERE rn = 1
 `
 
 /* La lista que alimenta el buscador de bandas.
@@ -44,7 +78,7 @@ const COLUMNS = `
    lista cuando se queda sin canciones sorteables. */
 export function listarArtistas(db) {
   return construirIndice(db.prepare(`
-    SELECT s.artist, COUNT(*) c ${BASE_FROM} GROUP BY s.artist ORDER BY c DESC
+    SELECT s.artist, COUNT(DISTINCT s.song_id) c ${BASE_FROM} GROUP BY s.artist ORDER BY c DESC
   `).all(1, 10))
 }
 
@@ -70,7 +104,7 @@ function filtroArtistas(indice, elegidas) {
 }
 
 function contar(db, mode, min, max, fa = { sql: '', params: [] }) {
-  return db.prepare(`SELECT COUNT(*) c ${BASE_FROM}${MODE_SQL[mode]}${fa.sql}`)
+  return db.prepare(`SELECT COUNT(DISTINCT s.song_id) c ${BASE_FROM}${MODE_SQL[mode]}${fa.sql}`)
     .get(min, max, ...fa.params).c
 }
 
@@ -83,33 +117,88 @@ function contar(db, mode, min, max, fa = { sql: '', params: [] }) {
 const elegirVideo = (json, feature) =>
   JSON.parse(json ?? '[]').find(v => v.feature === feature)?.videoId ?? null
 
-function hidratar(db, fila) {
+/* Los track_index que cumplen el filtro con el que se sorteo esta cancion.
+
+   Se pregunta al MISMO SQL que decidio el sorteo -- BASE_FROM + MODE_SQL --
+   en vez de reimplementar el predicado en JavaScript. Dos copias de esta
+   regla se desviarian, y la tarjeta terminaria marcando como "califica" una
+   pista por la que el sorteo jamas habria devuelto la cancion. */
+function pistasQueCalifican(db, songId, mode, min, max) {
+  const filas = db.prepare(`
+    SELECT g.track_index ${BASE_FROM}${MODE_SQL[mode]} AND s.song_id = ?
+  `).all(min, max, songId)
+  return new Set(filas.map(f => f.track_index))
+}
+
+/* Todas las pistas de guitarra de una cancion, ordenadas por views, cada una
+   con su propio tono.
+
+   No hay corte de ruido, y es una decision medida, no un olvido: la
+   distribucion de views esta dominada por una pista desbocada, asi que
+   cualquier corte relativo castiga pistas legitimas. Con un corte al 10% del
+   maximo, Fade to Black pierde la ritmica de Hetfield (287.234 views contra
+   los 2.984.809 de Kirk) -- justo lo que alguien querria aprender. Peor: en
+   cada corte evaluado, miles de las pistas cortadas son la mas facil de su
+   cancion, o sea exactamente las que hacen que la cancion entre al filtro.
+   Cortar haria entrar canciones por una pista que despues no se muestra.
+   Ordenar por views hace solo el trabajo: el ruido se hunde al fondo, y el
+   94% de las canciones tiene cuatro pistas o menos.
+
+   `califican` es el conjunto de track_index que cumplen el filtro, o null
+   cuando no hubo filtro (getList): ahi todas califican. */
+function pistasDeLaCancion(db, fila, tags, califican) {
+  const filas = db.prepare(`
+    SELECT track_index, instrument, name, difficulty, views, tuning
+    FROM guitar_tracks WHERE song_id = ?
+    ORDER BY views DESC, track_index ASC
+  `).all(fila.song_id)
+
+  return filas.map(p => {
+    const tuning = describeTuning(p.tuning ? JSON.parse(p.tuning) : null)
+    /* `artist` y `title` no son opcionales: son lo unico con lo que
+       sugerirAjustes puede buscar un preset de la comunidad. Sin ellos la
+       busqueda nunca recibe un artista y todo el camino de los presets queda
+       inerte, con la suite en verde. */
+    const sugerencia = sugerirAjustes({
+      tags, instrument: p.instrument, tuning,
+      artist: fila.artist, title: fila.title,
+    })
+    return {
+      trackIndex: p.track_index,
+      instrument: p.instrument,
+      name: p.name,
+      difficulty: p.difficulty,
+      tuning,
+      califica: califican ? califican.has(p.track_index) : true,
+      // Punto de partida para el ampli, o null si los tags no dan senal util.
+      // paraElAmpli son los mismos valores en la escala que espera el equipo.
+      ampli: sugerencia && { ...sugerencia, paraElAmpli: paraElAmpli(sugerencia) },
+    }
+  })
+}
+
+/* `califican` viene del sorteo (los track_index que cumplen el filtro) o es
+   null desde getList, que no filtra por nada.
+
+   Los campos de la PISTA -- difficulty, instrument, trackName, tuning, ampli
+   -- ya NO viven al nivel de la cancion. Tenerlos en los dos lados serian dos
+   fuentes de verdad para el mismo dato, y la primera vez que el selector y la
+   cabecera se desincronicen no habria forma de saber cual miente. La tarjeta
+   lee siempre de pistas[elegida]. */
+function hidratar(db, fila, califican = null) {
   if (!fila) return null
   const tags = db.prepare('SELECT tag FROM tags WHERE song_id = ?')
     .all(fila.song_id).map(r => r.tag)
-  const tuning = describeTuning(fila.tuning ? JSON.parse(fila.tuning) : null)
-  /* `artist` y `title` no son opcionales aunque el parametro lo sea: son lo
-     unico con lo que sugerirAjustes puede buscar un preset de la comunidad.
-     Sin ellos la busqueda nunca recibe un artista, jamas encuentra nada, y
-     todo el camino de los presets queda inerte -- con la suite entera en
-     verde, porque los tests de sugerirAjustes la llaman directo y no pasan por
-     aqui. Ese es exactamente el agujero que cubre el test de roll.test.js que
-     sortea una cancion de Metallica y exige fuente 'comunidad'. */
-  const sugerencia = sugerirAjustes({
-    tags, instrument: fila.instrument, tuning,
-    artist: fila.artist, title: fila.title,
-  })
+  const pistas = pistasDeLaCancion(db, fila, tags, califican)
   return {
     songId: fila.song_id,
     artist: fila.artist,
     title: fila.title,
-    difficulty: fila.difficulty,
-    instrument: fila.instrument,
-    trackName: fila.track_name,
-    tuning,
-    // Punto de partida para el ampli, o null si los tags no dan senal util.
-    // paraElAmpli son los mismos valores en la escala que espera el equipo.
-    ampli: sugerencia && { ...sugerencia, paraElAmpli: paraElAmpli(sugerencia) },
+    pistas,
+    // Cual viene elegida. El SQL ya decidio cual es (la mas vista de las que
+    // califican); aca solo se traduce ese track_index a su posicion en el
+    // arreglo ya ordenado.
+    pistaPorDefecto: Math.max(0, pistas.findIndex(p => p.trackIndex === fila.track_index)),
     tags,
     officialVideo: elegirVideo(fila.videos, null),
     backingVideo: elegirVideo(fila.videos, 'backing'),
@@ -180,17 +269,20 @@ export function roll(db, opts = {}) {
   let fila
   if (mode === 'solos') {
     // Sesgo al extremo alto: el tercio superior por dificultad, minimo 20,
-    // para que un rango angosto no deje el sorteo entre dos canciones.
+    // para que un rango angosto no deje el sorteo entre dos canciones. La
+    // dificultad que ordena es la de la PISTA ELEGIDA, ya resuelta por
+    // unaPorCancion.
     const pool = Math.max(20, Math.ceil(matching / 3))
     fila = db.prepare(`
       SELECT * FROM (
-        SELECT ${COLUMNS} ${BASE_FROM}${MODE_SQL.solos}${fa.sql}
-        ORDER BY r.difficulty DESC, s.song_id ASC LIMIT ?
+        ${unaPorCancion(`${BASE_FROM}${MODE_SQL.solos}${fa.sql}`)}
+        ORDER BY difficulty DESC, song_id ASC LIMIT ?
       ) ORDER BY RANDOM() LIMIT 1
     `).get(minDifficulty, maxDifficulty, ...fa.params, pool)
   } else {
     fila = db.prepare(`
-      SELECT ${COLUMNS} ${BASE_FROM}${MODE_SQL[mode]}${fa.sql} ORDER BY RANDOM() LIMIT 1
+      ${unaPorCancion(`${BASE_FROM}${MODE_SQL[mode]}${fa.sql}`)}
+      ORDER BY RANDOM() LIMIT 1
     `).get(minDifficulty, maxDifficulty, ...fa.params)
   }
 
@@ -200,7 +292,11 @@ export function roll(db, opts = {}) {
       .run(fila.song_id)
   }
 
-  return { song: hidratar(db, fila), matching, hint }
+  return {
+    song: hidratar(db, fila, fila && pistasQueCalifican(db, fila.song_id, mode, minDifficulty, maxDifficulty)),
+    matching,
+    hint,
+  }
 }
 
 export const LISTS = ['learned', 'skipped', 'queued', 'liked']
@@ -233,7 +329,7 @@ export function getList(db, list) {
   const filas = db.prepare(`
     SELECT ${COLUMNS}
     FROM songs s
-    JOIN representative_track r ON r.song_id = s.song_id
+    JOIN representative_track g ON g.song_id = s.song_id
     JOIN song_state st ON st.song_id = s.song_id
     WHERE ${filtro}
     ORDER BY st.updated_at DESC
@@ -246,7 +342,7 @@ export function getStats(db) {
   const s = db.prepare(`
     SELECT COUNT(*) total, SUM(enriched_at IS NOT NULL) enriched FROM songs
   `).get()
-  const available = db.prepare(`SELECT COUNT(*) c ${BASE_FROM}`).get(1, 10).c
+  const available = db.prepare(`SELECT COUNT(DISTINCT s.song_id) c ${BASE_FROM}`).get(1, 10).c
   return {
     total: s.total,
     enriched: s.enriched ?? 0,

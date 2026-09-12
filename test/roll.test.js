@@ -29,6 +29,9 @@ function agregar(db, o = {}) {
 
 function base() { siguienteId = 1; return openDb(':memory:') }
 
+// La pista que el sorteo eligio por defecto para esta cancion.
+const elegida = s => s.pistas[s.pistaPorDefecto]
+
 test('devuelve una cancion que calza', () => {
   const db = base()
   agregar(db, { title: 'Unica' })
@@ -46,11 +49,11 @@ test('arma la url de Songsterr desde el id', () => {
 test('formatea la afinacion y calla cuando es estandar', () => {
   const db = base()
   agregar(db, { songId: 1, tuning: '[64,59,55,50,45,38]' })
-  assert.equal(roll(db, {}).song.tuning, 'Drop D')
+  assert.equal(elegida(roll(db, {}).song).tuning, 'Drop D')
 
   const db2 = base()
   agregar(db2, { tuning: '[64,59,55,50,45,40]' })
-  assert.equal(roll(db2, {}).song.tuning, null)
+  assert.equal(elegida(roll(db2, {}).song).tuning, null)
 })
 
 test('filtra por rango de dificultad', () => {
@@ -103,7 +106,7 @@ test('modo solos sortea entre las mas dificiles cuando hay muchas', () => {
     agregar(db, { trackName: 'Lead Guitar', difficulty: (i % 6) + 1 })
   }
   const vistas = new Set()
-  for (let i = 0; i < 60; i++) vistas.add(roll(db, { mode: 'solos' }).song.difficulty)
+  for (let i = 0; i < 60; i++) vistas.add(elegida(roll(db, { mode: 'solos' }).song).difficulty)
 
   // El tercio superior de 60 son 20 canciones: las de dificultad 6 y 5.
   assert.ok(Math.min(...vistas) >= 5, `salieron dificultades ${[...vistas].sort()}`)
@@ -114,7 +117,7 @@ test('modo solos con pocas candidatas no restringe el sorteo', () => {
   for (let i = 0; i < 6; i++) agregar(db, { trackName: 'Lead Guitar', difficulty: i + 1 })
 
   const vistas = new Set()
-  for (let i = 0; i < 200; i++) vistas.add(roll(db, { mode: 'solos' }).song.difficulty)
+  for (let i = 0; i < 200; i++) vistas.add(elegida(roll(db, { mode: 'solos' }).song).difficulty)
   assert.ok(vistas.size > 3, 'con menos de 20 candidatas deben poder salir todas')
 })
 
@@ -255,7 +258,7 @@ test('roll incluye los ajustes de ampli cuando hay senal util', () => {
   const db = base()
   const id = agregar(db, { instrument: 'Distortion Guitar', tuning: '[64,59,55,50,45,38]' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
-  const s = roll(db, {}).song
+  const s = elegida(roll(db, {}).song)
   assert.equal(s.ampli.modelo, 'METAL 2000')
   assert.ok(s.ampli.gain >= 1 && s.ampli.gain <= 10)
   assert.ok(s.ampli.motivos.includes('thrash metal'))
@@ -266,7 +269,7 @@ test('roll deja ampli en null cuando los tags no dicen nada', () => {
   const db = base()
   const id = agregar(db)
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'rock')").run(id)
-  assert.equal(roll(db, {}).song.ampli, null)
+  assert.equal(elegida(roll(db, {}).song).ampli, null)
 })
 
 test('las listas tambien traen los ajustes', () => {
@@ -274,14 +277,14 @@ test('las listas tambien traen los ajustes', () => {
   const id = agregar(db, { instrument: 'Acoustic Guitar (steel)' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'folk')").run(id)
   mark(db, { songId: id, status: 'queued' })
-  assert.equal(getList(db, 'queued')[0].ampli.modelo, 'CHAMPION')
+  assert.equal(elegida(getList(db, 'queued')[0]).ampli.modelo, 'CHAMPION')
 })
 
 test('el payload trae los valores ya convertidos para el amplificador', () => {
   const db = base()
   const id = agregar(db, { instrument: 'Distortion Guitar' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
-  const a = roll(db, {}).song.ampli
+  const a = elegida(roll(db, {}).song).ampli
   assert.ok(a.paraElAmpli, 'deberia venir listo para mandar')
   assert.ok(a.paraElAmpli.gain > 0 && a.paraElAmpli.gain <= 1)
   assert.equal(a.paraElAmpli.volume, undefined, 'el volumen no se manda')
@@ -298,7 +301,7 @@ test('el sorteo le pasa el artista y el titulo a la sugerencia', () => {
   // "Metallica - Enter Sandman" es una fila real de la planilla de la comunidad.
   const id = agregar(db, { artist: 'Metallica', title: 'Enter Sandman', instrument: 'Distortion Guitar' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
-  const a = roll(db, {}).song.ampli
+  const a = elegida(roll(db, {}).song).ampli
   assert.equal(a.fuente, 'comunidad', 'sin artista esto diria "reglas"')
   assert.equal(a.modelo, '90S ROCK', 'METAL 2000 seria lo que dicen las reglas de genero')
   assert.match(a.procedencia, /Enter Sandman/i)
@@ -310,14 +313,14 @@ test('las listas tambien pasan el artista, no solo el sorteo', () => {
   const id = agregar(db, { artist: 'Metallica', title: 'Enter Sandman', instrument: 'Distortion Guitar' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
   mark(db, { songId: id, status: 'queued' })
-  assert.equal(getList(db, 'queued')[0].ampli.fuente, 'comunidad')
+  assert.equal(elegida(getList(db, 'queued')[0]).ampli.fuente, 'comunidad')
 })
 
 test('una cancion sin preset propio sigue cayendo en la tabla de reglas', () => {
   const db = base()
   const id = agregar(db, { artist: 'Banda Que No Existe', title: 'Cancion Que No Existe' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
-  const a = roll(db, {}).song.ampli
+  const a = elegida(roll(db, {}).song).ampli
   assert.equal(a.fuente, 'reglas')
   assert.equal(a.modelo, 'METAL 2000')
   assert.equal(a.cadena, null)
@@ -331,7 +334,7 @@ test('una perilla que la planilla no declaro no llega al payload del ampli', () 
   const db = base()
   const id = agregar(db, { artist: 'Metallica', title: 'Cancion Que No Esta En La Planilla' })
   db.prepare("INSERT INTO tags (song_id, tag) VALUES (?, 'thrash metal')").run(id)
-  const a = roll(db, {}).song.ampli
+  const a = elegida(roll(db, {}).song).ampli
   assert.equal(a.bass, null)
   assert.ok(!('bass' in a.paraElAmpli), `bass no deberia viajar, vino ${a.paraElAmpli.bass}`)
   assert.ok('gain' in a.paraElAmpli, 'las que si declaro tienen que viajar')

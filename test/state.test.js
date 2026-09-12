@@ -95,7 +95,7 @@ test('las listas devuelven lo marcado, con forma de cancion', () => {
   assert.deepEqual(getList(db, 'liked').map(s => s.title), ['Aprendida'])
 
   const fila = getList(db, 'learned')[0]
-  assert.equal(fila.difficulty, 3)
+  assert.equal(fila.pistas[fila.pistaPorDefecto].difficulty, 3)
   assert.match(fila.url, /songsterr/)
 })
 
