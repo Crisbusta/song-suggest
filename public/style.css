@@ -682,3 +682,24 @@ kbd { font: var(--t-micro)/1.2 var(--mono); border: 0; background: var(--relieve
   .acciones .principal { margin-left: auto; }
 }
 @keyframes aparece { from { opacity: 0; transform: translateY(-.25rem); } }
+
+/* --- La paleta de tonos manuales ----------------------------------------- */
+/* Doce fichas fijas, en dos columnas. En una sola columna ocuparian ~310px y
+   empujarian las perillas y las ranuras fuera de la vista, que es justo lo que
+   se esta mirando cuando se cambia de tono. */
+.paleta-tonos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e1); margin-bottom: var(--e2); }
+.ficha-tono {
+  padding: var(--e1) var(--e2); text-align: left;
+  background: var(--relieve); color: var(--texto);
+  border: 1px solid transparent; border-radius: var(--radio);
+  font: inherit; font-size: var(--t-micro); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ficha-tono:hover { border-color: var(--borde); }
+.ficha-tono.puesto { background: var(--acento); color: var(--fondo); font-weight: 600; }
+/* Los dos de esta app se distinguen de los diez de la planilla. No es
+   decoracion: el panel dice de donde sale cada tono y estos no son de nadie
+   de fuera. */
+.ficha-tono.propio { border-color: color-mix(in srgb, var(--acento) 40%, transparent); }
+.ficha-tono.propio.puesto { border-color: var(--acento); }
+.ficha-tono.volver { grid-column: 1 / -1; width: 100%; background: transparent; color: var(--tenue); margin-bottom: var(--e2); }

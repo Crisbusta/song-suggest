@@ -44,7 +44,9 @@ const ranuras = a => RANURAS.map(ranura => {
 /* De donde sale este tono. Un preset de la comunidad es OPINION de alguien, no
    una medicion de la grabacion, y el panel lo dice en vez de presentarlo como
    un hecho. */
-const procedencia = a => a.fuente === 'comunidad'
+const procedencia = a => a.fuente === 'propio'
+  ? `${esc(a.procedencia)}. Lo elegiste tu: pisa la sugerencia de la pista hasta que sortees otra canción.`
+  : a.fuente === 'comunidad'
   ? `${esc(a.procedencia ?? 'Preset de la comunidad')}. Es lo que a alguien le funcionó, no el tono de la grabación.`
   : `Punto de partida, no el tono del disco.${a.motivos?.length ? ` Deducido de: ${a.motivos.map(esc).join(', ')}.` : ''}`
 
@@ -57,22 +59,51 @@ const queSePisa = a => {
   return `<details class="panel-detalles"><summary>Qué se pisa al enviar</summary><p>Las ranuras de efectos que este tono no usa quedan vacías: esto borra lo que hayas ajustado a mano en ellas. Cargar una unidad devuelve sus otras perillas a los valores de fábrica. Tu volumen se lee y se restaura; si no se puede leer, el modelo no cambia.</p>${reverbSuelto}<p>${procedencia(a)}</p></details>`
 }
 
+/* La paleta de tonos manuales, siempre a la vista.
+
+   Son doce y no crecen, asi que no se esconden detras de un clic: cuando el
+   tono sugerido no pega con lo que suena -- que pasa, porque se deduce de las
+   etiquetas de la CANCION y no de lo que toca la pista -- el remedio tiene que
+   estar donde ya estas mirando.
+
+   La primera ficha devuelve a la sugerencia automatica y solo aparece cuando
+   hay un tono manual puesto: ofrecer "volver" a lo que ya tienes seria ruido. */
+const paleta = (tonos, tonoManual) => {
+  if (!tonos?.length) return ''
+  const fichas = tonos.map(t => {
+    const puesto = tonoManual?.clave === t.clave
+    return `<button type="button" class="ficha-tono${puesto ? ' puesto' : ''}${t.fuente === 'propio' ? ' propio' : ''}" data-tono="${esc(t.clave)}" aria-pressed="${puesto}" title="${esc(t.modelo ?? '')}">${esc(t.clave)}</button>`
+  }).join('')
+  const volver = tonoManual
+    ? '<button type="button" class="ficha-tono volver" data-tono="">← la sugerencia de la pista</button>'
+    : ''
+  return `<h3>Tonos</h3><div class="paleta-tonos">${fichas}</div>${volver}`
+}
+
 /* `estado` lo pone app.js: si hay equipo conectado, si el boton puede pulsarse,
-   y que POSICION ocupa la pista elegida en la lista visible -- la misma que
-   nombran los atajos 1-9, no su indice en el catalogo. */
+   que POSICION ocupa la pista elegida en la lista visible -- la misma que
+   nombran los atajos 1-9, no su indice en el catalogo -- y la paleta de tonos
+   con el que este puesto a mano.
+
+   Un tono manual PISA la sugerencia de la pista: es el objeto que se dibuja y
+   el que se manda. Por eso no se lee `pista.ampli` aqui directamente. */
 export function pintarPanelAmpli(pista, estado = {}) {
-  const a = pista?.ampli
+  const a = estado.tonoManual ?? pista?.ampli
   const cabecera = `<div class="panel-cabecera"><h2>Ampli · Mustang LT25</h2><span id="panel-conexion" class="${estado.conectado ? 'conectado' : ''}">${estado.conectado ? 'Ampli conectado' : 'Sin conectar'}</span></div>`
 
+  /* Sin sugerencia la paleta se ofrece IGUAL, y es cuando mas sirve: esta
+     pista no trae tono, asi que elegir uno a mano es la unica salida que no
+     pasa por el editor. */
   if (!a) {
-    return `${cabecera}<div class="panel-vacio"><p>Sin sugerencia de ampli</p><span>Esta pista no trae ajustes para mandar. Puedes preparar tu tono en el editor.</span></div>`
+    return `${cabecera}<div class="panel-vacio"><p>Sin sugerencia de ampli</p><span>Esta pista no trae ajustes para mandar. Elige un tono de abajo, o preparalo en el editor.</span></div>${paleta(estado.tonos, estado.tonoManual)}`
   }
 
   const dibujadas = perillas(a)
   const modelo = a.modelo != null ? esc(a.modelo) : 'no declarado'
 
   return `${cabecera}
-    <div class="modelo"><span>Modelo · pista ${esc(estado.posicion ?? 1)}</span><strong>${modelo}</strong></div>
+    <div class="modelo"><span>${estado.tonoManual ? 'Tono elegido por ti' : `Modelo · pista ${esc(estado.posicion ?? 1)}`}</span><strong>${modelo}</strong></div>
+    ${paleta(estado.tonos, estado.tonoManual)}
     ${dibujadas ? `<div class="perillas-panel">${dibujadas}</div>` : ''}
     <p class="volumen-nota">Volume no viaja al ampli.</p>
     <h3>Ranuras</h3><ul class="cadena cadena-panel">${ranuras(a)}</ul>

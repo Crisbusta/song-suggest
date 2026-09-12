@@ -128,3 +128,62 @@ test('la pagina cabe en la pantalla y la botonera se ve siempre', async ({ page 
 
   await expect(page.locator('.acciones')).toBeInViewport()
 })
+
+/* La paleta existe porque la sugerencia automatica se equivoca por diseño: se
+   deduce de las etiquetas de la CANCION, no de lo que toca la pista. Elegir a
+   mano tiene que pisar esa sugerencia, y el panel tiene que decirlo -- si
+   siguiera diciendo "modelo de la pista" estaria mintiendo. */
+test('elegir un tono pisa la sugerencia y el panel lo declara', async ({ page }) => {
+  await abrirCancion(page, 'Seis Pistas')
+  await page.locator('.ficha-tono[data-tono="Clean Jazz Amp"]').click()
+
+  await expect(page.locator('.panel-ampli .modelo')).toContainText('Tono elegido por ti')
+  await expect(page.locator('.ficha-tono.puesto')).toHaveText('Clean Jazz Amp')
+  await expect(page.locator('.ficha-tono.volver')).toBeVisible()
+})
+
+/* Un tono nuestro no puede repetir la frase de los de la planilla: nadie ajeno
+   lo ajusto. */
+test('un tono propio no se hace pasar por uno de la comunidad', async ({ page }) => {
+  await abrirCancion(page, 'Seis Pistas')
+  await page.locator('.ficha-tono[data-tono="Wah"]').click()
+  await page.locator('.panel-detalles summary').click()
+
+  const texto = await page.locator('.panel-detalles').textContent()
+  expect(texto).toContain('no de la planilla')
+  expect(texto).not.toContain('a alguien le funcionó')
+})
+
+/* Aguanta al cambiar de PISTA -- si elegiste un tono porque el automatico no
+   pegaba, lo normal es comparar pistas con ese mismo tono puesto. */
+test('el tono elegido sobrevive a cambiar de pista', async ({ page }) => {
+  await abrirCancion(page, 'Seis Pistas')
+  await page.locator('.ficha-tono[data-tono="Texas Blues"]').click()
+
+  await page.locator('.fila-pista').first().click()
+  await expect(page.locator('.ficha-tono.puesto')).toHaveText('Texas Blues')
+})
+
+/* Y se suelta al sortear otra: heredarlo acabaria contigo tocando thrash con el
+   tono de jazz sin acordarte de por que. */
+test('sortear otra cancion suelta el tono elegido', async ({ page }) => {
+  await abrirCancion(page, 'Seis Pistas')
+  await page.locator('.ficha-tono[data-tono="Texas Blues"]').click()
+  await expect(page.locator('.ficha-tono.puesto')).toHaveCount(1)
+
+  await page.click('#otra')
+  await expect(page.locator('.ficha-tono.puesto')).toHaveCount(0)
+})
+
+/* La paleta se pide UNA vez al arrancar: elegir es puro cliente. */
+test('elegir un tono no genera ninguna peticion', async ({ page }) => {
+  await abrirCancion(page, 'Seis Pistas')
+  const peticiones = []
+  page.on('request', r => { if (r.url().includes('/api/')) peticiones.push(r.url()) })
+
+  await page.locator('.ficha-tono[data-tono="Doom Wizard"]').click()
+  await expect(page.locator('.ficha-tono.puesto')).toHaveText('Doom Wizard')
+  await page.waitForTimeout(300)
+
+  expect(peticiones).toEqual([])
+})

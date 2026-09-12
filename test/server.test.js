@@ -180,3 +180,22 @@ test('GET /api/song sin songId da 400', () => conApp(async url => {
   assert.equal(res.status, 400)
   assert.match((await res.json()).error, /songId/)
 }))
+
+/* La paleta se pide UNA vez al arrancar, como /api/artists: son doce tonos
+   fijos y no dependen de la cancion. */
+test('GET /api/tonos devuelve la paleta lista para mandar al ampli', () => conApp(async url => {
+  const { tonos } = await (await fetch(`${url}/api/tonos`)).json()
+  assert.equal(tonos.length, 12)
+
+  const wah = tonos.find(t => t.clave === 'Wah')
+  assert.equal(wah.fuente, 'propio', 'los nuestros no se hacen pasar por de la comunidad')
+  assert.equal(wah.cadena.mod.nombre, 'TOUCH WAH')
+  // Los parametros de texto viajan sin convertir: el ampli solo acepta estos.
+  assert.equal(wah.cadena.mod.valores.mode, 'Low Up')
+
+  const blues = tonos.find(t => t.clave === 'Texas Blues')
+  assert.equal(blues.fuente, 'comunidad')
+  // Misma forma que la sugerencia de una pista: el envio no necesita casos
+  // especiales para distinguirlos.
+  assert.ok(blues.paraElAmpli && blues.modelo && blues.cadena)
+}))

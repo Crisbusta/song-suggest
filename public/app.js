@@ -19,6 +19,23 @@ const $ = s => document.querySelector(s)
 let indiceArtistas = []
 let bandas = []          // los nombres visibles elegidos, en orden de eleccion
 
+/* La paleta de tonos manuales y el que este puesto, si hay uno.
+
+   `tonoManual` PISA la sugerencia de la pista mientras dura. Se suelta al
+   sortear otra cancion (en `pintarCancion`) y no al cambiar de pista: si
+   elegiste "Clean Jazz Amp" porque el tono automatico no pegaba, lo normal es
+   comparar pistas con ese mismo tono puesto. Entre canciones si se suelta --
+   heredarlo acabaria contigo tocando thrash con el tono de jazz sin acordarte
+   de por que. */
+let tonos = []
+let tonoManual = null
+
+/* El tono que de verdad esta activo: el manual si lo hay, si no el de la pista.
+   Existe como funcion y no como variable para que NADIE lea `pista.ampli` por
+   su cuenta: el panel, el boton y el envio tienen que coincidir siempre, y tres
+   lecturas sueltas se desvian en cuanto alguien toque una sola. */
+const ampliActivo = pista => tonoManual ?? pista?.ampli ?? null
+
 const api = async (ruta, opts) => {
   const r = await fetch(ruta, opts)
   if (!r.ok) {
@@ -63,6 +80,9 @@ function pintar({ song, matching, hint }) {
    califican. */
 function pintarCancion(song, sinFiltros = false) {
   pistaElegida = song?.pistaPorDefecto ?? 0
+  // Cancion nueva, tono nuevo: el manual no se hereda. Cambiar de PISTA si lo
+  // conserva -- esa ruta pasa por pintarTarjeta, no por aqui.
+  tonoManual = null
   pintarTarjeta(song, sinFiltros)
 }
 
@@ -96,6 +116,7 @@ function pintarTarjeta(song, sinFiltros = false) {
   const pista = song.pistas[pistaElegida]
   const detallesAbiertos = mismaCancion && $('#panel-ampli details')?.open
   $('#panel-ampli').innerHTML = pintarPanelAmpli(pista, {
+    tonos, tonoManual,
     soportado: ampli.soportado(), conectado: ampli.conectado(),
     puedeEnviar: ampli.conectado() && hayQueEnviar(song),
     posicion: Math.max(1, [...document.querySelectorAll('.fila-pista')].findIndex(f => Number(f.dataset.pista) === pistaElegida) + 1),
@@ -339,7 +360,7 @@ function catalogo() {
    reves, `{}` tambien es truthy, asi que preguntar por el objeto dejaba el
    boton habilitado para envios que no escribian nada. */
 function hayQueEnviar(cancion) {
-  const a = cancion?.pistas[pistaElegida]?.ampli
+  const a = ampliActivo(cancion?.pistas[pistaElegida])
   if (!a) return false
   return !!a.fenderId || !!a.cadena || Object.keys(a.paraElAmpli ?? {}).length > 0
 }
@@ -457,7 +478,7 @@ $('#vista-sorteo').addEventListener('click', async e => {
     /* La pista se lee aqui, en el mismo instante en que se fijo `cancion`:
        el envio manda el tono que se prometio al apretar el boton, aunque
        despues se cambie de pista. */
-    const sugerencia = cancion.pistas[pistaElegida].ampli
+    const sugerencia = ampliActivo(cancion.pistas[pistaElegida])
     // La cadena completa de la planilla, o null cuando la sugerencia salio de
     // la tabla de reglas (que no opina sobre efectos).
     const cadena = sugerencia.cadena ?? null
@@ -1160,6 +1181,29 @@ sincronizarRangos('min')
 sortear()
 pintarStats()
 cargarArtistas().then(pintarAtajos)
+cargarTonos()
+
+/* Los doce tonos no dependen de la cancion ni de la base: se piden una vez.
+   Si el fetch falla la app sigue entera -- simplemente no hay paleta, y el
+   panel no dibuja la lista en vez de dibujarla vacia. */
+async function cargarTonos() {
+  try {
+    tonos = (await api('/api/tonos')).tonos
+    if (actual) pintarTarjeta(actual)
+  } catch {
+    tonos = []
+  }
+}
+
+/* Elegir un tono no lo manda: lo carga en el panel y tu decides con Enviar.
+   Mandar sigue siendo un acto deliberado -- pisa lo que tengas en el equipo. */
+$('#panel-ampli').addEventListener('click', e => {
+  const boton = e.target.closest('[data-tono]')
+  if (!boton || !actual) return
+  const clave = boton.dataset.tono
+  tonoManual = clave === '' ? null : tonos.find(t => t.clave === clave) ?? null
+  pintarTarjeta(actual)
+})
 
 const LISTAS = [
   ['learned', 'Aprendidas'],

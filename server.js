@@ -5,6 +5,7 @@ import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDb } from './db/open.js'
 import { roll, mark, getList, getStats, listarArtistas, buscarCanciones, getSong } from './db/queries.js'
+import { TONOS } from './lib/tonos.js'
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url))
 const RAIZ = realpathSync(PUBLIC)   // sin barra final: realpath la quita
@@ -54,6 +55,12 @@ export function createApp(db) {
       }
 
       if (ruta === '/api/artists') return json(res, 200, { artists: listarArtistas(db) })
+
+      /* La paleta de tonos manuales. No depende de la cancion ni de la base:
+         son doce fijos, asi que el cliente los pide una vez al arrancar. Salen
+         con la misma forma que la sugerencia de una pista, para que el panel y
+         el boton de enviar no necesiten distinguirlos. */
+      if (ruta === '/api/tonos') return json(res, 200, { tonos: TONOS })
 
       /* Buscar es una CONSULTA, no un sorteo: no toca song_state y encuentra
          tambien lo que ya descartaste (ver buscarCanciones en db/queries.js).
