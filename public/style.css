@@ -114,7 +114,7 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 @keyframes entra { from { opacity: 0; transform: translateY(6px); } }
 
 /* --- Selector de pista: que se practica de esta cancion ------------------ */
-.pistas { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.pistas { display: flex; align-items: center; gap: var(--e2); margin-bottom: var(--e3); }
 .pistas > label {
   font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .06em;
   color: var(--tenue);
