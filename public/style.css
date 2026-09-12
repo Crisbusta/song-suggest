@@ -381,12 +381,20 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 
 /* El desplegable se posiciona contra este contenedor, no contra los controles,
    para que no empuje la tarjeta hacia abajo al aparecer. */
-.banda-buscador { position: relative; }
-#banda-q { width: 100%; box-sizing: border-box; padding: var(--e2);
+.banda-buscador, .cancion-caja { position: relative; }
+#banda-q, #cancion-q { width: 100%; box-sizing: border-box; padding: var(--e2);
   background: var(--relieve); color: var(--texto);
   border: 1px solid var(--borde); border-radius: var(--radio);
   font: inherit; font-size: var(--t-base); }
-#banda-q:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+#banda-q:focus-visible, #cancion-q:focus-visible {
+  outline: 2px solid var(--acento); outline-offset: 1px; }
+
+/* El buscador de canciones va entre los controles y la tarjeta, con su propio
+   aire: no pertenece a ninguno de los dos. Reusa `.banda-sug` para el
+   desplegable -- es el mismo componente con otro contenido. */
+.cancion-buscador { margin: var(--e3) 0; }
+.cancion-buscador > label { display: block; margin-bottom: var(--e1);
+  font-size: var(--t-micro); color: var(--tenue); }
 
 .banda-sug { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + var(--e1));
   margin: 0; padding: var(--e1); list-style: none; max-height: 15rem; overflow-y: auto;

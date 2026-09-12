@@ -14,7 +14,6 @@ const $ = s => document.querySelector(s)
    ese sorteo temprano simplemente no manda ninguna banda, que es lo correcto. */
 let indiceArtistas = []
 let bandas = []          // los nombres visibles elegidos, en orden de eleccion
-let sugerido = -1        // fila resaltada del desplegable, para las flechas
 
 const api = async (ruta, opts) => {
   const r = await fetch(ruta, opts)
@@ -1088,36 +1087,95 @@ async function cargarArtistas() {
   }
 }
 
-function pintarSugerencias() {
-  const caja = $('#banda-sug')
-  const q = $('#banda-q').value
-  const hits = buscarArtistas(indiceArtistas, q, 8, bandas)
-  sugerido = hits.length ? 0 : -1
+/* Un buscador con desplegable y navegacion por teclado.
 
-  if (!q.trim()) { caja.hidden = true; caja.innerHTML = ''; return }
+   Existe porque hay DOS -- bandas y canciones -- y la navegacion por flechas,
+   el cierre al salir, y el clic-antes-del-blur son la misma logica con otros
+   ids. Copiarla seria dos versiones que se desvian: la primera vez que alguien
+   arregle un caso de borde en una, la otra queda con el bug.
 
-  caja.hidden = false
-  caja.innerHTML = hits.length
-    ? hits.map((a, i) => `
-        <li role="option" aria-selected="${i === 0}" data-nombre="${esc(a.nombre)}">
-          <span>${esc(a.nombre)}</span>
-          <span class="cuantas">${a.canciones}</span>
-        </li>`).join('')
-    : `<li class="vacio">Ninguna banda del catálogo se llama así.</li>`
-}
+   Lo que cambia entre los dos es solo esto: donde escribes, donde se dibuja,
+   como se buscan los candidatos, como se dibuja cada uno, y que pasa al elegir.
 
-function moverSugerencia(paso) {
-  const filas = [...$('#banda-sug').querySelectorAll('li[data-nombre]')]
-  if (!filas.length) return
-  sugerido = (sugerido + paso + filas.length) % filas.length
-  filas.forEach((f, i) => f.setAttribute('aria-selected', String(i === sugerido)))
-  filas[sugerido].scrollIntoView({ block: 'nearest' })
-}
+   `buscar` puede ser asincrona -- la de canciones pregunta al servidor -- y de
+   ahi salen las dos piezas que el buscador de bandas no necesitaba:
+   `espera` (no preguntar en cada tecla) y el descarte de la respuesta vieja. */
+function crearBuscador({ entrada, lista, buscar, dibujar, vacio, alElegir, espera = 0 }) {
+  const caja = $(entrada)
+  const desplegable = $(lista)
+  let sugerido = -1      // fila resaltada, para las flechas
+  let ultimoPedido = 0
+  let temporizador
 
-function cerrarSugerencias() {
-  $('#banda-sug').hidden = true
-  $('#banda-sug').innerHTML = ''
-  sugerido = -1
+  const cerrar = () => {
+    desplegable.hidden = true
+    desplegable.innerHTML = ''
+    sugerido = -1
+  }
+
+  async function pintar() {
+    const q = caja.value
+    if (!q.trim()) return cerrar()
+
+    /* Escribir rapido dispara varias busquedas y no vuelven en orden: la del
+       prefijo mas corto tiene mas resultados y puede tardar mas. Sin esto, la
+       respuesta vieja pisaria a la nueva y verias sugerencias de lo que
+       escribiste hace dos teclas. */
+    const mio = ++ultimoPedido
+    const hits = await buscar(q)
+    if (mio !== ultimoPedido) return
+
+    sugerido = hits.length ? 0 : -1
+    desplegable.hidden = false
+    desplegable.innerHTML = hits.length
+      ? hits.map((h, i) => `
+          <li role="option" aria-selected="${i === 0}" data-valor="${esc(String(h.valor))}">
+            ${dibujar(h)}
+          </li>`).join('')
+      : `<li class="vacio">${esc(vacio)}</li>`
+  }
+
+  const pintarConEspera = () => {
+    clearTimeout(temporizador)
+    temporizador = setTimeout(pintar, espera)
+  }
+
+  const elegir = valor => {
+    caja.value = ''
+    cerrar()
+    alElegir(valor)
+  }
+
+  caja.addEventListener('input', pintarConEspera)
+  caja.addEventListener('focus', pintarConEspera)
+
+  caja.addEventListener('keydown', e => {
+    const filas = [...desplegable.querySelectorAll('li[data-valor]')]
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (!filas.length) return
+      sugerido = (sugerido + (e.key === 'ArrowDown' ? 1 : -1) + filas.length) % filas.length
+      filas.forEach((f, i) => f.setAttribute('aria-selected', String(i === sugerido)))
+      filas[sugerido].scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'Escape') {
+      cerrar()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const fila = desplegable.querySelector('li[aria-selected="true"][data-valor]')
+      if (fila) elegir(fila.dataset.valor)
+    }
+  })
+
+  // El `mousedown` va antes del `blur` de la caja, asi que el clic alcanza a
+  // registrarse; con `click` el desplegable ya se habria cerrado.
+  desplegable.addEventListener('mousedown', e => {
+    const fila = e.target.closest('li[data-valor]')
+    if (fila) { e.preventDefault(); elegir(fila.dataset.valor) }
+  })
+
+  caja.addEventListener('blur', () => setTimeout(cerrar, 0))
+
+  return { refrescar: pintar, cerrar }
 }
 
 function agregarBanda(nombre) {
@@ -1125,8 +1183,8 @@ function agregarBanda(nombre) {
   // esta "Motörhead" seria la misma banda dos veces y un filtro sin efecto.
   const clave = claveDeArtista(nombre)
   if (!bandas.some(b => claveDeArtista(b) === clave)) bandas.push(nombre)
-  $('#banda-q').value = ''
-  cerrarSugerencias()
+  // Limpiar la caja y cerrar el desplegable los hace crearBuscador; por aqui
+  // tambien se entra desde los atajos, donde no hay nada escrito que limpiar.
   pintarBandas()
   sortear()
 }
@@ -1166,28 +1224,54 @@ function pintarAtajos() {
   caja.innerHTML = fila('Con más canciones', libres.slice(0, 5))
 }
 
-$('#banda-q').addEventListener('input', pintarSugerencias)
-$('#banda-q').addEventListener('focus', pintarSugerencias)
+/* El de bandas busca en el indice que ya esta en memoria, asi que no espera
+   nada: la respuesta es sincrona y preguntar en cada tecla es gratis. */
+crearBuscador({
+  entrada: '#banda-q',
+  lista: '#banda-sug',
+  buscar: q => buscarArtistas(indiceArtistas, q, 8, bandas)
+    .map(a => ({ valor: a.nombre, nombre: a.nombre, canciones: a.canciones })),
+  dibujar: a => `<span>${esc(a.nombre)}</span><span class="cuantas">${a.canciones}</span>`,
+  vacio: 'Ninguna banda del catálogo se llama así.',
+  alElegir: agregarBanda,
+})
 
-$('#banda-q').addEventListener('keydown', e => {
-  if (e.key === 'ArrowDown') { e.preventDefault(); moverSugerencia(1) }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); moverSugerencia(-1) }
-  else if (e.key === 'Escape') cerrarSugerencias()
-  else if (e.key === 'Enter') {
-    e.preventDefault()
-    const fila = $('#banda-sug').querySelector('li[aria-selected="true"][data-nombre]')
-    if (fila) agregarBanda(fila.dataset.nombre)
+/* El de canciones pregunta al servidor -- el catalogo entero son 380 KB y no
+   vale mandarlo al navegador por esto -- asi que espera a que dejes de
+   escribir. La consulta tarda ~45 ms sobre las 10.011 canciones; con la espera
+   no se siente. */
+crearBuscador({
+  entrada: '#cancion-q',
+  lista: '#cancion-sug',
+  espera: 150,
+  buscar: async q => {
+    try {
+      const { songs } = await api(`/api/buscar?q=${encodeURIComponent(q)}`)
+      return songs.map(s => ({ valor: s.songId, artist: s.artist, title: s.title }))
+    } catch {
+      // Sin servidor no hay sugerencias; el mensaje de "ninguna" ya lo dice
+      // sin prometer que el catalogo no la tiene.
+      return []
+    }
+  },
+  dibujar: s => `<span>${esc(s.title)}</span><span class="cuantas">${esc(s.artist)}</span>`,
+  vacio: 'Ninguna canción del catálogo se llama así.',
+  alElegir: abrirCancion,
+})
+
+/* Abrir una cancion buscada NO toca el contador ni el aviso: describen lo que
+   prometen tus filtros, y esta cancion no salio de ellos. Misma regla que
+   "Sortear de todo". */
+async function abrirCancion(songId) {
+  try {
+    const { song } = await api(`/api/song?songId=${encodeURIComponent(songId)}`)
+    $('#hint').classList.remove('mal')
+    pintarCancion(song)
+  } catch (err) {
+    $('#hint').className = 'hint mal'
+    $('#hint').textContent = `No pude abrir esa canción: ${err.message}`
   }
-})
-
-// El `mousedown` va antes del `blur` de la caja, asi que el clic alcanza a
-// registrarse; con `click` el desplegable ya se habria cerrado.
-$('#banda-sug').addEventListener('mousedown', e => {
-  const fila = e.target.closest('li[data-nombre]')
-  if (fila) { e.preventDefault(); agregarBanda(fila.dataset.nombre) }
-})
-
-$('#banda-q').addEventListener('blur', () => setTimeout(cerrarSugerencias, 0))
+}
 
 $('#banda-fichas').addEventListener('click', e => {
   const b = e.target.closest('button[data-quitar]')
