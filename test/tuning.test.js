@@ -40,7 +40,7 @@ test('Drop C#', () => {
 
 test('una afinacion rara muestra las notas', () => {
   // Afinacion abierta cualquiera: ni trasladada ni de la familia Drop.
-  assert.equal(describeTuning([50, 45, 43, 38, 33, 26]), 'Afinacion abierta: D-A-G-D-A-D')
+  assert.equal(describeTuning([50, 45, 43, 38, 33, 26]), 'Afinación abierta: D-A-G-D-A-D')
 })
 
 test('una guitarra de siete cuerdas no revienta', () => {
