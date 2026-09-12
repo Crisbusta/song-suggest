@@ -145,3 +145,38 @@ test('no sirve un symlink que apunta fuera de public/', async () => {
     unlinkSync(enlace)
   }
 })
+
+test('GET /api/buscar encuentra la cancion por nombre', () => conApp(async url => {
+  const { songs } = await (await fetch(`${url}/api/buscar?q=one`)).json()
+  assert.equal(songs.length, 1)
+  assert.deepEqual(songs[0], { songId: 1, artist: 'Metallica', title: 'One' })
+}))
+
+test('GET /api/buscar sin q no devuelve nada, y no revienta', () => conApp(async url => {
+  const res = await fetch(`${url}/api/buscar`)
+  assert.equal(res.status, 200)
+  assert.deepEqual((await res.json()).songs, [])
+}))
+
+test('GET /api/song devuelve la tarjeta entera de esa cancion', () => conApp(async url => {
+  const { song } = await (await fetch(`${url}/api/song?songId=1`)).json()
+  assert.equal(song.title, 'One')
+  assert.ok(song.pistas.length > 0, 'trae sus pistas')
+  assert.ok(song.pistas.every(p => p.califica), 'sin filtro, todas califican')
+}))
+
+/* Pedir una cancion que no existe es un error del cliente, no una tarjeta
+   vacia: `song: null` se confundiria con "el sorteo no encontro nada". */
+test('GET /api/song con un id que no existe da 404', () => conApp(async url => {
+  const res = await fetch(`${url}/api/song?songId=99999`)
+  assert.equal(res.status, 404)
+  // Su propio mensaje, no el 404 generico de /api/: sin esto el test pasaria
+  // sin que la ruta exista siquiera.
+  assert.match((await res.json()).error, /cancion/)
+}))
+
+test('GET /api/song sin songId da 400', () => conApp(async url => {
+  const res = await fetch(`${url}/api/song`)
+  assert.equal(res.status, 400)
+  assert.match((await res.json()).error, /songId/)
+}))
