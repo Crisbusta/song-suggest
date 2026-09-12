@@ -10,54 +10,60 @@
 <link rel="stylesheet" href="/style.css">
 
 <header class="cabecera-app">
-  <span class="marca">song-suggest</span>
-  <nav aria-label="Vistas">
-    <button id="ver-sorteo" class="activo">Sortear</button>
-    <button id="ver-listas">Mis listas</button>
-    <button id="ver-editor" hidden>Ampli</button>
-  </nav>
+  <div class="fila-marca">
+    <span class="marca">song<span>-</span>suggest</span>
 
-  <label class="cancion-buscador">
-    <span class="solo-lector">Buscar una canción o banda</span>
-    <svg class="buscar-icono" width="15" height="15" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path></svg>
-    <input id="cancion-q" type="text" autocomplete="off" spellcheck="false" placeholder="Buscar una canción o banda" aria-describedby="cancion-ayuda">
-    <kbd aria-hidden="true">/</kbd>
-    <ul id="cancion-sug" class="banda-sug" hidden></ul>
-  </label>
-  <p id="cancion-ayuda" class="solo-lector">Abre su tarjeta sin sortear. Encuentra también las que descartaste.</p>
+    <label class="cancion-buscador">
+      <span class="solo-lector">Buscar una canción o banda</span>
+      <svg class="buscar-icono" width="15" height="15" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path></svg>
+      <input id="cancion-q" type="text" autocomplete="off" spellcheck="false" placeholder="Buscar una canción o banda" aria-describedby="cancion-ayuda">
+      <kbd aria-hidden="true">/</kbd>
+      <ul id="cancion-sug" class="banda-sug" hidden></ul>
+    </label>
+    <p id="cancion-ayuda" class="solo-lector">Abre su tarjeta sin sortear. Encuentra también las que descartaste.</p>
 
-  <button id="ampli-conectar" class="ampli-pastilla" hidden>
-    <span class="punto" aria-hidden="true"></span><span id="ampli-estado">Conectar ampli</span>
-  </button>
-</header>
+    <p id="calzan" class="calzan" aria-live="polite"></p>
+    <!-- El diseño da por conectado el ampli y no le deja sitio. Este boton solo
+         aparece cuando NO lo esta: WebHID exige un gesto del usuario, asi que
+         tiene que existir en alguna parte. Conectado, desaparece y el estado lo
+         dice el panel. -->
+    <button id="ampli-conectar" class="btn btn-ghost ampli-conectar" hidden>
+      <span class="punto" aria-hidden="true"></span><span id="ampli-estado">Conectar ampli</span>
+    </button>
+  </div>
 
-<main id="vista-sorteo">
-  <section class="barra-controles" aria-label="Filtros del sorteo">
-    <label class="control"><span>Modo</span>
-      <select id="modo" class="input">
+  <div class="fila-pestanas">
+    <nav aria-label="Vistas">
+      <button id="ver-sorteo" class="activo">Sortear</button>
+      <button id="ver-listas">Mis listas</button>
+      <button id="ver-editor" hidden>Ampli</button>
+    </nav>
+
+    <div class="filtros" aria-label="Filtros del sorteo">
+      <label class="solo-lector" for="modo">Modo</label>
+      <select id="modo" class="input pastilla">
         <option value="surprise">Sorpréndeme</option>
         <option value="riffs">Riffs eléctricos</option>
         <option value="acoustic">Acústica / fingerpicking</option>
         <option value="solos">Solos y técnica</option>
       </select>
-    </label>
 
-    <div class="control"><span>Dificultad</span>
-      <!-- Dos selectores en vez de diez fichas: el diseño pide una barra de una
-           línea, y un rango se pide con sus dos extremos. -->
-      <select id="min" class="input" aria-label="Dificultad mínima"></select>
-      <span class="guion" aria-hidden="true">–</span>
-      <select id="max" class="input" aria-label="Dificultad máxima"></select>
+      <!-- Un rango es UN control: los dos extremos van dentro de la misma
+           pastilla, con su rotulo, en vez de sueltos con un guion en medio. -->
+      <span class="rango">
+        <span class="rango-rotulo">dificultad</span>
+        <select id="min" class="input" aria-label="Dificultad mínima"></select>
+        <span class="guion" aria-hidden="true">–</span>
+        <select id="max" class="input" aria-label="Dificultad máxima"></select>
+      </span>
+
+      <button id="bandas-abrir" class="input pastilla" type="button" aria-expanded="false" aria-controls="bandas-panel">Bandas <span id="bandas-estado">todas</span></button>
+      <span id="stats" class="stats" hidden></span>
     </div>
+  </div>
+</header>
 
-    <button id="bandas-abrir" class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="bandas-panel">Bandas <span id="bandas-estado">todas</span>
-      <svg width="11" height="11" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"></path></svg>
-    </button>
-
-    <p id="calzan" class="calzan" aria-live="polite"></p>
-    <span id="stats" class="stats"></span>
-  </section>
-
+<main id="vista-sorteo">
   <section id="bandas-panel" class="bandas" hidden>
     <label for="banda-q">Filtrar por bandas</label>
     <div class="banda-buscador">
@@ -70,25 +76,30 @@
   </section>
 
   <div class="columnas">
-    <section id="tarjeta" class="tarjeta" aria-label="Canción para practicar"></section>
-    <aside id="panel-ampli" class="panel-ampli" aria-label="Ajustes del Mustang LT25"></aside>
-  </div>
-
-  <p id="hint" class="hint" aria-live="polite"></p>
-
+    <div class="col-cancion">
+      <section id="tarjeta" class="tarjeta" aria-label="Canción para practicar"></section>
+      <p id="hint" class="hint" aria-live="polite"></p>
   <section class="acciones" aria-label="Acciones de la canción">
-    <button id="aprendida" class="btn btn-secondary" disabled>Ya la aprendí <kbd>A</kbd></button>
-    <button id="descartada" class="btn btn-secondary" disabled>No me tinca <kbd>N</kbd></button>
-    <button id="despues" class="btn btn-secondary" disabled>Después <kbd>D</kbd></button>
-    <button id="like" class="btn btn-secondary like" title="Me gustó (L)" aria-label="Me gustó" disabled>
-      <svg width="14" height="14" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="14" aria-hidden="true"><path d="M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40Z"></path></svg>
-      <kbd>L</kbd>
+    <!-- Siguen siendo botones y no radios: marcar sortea otra cancion al
+         instante, asi que un estado "elegido" quedaria puesto sobre una tarjeta
+         que ya no existe. El aspecto es el del control segmentado; el
+         comportamiento, el de tres acciones. -->
+    <div class="seg veredictos" role="group" aria-label="Qué hago con esta canción">
+      <button id="aprendida" class="seg-opt" disabled>Ya la aprendí <kbd>A</kbd></button>
+      <button id="descartada" class="seg-opt" disabled>No me tinca <kbd>N</kbd></button>
+      <button id="despues" class="seg-opt" disabled>Después <kbd>D</kbd></button>
+    </div>
+    <button id="like" class="btn btn-secondary btn-icon like" title="Me gustó · L" aria-label="Me gustó" disabled>
+      <svg width="15" height="15" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><path d="M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40Z"></path></svg>
     </button>
     <span class="acciones-sorteo">
       <button id="todo" class="btn btn-ghost" type="button">Sortear de todo</button>
       <button id="otra" class="btn btn-primary">Otra <kbd>espacio</kbd></button>
     </span>
   </section>
+    </div>
+    <aside id="panel-ampli" class="panel-ampli" aria-label="Ajustes del Mustang LT25"></aside>
+  </div>
 </main>
 
 <main id="vista-listas" hidden></main>

@@ -500,32 +500,31 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 
 .solo-lector { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* --- Cabecera ------------------------------------------------------------- */
+/* --- Cabecera: dos filas ------------------------------------------------- */
+/* Arriba la identidad, el buscador y el contador. Abajo las pestañas y los
+   filtros, sobre una regla que separa la cabecera del contenido. */
 .cabecera-app {
-  display: flex; align-items: center; gap: 20px;
-  padding: 14px 28px; margin: 0; border: 0; flex-wrap: wrap;
+  display: flex; flex-direction: column; width: 100%; max-width: var(--ancho);
+  margin: 0 auto; padding: 12px 28px 0; border: 0; gap: 0; min-height: 0;
+  /* `stretch` explicito: la regla `header` de la capa base pone `baseline`, y
+     con direccion columna eso encoge cada fila al ancho de su contenido -- el
+     contador no llegaba al borde y la regla de las pestañas se cortaba a media
+     pantalla. */
+  align-items: stretch;
 }
+.fila-marca { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .marca {
   font-family: var(--font-heading); font-weight: 600; font-size: 16px;
-  letter-spacing: -0.02em; color: var(--color-accent); margin-right: 4px;
+  letter-spacing: -0.02em; color: var(--color-text); white-space: nowrap;
 }
-.cabecera-app nav { display: flex; align-items: center; gap: 2px; margin: 0; }
-.cabecera-app nav button {
-  font-size: 13.5px; color: var(--color-neutral-400); background: transparent;
-  border: 0; padding: 6px 11px; border-radius: var(--radius-md); cursor: pointer;
-  white-space: nowrap; font-family: inherit;
-}
-.cabecera-app nav button:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-text) 6%, transparent); }
-/* La vista activa se marca con un anillo, no con un relleno: el sistema pide
-   que el acento sea linea y no mancha. */
-.cabecera-app nav button.activo { color: var(--color-text); box-shadow: inset 0 0 0 1px var(--color-accent); }
+/* Solo el guion lleva el acento: la marca no se pinta entera de color. */
+.marca span { color: var(--color-accent); }
 
 .cabecera-app .cancion-buscador {
-  flex: 1 1 280px; min-width: 220px; max-width: 520px;
-  display: flex; align-items: center; gap: 9px;
-  padding: 0 10px; min-height: 36px; margin: 0; position: relative;
-  background: color-mix(in srgb, var(--color-text) 4%, transparent);
-  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+  flex: 1 1 240px; min-width: 200px; max-width: 380px;
+  display: flex; align-items: center; gap: 9px; position: relative;
+  padding: 0 13px; min-height: 36px; margin: 0;
+  background: transparent; border: 1px solid var(--color-divider); border-radius: 999px;
 }
 .cabecera-app .cancion-buscador:hover { border-color: color-mix(in srgb, var(--color-text) 30%, transparent); }
 .cabecera-app .cancion-buscador:focus-within { border-color: var(--color-accent); }
@@ -537,66 +536,78 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 }
 #cancion-q::placeholder { color: var(--color-neutral-500); }
 .cabecera-app kbd {
-  font: inherit; font-size: 10.5px; color: var(--color-neutral-500);
-  border: 1px solid var(--color-divider); border-radius: 4px; padding: 1px 5px;
+  font: inherit; font-size: 10px; color: var(--color-neutral-500);
+  border: 1px solid var(--color-divider); border-radius: 3px; padding: 0 4px;
 }
 
-/* El estado del ampli es una pastilla con un punto que brilla: se lee de un
-   vistazo desde lejos, que es como se mira estando con la guitarra. */
-.ampli-pastilla {
-  display: flex; align-items: center; gap: 7px; margin-left: auto;
-  padding: 5px 11px 5px 9px; border: 0; border-radius: 999px; cursor: pointer;
-  font: inherit; font-size: 12.5px; white-space: nowrap;
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  color: var(--color-accent-300);
-}
-.ampli-pastilla .punto {
-  width: 6px; height: 6px; border-radius: 50%; flex: none;
-  background: var(--color-accent); box-shadow: 0 0 8px var(--color-accent);
-}
-.ampli-pastilla:not(.conectado) { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: var(--color-neutral-400); }
-.ampli-pastilla:not(.conectado) .punto { background: var(--color-neutral-600); box-shadow: none; }
-
-/* --- Barra de filtros ----------------------------------------------------- */
-.barra-controles {
-  display: flex; align-items: center; gap: 18px;
-  padding: 0 28px 14px; background: transparent; border: 0; border-radius: 0;
-  flex-wrap: wrap; min-height: 0;
-}
-.barra-controles .control { display: flex; align-items: center; gap: 8px; }
-.barra-controles .control > span {
-  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--color-neutral-500);
-}
-.barra-controles .control .guion { font-size: 13px; color: var(--color-neutral-500); letter-spacing: 0; text-transform: none; }
-.barra-controles select {
-  width: auto; min-height: 32px; padding: 4px 26px 4px 9px; font-size: 13px;
-  background-color: color-mix(in srgb, var(--color-text) 4%, transparent);
-}
-#bandas-abrir { min-height: 32px; font-size: 13px; gap: 7px; white-space: nowrap; }
-
-.barra-controles .calzan {
+.fila-marca .calzan {
   margin: 0 0 0 auto; padding: 0; border: 0;
   font-size: 12.5px; color: var(--color-text); white-space: nowrap;
 }
-/* El catalogo entero ya no se anuncia aparte: repetia el numero que el contador
-   de al lado ya da, y dos cifras casi iguales juntas se leen como un fallo. */
-.barra-controles .stats { display: none; }
+/* WebHID exige un gesto del usuario, asi que el boton tiene que existir; el
+   diseño da el ampli por conectado y no le reserva sitio, de modo que solo
+   aparece mientras NO lo esta. */
+.ampli-conectar { display: flex; align-items: center; gap: 7px; font-size: 12.5px; white-space: nowrap; }
+.ampli-conectar .punto { width: 6px; height: 6px; border-radius: 50%; background: var(--color-neutral-600); flex: none; }
+.ampli-conectar.conectado { display: none; }
 
-/* --- Las dos columnas ----------------------------------------------------- */
-.columnas {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  gap: 28px; align-items: start; padding: 10px 28px 28px;
+/* --- Pestañas y filtros --------------------------------------------------- */
+.fila-pestanas {
+  display: flex; align-items: center; gap: 24px; margin-top: 12px;
+  flex-wrap: wrap; box-shadow: inset 0 -1px 0 var(--color-divider);
 }
+.fila-pestanas nav { display: flex; align-items: center; gap: 24px; margin: 0; }
+.fila-pestanas nav button {
+  font: inherit; font-size: 13.5px; color: var(--color-neutral-500);
+  background: transparent; border: 0; padding: 0 0 10px; cursor: pointer;
+  white-space: nowrap; border-radius: 0;
+}
+.fila-pestanas nav button:hover { color: var(--color-text); background: transparent; }
+/* La pestaña viva se marca con un subrayado, que es la linea del sistema. */
+.fila-pestanas nav button.activo { color: var(--color-text); box-shadow: inset 0 -2px 0 var(--color-accent); }
+
+.filtros { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-wrap: wrap; }
+.filtros .pastilla {
+  width: auto; min-height: 28px; padding: 2px 20px 2px 9px; font-size: 12.5px;
+  border-radius: 999px; background-color: transparent; color: var(--color-neutral-300);
+  cursor: pointer;
+}
+/* Un rango es UN control: los dos extremos comparten pastilla y rotulo. */
+.filtros .rango {
+  display: flex; align-items: center; gap: 4px; padding-left: 10px;
+  border: 1px solid var(--color-divider); border-radius: 999px; white-space: nowrap;
+}
+.filtros .rango-rotulo { font-size: 12px; color: var(--color-neutral-500); }
+.filtros .rango select {
+  width: auto; min-height: 26px; padding: 2px 17px 2px 4px; font-size: 12.5px;
+  border: 0; background-color: transparent; color: var(--color-neutral-200); cursor: pointer;
+}
+.filtros .guion { font-size: 12px; color: var(--color-neutral-600); }
+
+/* --- El cuerpo ------------------------------------------------------------ */
+.columnas {
+  flex: 1; width: 100%; max-width: var(--ancho); margin: 0 auto;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 32px; align-items: start; padding: 16px 28px 28px;
+}
+.col-cancion { display: flex; flex-direction: column; gap: 18px; min-width: 0; min-height: 0; }
+
+/* La tarjeta ENVUELVE: identidad y lista de pistas van lado a lado cuando hay
+   sitio, y se apilan cuando no. Es lo que deja la lista ancha sin estrechar el
+   titulo, que a 54px necesita su propio espacio. */
 .columnas .tarjeta {
-  display: flex; flex-direction: column; gap: 22px;
+  display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start;
+  gap: 24px 32px; min-width: 0;
   background: transparent; border: 0; border-radius: 0; padding: 0; margin: 0;
-  min-width: 0;
 }
 
 /* --- La cancion ----------------------------------------------------------- */
-.cancion-cabecera { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
-.cancion-identidad { min-width: 0; flex: 1 1 320px; }
+/* La identidad y el video son la parte estrecha de la fila. */
+.cancion-cabecera {
+  flex: 1 1 300px; max-width: 420px; min-width: 0;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 22px;
+}
+.cancion-identidad { min-width: 0; width: 100%; }
 .cancion-identidad .artista {
   font-size: 13px; letter-spacing: 0.02em; color: var(--color-neutral-400); margin: 0 0 2px;
 }
@@ -607,7 +618,7 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .cancion-identidad .enlaces { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0 0; }
 .cancion-identidad .enlaces a { font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 .cancion-identidad .enlaces a:hover { color: var(--color-accent-300); }
-.tarjeta .meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; }
+.tarjeta .meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 0; }
 .tarjeta .chip {
   display: inline-flex; align-items: center; font-size: 11px; letter-spacing: 0.02em;
   padding: 3px 10px; border-radius: calc(var(--radius-md) * 0.75); border: 0;
@@ -629,13 +640,14 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .preview .play {
   width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
   background: color-mix(in srgb, var(--color-accent) 16%, transparent);
-  color: var(--color-accent-200); font-size: 13px;
+  color: var(--color-accent-200); font-size: 13px; flex: none;
 }
 .preview.reproduciendo { display: block; padding: 0; box-shadow: none; width: 100%; }
 .preview.reproduciendo iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--radius-lg); }
 
 /* --- La lista de pistas --------------------------------------------------- */
 .pistas-lista {
+  flex: 3 1 460px; min-width: 0;
   border-radius: var(--radius-lg); overflow: hidden;
   background: color-mix(in srgb, var(--color-surface) 55%, transparent);
   box-shadow: var(--shadow-sm);
@@ -701,31 +713,42 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .medidor i.on { background: var(--color-accent); }
 .fila-pista em > span:last-child { width: 14px; font-size: 12px; color: var(--color-neutral-400); text-align: right; font-variant-numeric: tabular-nums; }
 
-.pista-unica { padding: 13px 16px 16px; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-surface) 55%, transparent); box-shadow: var(--shadow-sm); }
+.pista-unica { flex: 3 1 460px; min-width: 0; padding: 13px 16px 16px; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-surface) 55%, transparent); box-shadow: var(--shadow-sm); }
 .pista-unica strong { display: block; font-size: 14.5px; font-weight: 400; margin-bottom: 2px; }
 .pista-unica p:last-child { margin: 0; font-size: 11.5px; color: var(--color-neutral-500); }
 
 /* --- Acciones ------------------------------------------------------------- */
 .acciones {
-  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
-  padding: 0 28px 18px; background: transparent; border: 0; min-height: 0;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 4px 0 0; background: transparent; border: 0; min-height: 0;
 }
+/* Los tres veredictos comparten una sola caja: son la misma pregunta -- que
+   hago con esta cancion -- y verlos juntos lo dice sin necesidad de rotulo.
+   Siguen siendo botones y no radios: marcar sortea otra al instante, asi que un
+   estado "elegido" quedaria puesto sobre una tarjeta que ya no existe. */
+.veredictos .seg-opt {
+  font: inherit; font-size: 13px; background: transparent; color: var(--color-text);
+  border: 0; gap: 8px; white-space: nowrap;
+}
+.veredictos .seg-opt:disabled { opacity: .45; cursor: not-allowed; }
+.veredictos .seg-opt:not(:disabled):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .acciones kbd {
   font: inherit; font-size: 10px; color: var(--color-neutral-500);
   border: 1px solid var(--color-divider); border-radius: 3px; padding: 0 4px;
 }
-.acciones .acciones-sorteo { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+#like { border-color: var(--color-divider); }
+#like.marcado svg { fill: var(--color-accent); stroke: var(--color-accent); }
+.acciones .acciones-sorteo { display: flex; align-items: center; gap: 14px; margin-left: auto; }
 #todo { color: var(--color-neutral-400); font-size: 13px; white-space: nowrap; }
 #otra { gap: 8px; padding: 9px 16px; white-space: nowrap; }
 #otra kbd { color: var(--color-accent-300); border-color: color-mix(in srgb, var(--color-accent) 45%, transparent); padding: 0 5px; }
-#like.marcado svg { fill: var(--color-accent); stroke: var(--color-accent); }
 
 /* Por esta misma linea llegan dos cosas muy distintas: el conteo de canciones
    (y el aviso inocuo de un envio abandonado a mitad) y el unico canal que
    tenemos para decir que el amplificador quedo hasta 16 dB mas arriba. En el
    mismo gris, aprender que la linea es inofensiva es aprender a no leer el
    aviso que importa. Mismo rojo que .envio-estado.mal, que ya dice eso. */
-.hint { margin: 0 28px var(--space-2); font-size: 12px; color: var(--color-neutral-500); min-height: 1.2rem; }
+.hint { margin: 0; font-size: 12px; color: var(--color-neutral-500); min-height: 1.2rem; }
 .hint.mal { color: var(--peligro); }
 
 /* --- El panel del amplificador -------------------------------------------- */

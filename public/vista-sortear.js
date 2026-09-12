@@ -61,10 +61,16 @@ export function pintarSortear(song, elegida) {
   const tags = song.tags.slice(0, 5).map(t => `<span class="chip">${esc(t)}</span>`).join('')
   const detalle = song.pistas.length === 1 ? pistaUnica(song) : listaDePistas(song.pistas, elegida)
 
+  /* La identidad y el video son la parte estrecha; la lista de pistas, la ancha.
+     Van como HERMANAS dentro de la tarjeta, que envuelve: asi se ponen lado a
+     lado cuando cabe y se apilan cuando no, sin que el titulo de 54px tenga que
+     competir con la lista por el mismo ancho. */
   return `<div class="cancion-cabecera">
-      <div class="cancion-identidad"><p class="artista">${esc(song.artist)}</p><h2>${esc(song.title)}</h2><p class="cancion-cuenta">${cuantas}</p>
-      <p class="enlaces">${enlaces(song, urlUltimateGuitar(song.artist, song.title))}</p></div>${miniatura(song)}
+      <div class="cancion-identidad">
+        <p class="artista">${esc(song.artist)}</p><h2>${esc(song.title)}</h2><p class="cancion-cuenta">${cuantas}</p>
+        <p class="enlaces">${enlaces(song, urlUltimateGuitar(song.artist, song.title))}</p>
+        ${tags ? `<div class="meta">${tags}</div>` : ''}
+      </div>${miniatura(song)}
     </div>
-    ${tags ? `<div class="meta">${tags}</div>` : ''}
     <div id="detalle-pistas">${detalle}</div>`
 }
