@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm start                      # servidor en http://localhost:3000
 npm test                       # suite completa (node:test), ninguna toca la red
 node --test test/roll.test.js  # un archivo suelto
+npm run test:ui                # tests de navegador (Playwright, aparte)
 npm run etl                    # baja y enriquece el catalogo (2-3 h la 1a vez)
 npm run backup                 # copia songs.db a songs-<fecha>.db.bak
 ```
@@ -31,9 +32,15 @@ El ETL corre en dos fases y es reanudable (Ctrl-C en cualquier momento). Bandera
 - **Nunca inventar un número.** Si la fuente no trae un dato, viaja como `null` y
   la interfaz no lo dibuja. Toda cifra citada en documentación está medida contra
   el `songs.db` real; si vas a escribir una, mídela.
-- **No hay tests de navegador.** Los cambios en `public/app.js`, `editor.js` o
-  `ampli-usb.js` se verifican **a mano** contra el servidor real. Una suite verde
-  no dice nada sobre ellos.
+- **`npm test` no abre navegador ni toca la red.** Los tests de navegador viven
+  aparte, en `npm run test:ui`: Playwright es la única dependencia del proyecto y
+  es de desarrollo — `dependencies` está vacío y así se queda.
+- **Los tests de navegador cubren invariantes, no aspecto.** Ninguno comprueba un
+  color ni una medida. Corren contra una base en memoria
+  (`test/ui/servidor-fixture.mjs`), nunca contra `songs.db`: sortear escribe
+  `shown_count`, y un test no debe ensuciar tu historial.
+- Aun así, `editor.js` y `ampli-usb.js` siguen **sin cobertura**: se verifican a
+  mano contra el equipo real.
 
 ## Zonas protegidas
 
@@ -66,7 +73,8 @@ navegador también lo necesita y tener dos copias las haría desviarse
 exactamente entre lo que se ofrece y lo que se filtra).
 
 **Qué está testeado de `public/`:** `artistas.js`, `catalogo-lt25.js`,
-`despachador.js`, `fender-protocolo.js`, `tarjeta.js`. **Qué no, y por qué no se
+`despachador.js`, `fender-protocolo.js`, `tarjeta.js` — y la vista Sortear
+entera, por comportamiento, desde `test/ui/`. **Qué no, y por qué no se
 puede:** `app.js`, `ampli-usb.js`, `editor.js` tienen efectos a nivel de módulo
 (llaman a `document` en el import), así que Node no puede importarlos. Si necesitas
 testear lógica nueva de la tarjeta, **extráela a `tarjeta.js`** — es lo que ese

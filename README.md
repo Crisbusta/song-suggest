@@ -298,7 +298,8 @@ No hay respaldo automático — es responsabilidad de quien usa la app.
 ## Tests
 
 ```
-npm test
+npm test        # la suite: node:test, sin red ni navegador
+npm run test:ui # los de navegador: Playwright sobre una base de prueba
 ```
 
 Corre con `node:test`, ningún test toca la red. El front end (`public/`)
