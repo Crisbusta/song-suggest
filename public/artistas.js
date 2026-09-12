@@ -11,7 +11,13 @@
    Este modulo es puro a proposito -- sin base de datos, sin DOM -- para que
    `test/` lo importe directo desde disco, igual que catalogo-lt25.js. */
 
-/* Conserva TODA letra de cualquier alfabeto: `\p{L}`, no `a-z`.
+/* Normaliza CUALQUIER texto del catalogo para compararlo: nombres de artista
+   y tambien titulos de cancion. Nada en ella es de artistas -- baja caja, quita
+   tildes y puntuacion -- y se llamo `normalizarArtista` hasta que el buscador
+   de canciones la necesito para los titulos. El nombre viejo habria mentido
+   sobre lo que hace.
+
+   Conserva TODA letra de cualquier alfabeto: `\p{L}`, no `a-z`.
 
    Esto no es celo: la version `[^a-z0-9 ]` de esta misma idea se escribio dos
    veces en este proyecto y las dos veces borro los alfabetos no latinos
@@ -20,8 +26,8 @@
    artista de la lista. La revision final lo encontro en presets-comunidad.js y
    yo lo repeti en el script con que medi las cifras de arriba. `\p{M}` quita
    las tildes que `NFD` acaba de separar de su letra. */
-export function normalizarArtista(nombre) {
-  return String(nombre ?? '')
+export function normalizarTexto(texto) {
+  return String(texto ?? '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
@@ -36,12 +42,12 @@ export function normalizarArtista(nombre) {
    al mismo colapso que el normalizador evita, por otra puerta.
 
    El prefijo `crudo:` no puede colisionar con una clave normal porque
-   `normalizarArtista` borra los dos puntos. Vive aqui y no repetido en cada
+   `normalizarTexto` borra los dos puntos. Vive aqui y no repetido en cada
    sitio de uso porque `construirIndice` y `expandirArtistas` tienen que
    calcular la MISMA clave para el mismo nombre; si se desviaran, elegir una
    banda dejaria de encontrar su propio grupo. */
 export function claveDeArtista(nombre) {
-  const norm = normalizarArtista(nombre)
+  const norm = normalizarTexto(nombre)
   return norm === '' ? `crudo:${nombre}` : norm
 }
 
@@ -122,7 +128,7 @@ export function expandirArtistas(indice, elegidos) {
    Church, y escribir "maiden" tiene que ofrecer Maiden United antes que Iron
    Maiden, aunque Iron Maiden tenga mas canciones. */
 export function buscarArtistas(indice, consulta, limite = 8, yaElegidas = []) {
-  const q = normalizarArtista(consulta)
+  const q = normalizarTexto(consulta)
   if (q === '') return []
 
   const fuera = new Set((yaElegidas ?? []).map(claveDeArtista))
@@ -133,7 +139,7 @@ export function buscarArtistas(indice, consulta, limite = 8, yaElegidas = []) {
       // Se busca en TODAS las escrituras: "motorhead" tiene que encontrar el
       // grupo cuyo nombre visible es "Motörhead".
       const posicion = g.variantes.reduce((mejor, v) => {
-        const i = normalizarArtista(v).indexOf(q)
+        const i = normalizarTexto(v).indexOf(q)
         return i === -1 ? mejor : (mejor === -1 ? i : Math.min(mejor, i))
       }, -1)
       return { g, posicion }

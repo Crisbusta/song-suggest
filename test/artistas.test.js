@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizarArtista, construirIndice, expandirArtistas, buscarArtistas } from '../public/artistas.js'
+import { normalizarTexto, construirIndice, expandirArtistas, buscarArtistas } from '../public/artistas.js'
 
-test('normalizarArtista baja caja, quita tildes y puntuacion', () => {
-  assert.equal(normalizarArtista('Mötley Crüe'), 'motley crue')
-  assert.equal(normalizarArtista("Guns N' Roses"), 'guns n roses')
-  assert.equal(normalizarArtista('blink-182'), 'blink 182')
-  assert.equal(normalizarArtista('  Rush  '), 'rush')
+test('normalizarTexto baja caja, quita tildes y puntuacion', () => {
+  assert.equal(normalizarTexto('Mötley Crüe'), 'motley crue')
+  assert.equal(normalizarTexto("Guns N' Roses"), 'guns n roses')
+  assert.equal(normalizarTexto('blink-182'), 'blink 182')
+  assert.equal(normalizarTexto('  Rush  '), 'rush')
 })
 
 /* El error que este test fija se cometio dos veces en este proyecto: un
@@ -14,11 +14,11 @@ test('normalizarArtista baja caja, quita tildes y puntuacion', () => {
    nombres en cirilico normalizan a la cadena vacia y colapsan en un solo
    grupo. Medido sobre el catalogo: son unas 90 canciones que calzarian con el
    primer artista de la lista. */
-test('normalizarArtista conserva los alfabetos no latinos', () => {
-  assert.equal(normalizarArtista('Кино'), 'кино')
-  assert.equal(normalizarArtista('КИНО'), 'кино')
-  assert.equal(normalizarArtista('ヨルシカ'), 'ヨルシカ')
-  assert.notEqual(normalizarArtista('Кино'), normalizarArtista('Ария'))
+test('normalizarTexto conserva los alfabetos no latinos', () => {
+  assert.equal(normalizarTexto('Кино'), 'кино')
+  assert.equal(normalizarTexto('КИНО'), 'кино')
+  assert.equal(normalizarTexto('ヨルシカ'), 'ヨルシカ')
+  assert.notEqual(normalizarTexto('Кино'), normalizarTexto('Ария'))
 })
 
 test('construirIndice agrupa las escrituras de un mismo artista', () => {

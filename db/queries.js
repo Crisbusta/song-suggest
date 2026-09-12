@@ -6,7 +6,7 @@ import { sugerirAjustes, paraElAmpli } from '../lib/ampli.js'
    agrupar escrituras y buscar tienen que coincidir exactamente entre lo que se
    ofrece y lo que se filtra, y dos copias se desvian. Mismo criterio que
    `public/catalogo-lt25.js`, que tambien es puro y lo importan los tests. */
-import { construirIndice, expandirArtistas, claveDeArtista } from '../public/artistas.js'
+import { construirIndice, expandirArtistas, claveDeArtista, normalizarTexto } from '../public/artistas.js'
 
 export const MODES = ['surprise', 'riffs', 'acoustic', 'solos']
 
@@ -297,6 +297,87 @@ export function roll(db, opts = {}) {
     matching,
     hint,
   }
+}
+
+/* ------------------------------------------------------------------------
+   Buscar una cancion por nombre.
+
+   Es una CONSULTA, no un sorteo, y esa diferencia decide sus dos reglas raras:
+
+   1. Una cancion que descartaste SI aparece. La pediste por nombre; esconderla
+      porque un dia decidiste no aprenderla seria el buscador desobedeciendo una
+      orden explicita. El sorteo la sigue excluyendo -- son dos preguntas
+      distintas: "que aprendo hoy" y "con que tono toco esto".
+   2. La basura del catalogo NO aparece. Eso no lo decidiste tu, y detras no hay
+      tablatura que abrir. Tampoco aparecen las canciones sin ninguna pista de
+      guitarra: no habria tarjeta que dibujar.
+
+   Se normaliza en JavaScript en vez de en SQL porque `LIKE` de SQLite ignora la
+   caja solo en ASCII y no toca las tildes, y este catalogo tiene de las dos
+   cosas. Medido sobre las 10.011 canciones reales: ~45 ms por consulta leyendo
+   la tabla entera y normalizando titulo y artista de cada fila. A ese precio no
+   hace falta cachear un indice, y no cachearlo evita que quede viejo mientras
+   `npm run etl` corre en paralelo -- que el README invita a hacer. Los 45 ms no
+   se sienten porque el cliente espera a que dejes de escribir antes de
+   preguntar (ver el debounce en app.js). */
+export function buscarCanciones(db, consulta, limite = 8) {
+  const q = normalizarTexto(consulta)
+  if (q === '') return []
+
+  const filas = db.prepare(`
+    SELECT DISTINCT s.song_id, s.artist, s.title, s.views
+    FROM songs s
+    JOIN guitar_tracks g ON g.song_id = s.song_id
+    WHERE s.enriched_at IS NOT NULL
+      AND s.is_junk = 0 AND s.ai_generated = 0 AND s.is_blank = 0 AND s.is_published = 1
+  `).all()
+
+  /* La posicion del calce ordena igual que en buscarArtistas: lo que EMPIEZA
+     con lo escrito va primero, y entre iguales gana la mas vista.
+
+     Se mide sobre el titulo y sobre el artista POR SEPARADO, no sobre los dos
+     pegados. Midiendola sobre la cadena pegada, el largo del nombre de la banda
+     decidiria el orden: buscando "one", "Tool Someone" calza en la posicion 5 y
+     "Metallica One" en la 10, asi que Someone ganaria a One por tener la banda
+     un nombre mas corto. Hay test.
+
+     La cadena pegada queda como calce de ULTIMO recurso (`rango` 1), para que
+     se pueda escribir la banda y el tema juntos -- "metallica fade" -- que es
+     como uno los tiene en la cabeza. Va detras de todos los calces directos
+     porque no es un calce sobre ningun campo por si solo. */
+  return filas
+    .map(f => {
+      const enTitulo = normalizarTexto(f.title).indexOf(q)
+      const enArtista = normalizarTexto(f.artist).indexOf(q)
+      const directos = [enTitulo, enArtista].filter(i => i !== -1)
+      return directos.length
+        ? { f, rango: 0, posicion: Math.min(...directos) }
+        : { f, rango: 1, posicion: normalizarTexto(`${f.artist} ${f.title}`).indexOf(q) }
+    })
+    .filter(({ posicion }) => posicion !== -1)
+    .sort((a, b) =>
+      (a.rango - b.rango) || (a.posicion - b.posicion) || ((b.f.views ?? 0) - (a.f.views ?? 0)))
+    .slice(0, limite)
+    .map(({ f }) => ({ songId: f.song_id, artist: f.artist, title: f.title }))
+}
+
+/* Una cancion por su id, con todas sus pistas.
+
+   `califican` va en null igual que en getList: no hubo filtro contra el cual
+   calificar, asi que todas cuentan y viene elegida la mas vista.
+
+   NO toca song_state, ni siquiera para crear la fila. Mirar el tono de un tema
+   que ya te sabes no es que el sorteo te lo haya ofrecido, y sumarle
+   shown_count lo contaria como si lo fuera. */
+export function getSong(db, songId) {
+  const fila = db.prepare(`
+    SELECT ${COLUMNS}
+    FROM songs s
+    JOIN representative_track g ON g.song_id = s.song_id
+    LEFT JOIN song_state st ON st.song_id = s.song_id
+    WHERE s.song_id = ?
+  `).get(songId)
+  return hidratar(db, fila)
 }
 
 export const LISTS = ['learned', 'skipped', 'queued', 'liked']

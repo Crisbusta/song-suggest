@@ -48,6 +48,22 @@
     <p id="calzan" class="calzan"></p>
   </section>
 
+  <!-- Fuera de los controles a proposito: buscar una cancion no es un filtro
+       del sorteo, es la otra puerta de entrada a una tarjeta. No mueve el
+       contador de arriba ni el aviso de abajo. -->
+  <div class="cancion-buscador">
+    <label for="cancion-q">Buscar una canción</label>
+    <div class="cancion-caja">
+      <input id="cancion-q" type="text" autocomplete="off" spellcheck="false"
+             placeholder="escribe el tema o la banda y el tema"
+             aria-describedby="cancion-ayuda">
+      <ul id="cancion-sug" class="banda-sug" hidden></ul>
+    </div>
+    <p id="cancion-ayuda" class="banda-ayuda">
+      Abre su tarjeta directo, sin sortear. Encuentra también las que descartaste.
+    </p>
+  </div>
+
   <section id="tarjeta" class="tarjeta"></section>
   <p id="hint" class="hint"></p>
 

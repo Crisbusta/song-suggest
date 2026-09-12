@@ -4,7 +4,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDb } from './db/open.js'
-import { roll, mark, getList, getStats, listarArtistas } from './db/queries.js'
+import { roll, mark, getList, getStats, listarArtistas, buscarCanciones, getSong } from './db/queries.js'
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url))
 const RAIZ = realpathSync(PUBLIC)   // sin barra final: realpath la quita
@@ -54,6 +54,30 @@ export function createApp(db) {
       }
 
       if (ruta === '/api/artists') return json(res, 200, { artists: listarArtistas(db) })
+
+      /* Buscar es una CONSULTA, no un sorteo: no toca song_state y encuentra
+         tambien lo que ya descartaste (ver buscarCanciones en db/queries.js).
+         Sin `q` devuelve la lista vacia en vez de un 400: la caja arranca
+         vacia y preguntar con nada escrito no es un error del cliente. */
+      if (ruta === '/api/buscar') {
+        return json(res, 200, { songs: buscarCanciones(db, url.searchParams.get('q') ?? '') })
+      }
+
+      if (ruta === '/api/song') {
+        /* `Number(null)` es 0 y 0 es un entero, asi que mirar solo el numero
+           dejaba pasar la peticion SIN songId y la contestaba con un 404 de
+           "no existe esa cancion" -- que es mentira: no se pidio ninguna. */
+        const crudo = url.searchParams.get('songId')
+        const songId = Number(crudo)
+        if (crudo === null || !Number.isInteger(songId) || songId < 1) {
+          return json(res, 400, { error: 'falta songId' })
+        }
+        const song = getSong(db, songId)
+        // 404 y no `song: null`, que se confundiria con "el sorteo no encontro
+        // nada": pedir una cancion por id que no existe es otra cosa.
+        if (!song) return json(res, 404, { error: 'no existe esa cancion' })
+        return json(res, 200, { song })
+      }
 
       if (ruta === '/api/mark' && req.method === 'POST') {
         const body = await leerCuerpo(req)
