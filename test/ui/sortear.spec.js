@@ -47,23 +47,25 @@ test('sortear de todo no mueve el contador ni toca los controles', async ({ page
 })
 
 /* Se muestran igual, marcadas: asi se ve POR QUE salio esta cancion y cual
-   pista no fue el motivo. Esconderlas seria esconder el criterio. */
-test('las pistas que no cumplen el filtro se ven, marcadas', async ({ page }) => {
-  await page.click('#dificultad button:text-is("1")')
-  await page.click('#dificultad button:text-is("3")')
-  await page.locator('#tarjeta').waitFor()
+   pista no fue el motivo. Esconderlas seria esconder el criterio.
 
-  // La cancion de seis pistas tiene dos dificiles que con 1-3 quedan fuera.
-  await abrirCancion(page, 'Seis Pistas')
-  await page.click('#dificultad button:text-is("1")')
-  await page.click('#dificultad button:text-is("3")')
-  await page.locator('.fila-pista').first().waitFor()
+   Ojo con como se llega aqui: una cancion ABIERTA DESDE EL BUSCADOR no tiene
+   filtro contra el que calificar, asi que todas sus pistas califican y el test
+   pasaria en vacio. Tiene que venir de un SORTEO con filtro.
+
+   Con la dificultad en 1-3 el fixture deja una sola candidata -- la de seis
+   pistas, cuatro faciles y dos dificiles -- asi que el sorteo es determinista
+   y las dos dificiles tienen que verse marcadas. */
+test('las pistas que no cumplen el filtro se ven, marcadas', async ({ page }) => {
+  await page.selectOption('#min', '1')
+  await page.selectOption('#max', '3')
+  await expect(page.locator('.cancion-identidad h2')).toHaveText('Cancion De Seis Pistas')
 
   const fuera = page.locator('.fila-pista.fuera-filtro')
-  if (await fuera.count() > 0) {
-    await expect(fuera.first()).toBeVisible()
-    await expect(fuera.first().locator('.fuera-etiqueta')).toHaveText('fuera del filtro')
-  }
+  await expect(fuera).toHaveCount(2)
+  await expect(fuera.first().locator('.fuera-etiqueta')).toHaveText('fuera del filtro')
+  // Y siguen estando: marcadas, no escondidas.
+  await expect(page.locator('.fila-pista')).toHaveCount(6)
 })
 
 /* La mas vista DE LAS QUE CALIFICAN, no la primera de la lista. La lista agrupa

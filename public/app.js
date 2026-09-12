@@ -193,46 +193,31 @@ const marcar = async cuerpo => {
   refrescarArtistas()
 }
 
-// Los sliders no se pisan entre ellos.
+/* El rango de dificultad son dos selectores, uno por extremo.
+
+   El maximo lista de 10 a 1 a proposito, igual que el diseño: el valor que mas
+   se toca en ese control esta arriba del todo en vez de al final de la lista. */
+function llenarDificultad() {
+  const opciones = (valores, puesto) => valores
+    .map(v => `<option value="${v}"${v === puesto ? ' selected' : ''}>${v}</option>`).join('')
+  const arriba = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  $('#min').innerHTML = opciones(arriba, Number($('#min').dataset.valor ?? 1))
+  $('#max').innerHTML = opciones([...arriba].reverse(), Number($('#max').dataset.valor ?? 10))
+}
+
+// Ninguno de los dos extremos puede cruzar al otro.
 function sincronizarRangos(cambiado) {
   const min = $('#min'), max = $('#max')
   if (Number(min.value) > Number(max.value)) {
     if (cambiado === 'min') max.value = min.value
     else min.value = max.value
   }
-  pintarFichasDificultad()
 }
 
-function pintarFichasDificultad() {
-  const caja = $('#dificultad')
-  const min = Number($('#min').value), max = Number($('#max').value)
-  caja.innerHTML = Array.from({ length: 10 }, (_, i) => {
-    const valor = i + 1
-    const activa = valor >= min && valor <= max
-    return `<button type="button" data-dificultad="${valor}" aria-pressed="${activa}">${valor}</button>`
-  }).join('') + `<span>${min}–${max}</span>`
-}
+llenarDificultad()
 
-let extremoInicial = null
-$('#dificultad').addEventListener('click', e => {
-  const ficha = e.target.closest('button[data-dificultad]')
-  if (!ficha) return
-  const valor = Number(ficha.dataset.dificultad)
-  if (extremoInicial === null) {
-    extremoInicial = valor
-    $('#min').value = valor
-    $('#max').value = valor
-  } else {
-    $('#min').value = Math.min(extremoInicial, valor)
-    $('#max').value = Math.max(extremoInicial, valor)
-    extremoInicial = null
-  }
-  pintarFichasDificultad()
-  sortear()
-})
-
-for (const [id, ev] of [['min', 'min'], ['max', 'max']]) {
-  $(`#${id}`).addEventListener('input', () => { sincronizarRangos(ev); sortearConEspera() })
+for (const cual of ['min', 'max']) {
+  $(`#${cual}`).addEventListener('change', () => { sincronizarRangos(cual); sortear() })
 }
 $('#modo').addEventListener('change', sortear)
 $('#otra').addEventListener('click', sortear)
@@ -365,7 +350,9 @@ if (ampli.soportado()) {
   $botonAmpli.hidden = false
   $('#ver-editor').hidden = false
   ampli.alCambiarEstado(conectado => {
-    $botonAmpli.textContent = conectado ? 'Ampli conectado' : 'Conectar ampli'
+    // En el SPAN, no en el boton: el boton lleva ademas el punto de estado,
+    // y un textContent sobre el entero lo borraria.
+    $('#ampli-estado').textContent = conectado ? 'Ampli conectado' : 'Conectar ampli'
     $botonAmpli.classList.toggle('conectado', conectado)
     $botonAmpli.title = conectado ? 'Pulsa para desconectar' : 'Conectar el Mustang LT25 por USB'
     pintarBotonEnviar()

@@ -78,5 +78,5 @@ export function pintarPanelAmpli(pista, estado = {}) {
     <h3>Ranuras</h3><ul class="cadena cadena-panel">${ranuras(a)}</ul>
     ${a.incierto ? '<p class="envio-estado mal">La planilla marca este preset como dudoso.</p>' : ''}
     ${queSePisa(a)}
-    <div class="panel-envio"><button type="button" id="enviar-ampli" class="enviar-ampli" ${estado.puedeEnviar ? '' : 'disabled'}>Enviar al ampli <kbd>E</kbd></button><p id="envio-estado" class="envio-estado" role="status">Sin enviar todavía</p><p class="descargo">${resumenEnvioAmpli(a).queSeManda}</p></div>`
+    <div class="panel-envio"><button type="button" id="enviar-ampli" class="btn btn-primary btn-block enviar-ampli" ${estado.puedeEnviar ? '' : 'disabled'}>Enviar al ampli <kbd>E</kbd></button><p id="envio-estado" class="envio-estado" role="status">Sin enviar todavía</p><p class="descargo">${resumenEnvioAmpli(a).queSeManda}</p></div>`
 }

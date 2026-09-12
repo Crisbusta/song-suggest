@@ -2,33 +2,43 @@
    Tokens. Paleta heredada: medida con WCAG, ya cumplia AA/AAA, asi que se
    conserva. Se agregan solo un borde y la pista del medidor.
    --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Los tokens ya NO viven aqui: los pone `nocturne.css`, el sistema de diseño,
+   que se carga antes y sin tocar.
+
+   Lo de abajo son ALIAS de los nombres viejos a los del sistema. Existen para
+   que las vistas que este rediseño no reescribe -- Mis listas y el editor del
+   ampli -- hereden la paleta nueva sin tocarles una linea. Cuando esas dos se
+   rediseñen, este bloque se borra entero.
+
+   Las escalas de espacio y de tipo se quedan como estaban a proposito: la de
+   Nocturne es un 30% mas densa, y aplicarla de golpe al editor apretaria una
+   pantalla llena de perillas sin que nadie lo haya mirado. La vista Sortear si
+   usa `--space-*` y `--radius-*` directos, que es lo que el diseño pide. */
 :root {
-  --fondo: #14151a;
-  --panel: #1e2029;
-  --relieve: #2a2d38;
-  --borde: #424654;   /* 1.73 sobre panel: se lee sin gritar (era #32353f, 1.33) */
-  --texto: #e8e8ea;
-  --tenue: #9a9aa5;
-  --acento: #d4a24a;
+  --fondo:   var(--color-bg);
+  --panel:   var(--color-surface);
+  --relieve: color-mix(in srgb, var(--color-text) 4%, transparent);
+  --borde:   var(--color-divider);
+  --texto:   var(--color-text);
+  --tenue:   var(--color-neutral-500);
+  --acento:  var(--color-accent);
+  --acustica: var(--color-neutral-400);
+  --limpia:  var(--color-accent-2);
+  --peligro: #ef828b;
+  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
 
-  /* Escala de espaciado de 4px. Reemplaza los valores sueltos de antes
-     (habia un 3.2px, resto de un .2rem escrito a ojo). */
-  --e1: .25rem;   /*  4px */
-  --e2: .5rem;    /*  8px */
-  --e3: 1rem;     /* 16px */
-  --e4: 1.5rem;   /* 24px */
-  --e5: 2.5rem;   /* 40px */
+  --e1: .25rem;   --e2: .5rem;    --e3: 1rem;
+  --e4: 1.5rem;   --e5: 2.5rem;
 
-  /* Escala tipografica modular. El rotulo de la pagina y el titulo de la
-     cancion estaban a 22 y 24px con el mismo peso: competian. */
-  --t-micro: .75rem;    /* 12px  etiquetas */
-  --t-chico: .8125rem;  /* 13px  chips, notas */
-  --t-base: .9375rem;   /* 15px  cuerpo */
-  --t-medio: 1.0625rem; /* 17px  subtitulos */
-  --t-grande: 1.75rem;  /* 28px  titulo de la cancion, unico protagonista */
+  --t-micro: .75rem;    --t-chico: .8125rem;  --t-base: .9375rem;
+  --t-medio: 1.0625rem; --t-grande: 1.75rem;
 
-  --curva: cubic-bezier(.22, .61, .36, 1);  /* ease-out */
-  --radio: .5rem;
+  --curva: cubic-bezier(.22, .61, .36, 1);
+  --radio: var(--radius-md);
+
+  /* Ancho maximo del contenido, heredado del ajuste anterior. */
+  --ancho: 94rem;
 }
 
 * { box-sizing: border-box; }
@@ -191,30 +201,15 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 }
 
 /* --- Preview de YouTube -------------------------------------------------- */
-.preview {
-  position: relative; border-radius: var(--radio); overflow: hidden;
-  aspect-ratio: 16 / 9; background: #000; cursor: pointer;
-}
-.preview img, .preview iframe { display: block; width: 100%; height: 100%; border: 0; object-fit: cover; }
-.preview .play {
-  position: absolute; inset: 0; margin: auto;
-  width: 3.5rem; height: 3.5rem; border: 0; border-radius: 50%;
-  background: rgba(20,21,26,.7); color: var(--texto); font-size: 1.25rem;
-  cursor: pointer; transition: background .15s var(--curva), transform .15s var(--curva);
-}
-.preview:hover .play { background: var(--acento); color: var(--fondo); transform: scale(1.06); }
+/* El bloque que estaba aqui dibujaba el video como una miniatura 16:9 con el
+   play centrado en absoluto. El rediseño lo convierte en una pastilla: es lo
+   menos funcional de la tarjeta y era lo mas grande. Su estilo vive ahora en la
+   seccion de la vista Sortear, mas abajo. */
 
 .enlaces { margin: 0; font-size: var(--t-chico); }
 .tarjeta a { color: var(--acento); text-decoration-color: color-mix(in srgb, var(--acento) 40%, transparent); }
 .tarjeta a:hover { text-decoration-color: var(--acento); }
 .vacio { color: var(--tenue); text-align: center; padding: var(--e5) 0; }
-.hint { color: var(--tenue); font-size: var(--t-chico); min-height: 1.5rem; margin: 0 0 var(--e3); }
-/* Por esta misma linea llegan dos cosas muy distintas: el conteo de canciones
-   (y el aviso inocuo de un envio abandonado a mitad) y el unico canal que
-   tenemos para decir que el amplificador quedo hasta 16 dB mas arriba. En el
-   mismo gris, aprender que la linea es inofensiva es aprender a no leer el
-   aviso que importa. Mismo rojo que .envio-estado.mal, que ya dice eso. */
-.hint.mal { color: #e2585b; }
 
 /* --- Acciones ------------------------------------------------------------ */
 .acciones { display: flex; flex-wrap: wrap; gap: var(--e2); }
@@ -470,215 +465,357 @@ kbd { border: 1px solid var(--borde); border-radius: var(--e1); padding: 0 var(-
 @media (max-width: 60rem) { .columnas { grid-template-columns: minmax(0, 1fr); } .panel-ampli { position: static; } }
 @media (max-width: 38rem) { body { padding: var(--e3); } .barra-controles .calzan { width: 100%; margin-left: 0; } }
 
-/* Sortear v2: superficie continua, acentos por instrumento y panel lateral. */
-:root {
-  --fondo: #121016;
-  --panel: #1b1822;
-  --relieve: #272231;
-  --borde: #3c3546;
-  --texto: #ece8ef;
-  --tenue: #aaa1b3;
-  --acento: #e8a33d;
-  --acustica: #b98ae8;
-  --limpia: #5fd3c4;
-  --peligro: #ef828b;
-  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+/* ===========================================================================
+   Vista Sortear — implementa el diseño "Song Suggest · UI cleanup" (Nocturne).
 
-  /* Ancho maximo del contenido. Las barras siguen cruzando la pantalla entera
-     -- su borde inferior es la linea que separa las zonas -- pero lo que
-     llevan dentro se centra. El truco es el padding-inline calculado de abajo:
-     evita envolver cada barra en un div extra solo para esto. */
-  --ancho: 94rem;
-}
+   Todo lo de aqui abajo toma color, radio y sombra de `nocturne.css`, que se
+   carga antes. Las medidas de caja (28px de sangrado, 22px entre bloques) son
+   las del diseño y se escriben tal cual: no salen de la escala --space-*, que
+   llega hasta 22.4px.
+   =========================================================================== */
 
-/* Centra el contenido sin romper el sangrado completo de las barras. En una
-   pantalla estrecha gana el var(--e4) y el resultado es un margen normal; en un
-   monitor ancho gana la mitad del sobrante y el contenido queda centrado. */
-.cabecera-app, .barra-controles, .columnas, .acciones {
-  padding-inline: max(var(--e4), (100% - var(--ancho)) / 2);
-}
+/* Sin esto, `hidden` no gana contra las reglas de display de mas abajo y el
+   panel de bandas aparece abierto de entrada. Estaba en la capa que este
+   rediseño sustituyo y se perdio al reescribirla. */
 [hidden] { display: none !important; }
-/* El alto lo reparte el navegador en vez de calcularlo a mano. Antes
-   `.columnas` y `.panel-ampli` llevaban `min-height: calc(100vh - 12rem)`, y
-   esas 12rem eran una apuesta sobre lo que miden las barras. Medido: suman
-   208px, no 192 -- la cabecera 64, los filtros 56, el aviso 24 y las acciones
-   64. El resultado era una barra de scroll de 16px que no mostraba nada, y que
-   crecia si el aviso se partia en dos lineas. */
-body { max-width: none; padding: 0; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-/* La pagina NO scrollea: las barras se quedan siempre a la vista y lo que
-   scrollea es el contenido. Cada vista se encarga de lo suyo. */
+
+/* La pagina no scrollea: las barras se quedan a la vista y lo que scrollea es
+   el contenido. Cada vista se encarga de lo suyo. */
+body {
+  max-width: none; padding: 0; height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column;
+  /* El fondo del diseño: un halo frio arriba a la izquierda sobre el ground. */
+  background: radial-gradient(120% 70% at 18% -10%, #1d2033 0%, var(--color-bg) 60%);
+}
 body > main { flex: 1; min-height: 0; overflow-y: auto; }
 
-/* La vista Sortear reparte su alto: filtros arriba, acciones abajo, y las dos
+/* El alto se reparte, no se calcula: filtros arriba, acciones abajo, y las dos
    columnas se quedan con lo que sobre. `min-height: 0` es lo que permite que la
-   fila encoja por debajo de su contenido; sin el, flex se niega a encoger y
-   reaparece la barra de scroll. */
+   fila encoja por debajo de su contenido. */
 #vista-sorteo { display: flex; flex-direction: column; overflow: hidden; }
 #vista-sorteo .columnas { flex: 1; min-height: 0; }
-/* Si una columna no cabe, scrollea ELLA. Son dos regiones lado a lado, no
-   anidadas, y la pagina de alrededor sigue quieta. */
+/* Si una columna no cabe, scrollea ELLA. Dos regiones lado a lado, no anidadas,
+   y la pagina de alrededor sigue quieta. */
 #vista-sorteo .columnas > * { overflow-y: auto; min-height: 0; }
+
 .solo-lector { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.cabecera-app { min-height: 4rem; padding-block: var(--e2); margin: 0; align-items: center; gap: var(--e3); }
-.cabecera-app h1 { color: var(--acento); font-size: var(--t-base); letter-spacing: -.04em; text-transform: none; white-space: nowrap; }
-.cabecera-app nav { margin-left: 0; flex-shrink: 0; }
-.cabecera-app nav button { padding: var(--e2) var(--e3); }
-.cabecera-app nav button.activo { background: var(--relieve); color: var(--texto); font-weight: 500; }
-.cabecera-app .cancion-buscador { margin: 0; width: min(28rem, 35vw); }
-.cancion-caja { display: flex; align-items: center; }
-.cancion-caja .buscar-icono { position: absolute; left: var(--e3); color: var(--tenue); font-size: var(--t-medio); }
-.cancion-caja kbd { position: absolute; right: var(--e2); }
-.cancion-caja #cancion-q { background: var(--panel); padding: var(--e2) var(--e5); font-size: var(--t-chico); }
-.cabecera-app .stats { margin-left: auto; font-size: var(--t-micro); }
-.cabecera-app .ampli-conectar { margin: 0; white-space: nowrap; padding: var(--e2); }
-.barra-controles { border: 0; border-bottom: 1px solid var(--borde); border-radius: 0; padding-block: var(--e2); gap: var(--e4); min-height: 3.5rem; }
-.barra-controles label { text-transform: none; letter-spacing: normal; font-size: var(--t-chico); gap: var(--e2); }
-.barra-controles select { min-height: 2rem; background: var(--relieve); }
-.rango-control { display: flex; gap: var(--e2); align-items: center; color: var(--tenue); font-size: var(--t-chico); }
-.dificultad-filtro { gap: var(--e1); }
-.dificultad-filtro button { padding: 0; width: 1.5rem; height: 1.75rem; border-radius: var(--e1); background: transparent; font: var(--t-micro) var(--mono); color: var(--tenue); }
-.dificultad-filtro button[aria-pressed="true"] { background: color-mix(in srgb, var(--acento) 14%, transparent); border-color: var(--acento); color: var(--acento); }
-.dificultad-filtro span { font-family: var(--mono); color: var(--acento); min-width: 3rem; }
-#bandas-abrir { border-color: transparent; background: transparent; color: var(--tenue); max-width: 15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#bandas-abrir:hover { background: var(--relieve); color: var(--texto); }
-.barra-controles .calzan { font-family: var(--mono); white-space: nowrap; }
-#bandas-panel { position: absolute; z-index: 25; right: var(--e4); top: 7.5rem; width: min(32rem, calc(100% - 3rem)); padding: var(--e3); background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: 0 var(--e3) var(--e5) #0008; }
-.columnas { grid-template-columns: minmax(0, 1fr) 24rem; gap: 0; min-height: 0; align-items: stretch; }
-.columnas .tarjeta { margin: 0; padding: var(--e4); border: 0; background: transparent; min-width: 0; }
-.tarjeta > * { max-width: 52rem; }
-.tarjeta > * + * { margin-top: var(--e3); }
-.cancion-cabecera { display: flex; justify-content: space-between; align-items: start; gap: var(--e4); }
-.cancion-identidad { min-width: 0; flex: 1; }
-.tarjeta .artista { margin: 0 0 var(--e1); color: var(--texto); font-size: var(--t-medio); }
-.tarjeta h2 { color: var(--acento); font-size: 2rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
-.cancion-cuenta { margin: var(--e2) 0; color: var(--tenue); font: var(--t-micro)/1.5 var(--mono); }
-.tarjeta .enlaces { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e3); font-size: var(--t-micro); margin: var(--e3) 0 0; }
-.tarjeta .enlaces a { text-decoration: none; }
-.tarjeta .enlaces a:hover { text-decoration: underline; }
-.cancion-cabecera .preview { flex: 0 0 13rem; width: 13rem; aspect-ratio: 16 / 9; border: 1px solid var(--borde); background: var(--panel); color: var(--tenue); font: inherit; padding: 0; }
-.cancion-cabecera .preview .play { width: 2.75rem; height: 2.75rem; display: grid; place-items: center; color: var(--acento); border: 1px solid var(--acento); background: transparent; font-size: var(--t-base); }
-.preview small { position: absolute; bottom: var(--e2); left: var(--e2); font: var(--t-micro) var(--mono); }
-.cancion-cabecera .preview .play { top: -1rem; }
-.preview:hover { border-color: var(--acento); }
-.chip { padding: 0 var(--e2); border-radius: var(--e1); background: var(--panel); font-size: var(--t-micro); }
-.pistas-lista { background: var(--panel); overflow: hidden; max-height: none; }
-.pistas-titulo { display: flex; align-items: center; justify-content: space-between; gap: var(--e2); padding: var(--e2) var(--e3); font: var(--t-micro)/1.5 var(--mono); letter-spacing: .04em; }
-.pistas-titulo > span { text-transform: none; letter-spacing: 0; font-family: inherit; }
-/* Ya no scrollea por dentro: la columna que la contiene se encarga. Tenerlo en
-   los dos sitios daba scroll anidado -- rueda dentro de rueda -- que es de lo
-   peor que se puede sentir en escritorio. Se conserva el color de la barra para
-   cuando le toque a la columna. */
-.pistas-filas { scrollbar-color: var(--borde) var(--panel); }
-.grupo-pistas { --familia: var(--acento); }
-.grupo-pistas[data-familia="ACÚSTICA"] { --familia: var(--acustica); }
-.grupo-pistas[data-familia="LIMPIA"] { --familia: var(--limpia); }
-.grupo-pistas[data-familia="OTRAS"] { --familia: var(--tenue); }
-.grupo-pistas h3 { padding: var(--e1) var(--e3); border-top: 1px solid var(--borde); background: var(--fondo); color: var(--tenue); font: var(--t-micro)/1.75 var(--mono); }
-.grupo-pistas h3::before { content: ''; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: var(--familia); margin-right: var(--e2); }
-.fila-pista { border-left: 2px solid transparent; grid-template-columns: 1rem minmax(0, 1fr) auto; padding: var(--e2) var(--e3); gap: 0 var(--e3); min-height: 3.5rem; }
-.fila-pista b { grid-row: 1 / 3; font: var(--t-micro) var(--mono); font-weight: 400; }
-.fila-pista .nombre-pista { font-size: var(--t-base); font-weight: 500; line-height: 1.5; }
-.fila-pista small { font: var(--t-micro)/1.6 var(--mono); }
-.fila-pista em { display: flex; align-items: center; gap: var(--e2); font: var(--t-micro) var(--mono); }
-.fila-pista em > span:last-child { min-width: 1rem; text-align: right; }
-.fila-pista .medidor { gap: 2px; }
-.fila-pista .medidor i { width: var(--e1); height: 1rem; background: var(--relieve); border-radius: 0; }
-.fila-pista .medidor i.on { background: color-mix(in srgb, var(--familia) 60%, var(--panel)); }
-.fila-pista.elegida { background: color-mix(in srgb, var(--familia) 9%, var(--panel)); border-left-color: var(--familia); }
-.fila-pista.elegida b, .fila-pista.elegida small { color: var(--familia); }
-.fila-pista.elegida .medidor i.on { background: var(--familia); }
-.fila-pista:hover { background: var(--relieve); }
-.fila-pista.fuera-filtro { opacity: 1; color: var(--tenue); }
-.fuera-etiqueta { padding: var(--e1); border: 1px solid var(--borde); border-radius: var(--e1); font: var(--t-micro) system-ui; }
-.pista-unica { padding: var(--e3); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--panel); }
-.pista-unica .pistas-titulo { padding: 0 0 var(--e2); }
-.pista-unica p:last-child { margin: var(--e2) 0 0; color: var(--tenue); font: var(--t-micro)/1.6 var(--mono); }
-.panel-ampli { border-radius: 0; border: 0; border-left: 1px solid var(--borde); padding: var(--e3); top: 0; background: var(--panel); min-height: 0; display: flex; flex-direction: column; }
-.panel-cabecera { display: flex; justify-content: space-between; align-items: center; gap: var(--e2); margin-bottom: var(--e3); }
-.panel-ampli h2, .panel-ampli h3 { font: var(--t-micro)/1.5 var(--mono); color: var(--tenue); letter-spacing: .04em; margin: 0; }
-#panel-conexion { font-size: var(--t-micro); color: var(--tenue); white-space: nowrap; }
-#panel-conexion::before { content: '●'; font-size: .5rem; margin-right: var(--e1); }
-#panel-conexion.conectado { color: var(--limpia); }
-.panel-ampli .modelo { display: grid; gap: var(--e1); border: 1px solid var(--acustica); border-radius: var(--radio); padding: var(--e3); background: var(--fondo); margin: 0 0 var(--e3); }
-.panel-ampli .modelo span { font: var(--t-micro)/1.5 var(--mono); text-transform: uppercase; color: var(--tenue); }
-.panel-ampli .modelo strong { font: var(--t-medio)/1.5 var(--mono); color: var(--acustica); }
-.perillas-panel { gap: var(--e2); }
-.panel-ampli .perilla { display: grid; grid-template-columns: 3.5rem 1fr 2rem; gap: var(--e2); font-size: var(--t-chico); }
-.panel-ampli .perilla .num { text-align: right; font-family: var(--mono); }
-.perilla meter { width: 100%; height: var(--e2); border: 0; background: var(--relieve); border-radius: var(--e1); }
-.perilla meter::-webkit-meter-bar { background: var(--relieve); border: 0; }
-.perilla meter::-webkit-meter-optimum-value { background: var(--acustica); border-radius: var(--e1); }
-.perilla meter::-moz-meter-bar { background: var(--acustica); }
-.volumen-nota { color: var(--tenue); font-size: var(--t-micro); margin: var(--e3) 0; }
-.cadena-panel { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e2); margin: var(--e2) 0 var(--e3); }
-.cadena-panel li { display: grid; gap: var(--e1); padding: var(--e2); border: 1px solid var(--acustica); border-radius: var(--radio); background: color-mix(in srgb, var(--acustica) 5%, var(--panel)); }
-.cadena-panel li.ranura-vacia { border: 1px dashed var(--borde); background: transparent; color: var(--tenue); }
-.cadena-panel li span { min-width: 0; font: var(--t-micro) var(--mono); color: var(--tenue); }
-.cadena-panel strong { font: var(--t-micro)/1.5 var(--mono); overflow-wrap: anywhere; }
-.panel-detalles { font-size: var(--t-micro); color: var(--tenue); margin-bottom: var(--e4); }
-.panel-detalles summary { cursor: pointer; }
-.panel-detalles p { margin: var(--e2) 0; }
-.panel-envio { margin-top: auto; padding-top: var(--e3); border-top: 1px solid var(--borde); }
-.panel-envio .enviar-ampli { width: 100%; padding: var(--e2); min-height: 2.75rem; background: var(--acento); color: var(--fondo); font-weight: 600; border-color: var(--acento); }
-.panel-envio .enviar-ampli:disabled { opacity: 1; background: var(--relieve); border-color: var(--borde); color: var(--tenue); cursor: not-allowed; }
-.panel-envio .envio-estado { display: block; margin: var(--e2) 0 var(--e3); min-height: 1.5rem; font-size: var(--t-micro); overflow-wrap: anywhere; }
-.panel-envio .descargo { font-size: var(--t-micro); color: var(--tenue); margin: 0; line-height: 1.6; }
-.envio-estado.mal, .hint.mal { color: var(--peligro); }
-.panel-vacio { color: var(--tenue); font-size: var(--t-chico); padding: var(--e4) 0; }
-.panel-vacio p { color: var(--texto); font-size: var(--t-medio); }
-.hint { padding: 0 var(--e4); margin: 0; }
-.hint:empty { display: none; }
-.acciones { position: relative; z-index: 10; padding-block: var(--e2); border-top: 1px solid var(--borde); background: var(--fondo); align-items: center; min-height: 4rem; }
-.acciones button { padding: var(--e2) var(--e3); background: var(--panel); border: 1px solid var(--borde); }
-.acciones .principal { margin-left: 0; color: var(--acento); background: transparent; border-color: var(--acento); }
-.acciones #todo { margin-left: auto; background: transparent; border-color: transparent; color: var(--tenue); }
-.acciones .like { font-size: var(--t-base); }
-kbd { font: var(--t-micro)/1.2 var(--mono); border: 0; background: var(--relieve); color: var(--tenue); padding: var(--e1); }
-#vista-listas, #vista-editor { max-width: 60rem; margin: var(--e4) auto; padding: 0 var(--e4); }
-/* Antes aqui se capaba `.tarjeta > *` a 60rem. Eso dejaba el contenido en 960px
-   dentro de una columna de 1580px en un monitor ancho: ~600px muertos entre la
-   tarjeta y el panel. Ahora el tope lo pone --ancho sobre la rejilla entera, asi
-   que las dos columnas se acercan en vez de separarse. */
+
+/* --- Cabecera ------------------------------------------------------------- */
+.cabecera-app {
+  display: flex; align-items: center; gap: 20px;
+  padding: 14px 28px; margin: 0; border: 0; flex-wrap: wrap;
+}
+.marca {
+  font-family: var(--font-heading); font-weight: 600; font-size: 16px;
+  letter-spacing: -0.02em; color: var(--color-accent); margin-right: 4px;
+}
+.cabecera-app nav { display: flex; align-items: center; gap: 2px; margin: 0; }
+.cabecera-app nav button {
+  font-size: 13.5px; color: var(--color-neutral-400); background: transparent;
+  border: 0; padding: 6px 11px; border-radius: var(--radius-md); cursor: pointer;
+  white-space: nowrap; font-family: inherit;
+}
+.cabecera-app nav button:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+/* La vista activa se marca con un anillo, no con un relleno: el sistema pide
+   que el acento sea linea y no mancha. */
+.cabecera-app nav button.activo { color: var(--color-text); box-shadow: inset 0 0 0 1px var(--color-accent); }
+
+.cabecera-app .cancion-buscador {
+  flex: 1 1 280px; min-width: 220px; max-width: 520px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 0 10px; min-height: 36px; margin: 0; position: relative;
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+}
+.cabecera-app .cancion-buscador:hover { border-color: color-mix(in srgb, var(--color-text) 30%, transparent); }
+.cabecera-app .cancion-buscador:focus-within { border-color: var(--color-accent); }
+.buscar-icono { color: var(--color-neutral-500); flex: none; }
+#cancion-q {
+  flex: 1; min-width: 0; background: transparent; border: 0; padding: 0;
+  min-height: 34px; font: inherit; font-size: 13.5px; color: var(--color-text);
+  caret-color: var(--color-accent);
+}
+#cancion-q::placeholder { color: var(--color-neutral-500); }
+.cabecera-app kbd {
+  font: inherit; font-size: 10.5px; color: var(--color-neutral-500);
+  border: 1px solid var(--color-divider); border-radius: 4px; padding: 1px 5px;
+}
+
+/* El estado del ampli es una pastilla con un punto que brilla: se lee de un
+   vistazo desde lejos, que es como se mira estando con la guitarra. */
+.ampli-pastilla {
+  display: flex; align-items: center; gap: 7px; margin-left: auto;
+  padding: 5px 11px 5px 9px; border: 0; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12.5px; white-space: nowrap;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent-300);
+}
+.ampli-pastilla .punto {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--color-accent); box-shadow: 0 0 8px var(--color-accent);
+}
+.ampli-pastilla:not(.conectado) { background: color-mix(in srgb, var(--color-text) 6%, transparent); color: var(--color-neutral-400); }
+.ampli-pastilla:not(.conectado) .punto { background: var(--color-neutral-600); box-shadow: none; }
+
+/* --- Barra de filtros ----------------------------------------------------- */
+.barra-controles {
+  display: flex; align-items: center; gap: 18px;
+  padding: 0 28px 14px; background: transparent; border: 0; border-radius: 0;
+  flex-wrap: wrap; min-height: 0;
+}
+.barra-controles .control { display: flex; align-items: center; gap: 8px; }
+.barra-controles .control > span {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+.barra-controles .control .guion { font-size: 13px; color: var(--color-neutral-500); letter-spacing: 0; text-transform: none; }
+.barra-controles select {
+  width: auto; min-height: 32px; padding: 4px 26px 4px 9px; font-size: 13px;
+  background-color: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+#bandas-abrir { min-height: 32px; font-size: 13px; gap: 7px; white-space: nowrap; }
+
+.barra-controles .calzan {
+  margin: 0 0 0 auto; padding: 0; border: 0;
+  font-size: 12.5px; color: var(--color-text); white-space: nowrap;
+}
+/* El catalogo entero ya no se anuncia aparte: repetia el numero que el contador
+   de al lado ya da, y dos cifras casi iguales juntas se leen como un fallo. */
+.barra-controles .stats { display: none; }
+
+/* --- Las dos columnas ----------------------------------------------------- */
+.columnas {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 28px; align-items: start; padding: 10px 28px 28px;
+}
+.columnas .tarjeta {
+  display: flex; flex-direction: column; gap: 22px;
+  background: transparent; border: 0; border-radius: 0; padding: 0; margin: 0;
+  min-width: 0;
+}
+
+/* --- La cancion ----------------------------------------------------------- */
+.cancion-cabecera { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+.cancion-identidad { min-width: 0; flex: 1 1 320px; }
+.cancion-identidad .artista {
+  font-size: 13px; letter-spacing: 0.02em; color: var(--color-neutral-400); margin: 0 0 2px;
+}
+.cancion-identidad h2 {
+  font-size: 54px; letter-spacing: -0.03em; margin: 0 0 8px; color: var(--color-text);
+}
+.cancion-cuenta { font-size: 13px; color: var(--color-neutral-400); margin: 0; }
+.cancion-identidad .enlaces { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0 0; }
+.cancion-identidad .enlaces a { font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.cancion-identidad .enlaces a:hover { color: var(--color-accent-300); }
+.tarjeta .meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; }
+.tarjeta .chip {
+  display: inline-flex; align-items: center; font-size: 11px; letter-spacing: 0.02em;
+  padding: 3px 10px; border-radius: calc(var(--radius-md) * 0.75); border: 0;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  color: var(--color-neutral-300); white-space: nowrap;
+}
+
+/* El video es una pastilla, no un cartel: es lo menos funcional de la tarjeta y
+   antes era lo mas grande. */
+.preview {
+  display: flex; align-items: center; gap: 11px; text-decoration: none;
+  padding: 8px 16px 8px 8px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; box-shadow: inset 0 0 0 1px var(--color-divider);
+  font: inherit; font-size: 13px; color: var(--color-text); flex: none;
+  white-space: nowrap;
+}
+.preview small { font-size: 13px; }
+.preview:hover { box-shadow: inset 0 0 0 1px var(--color-accent); }
+.preview .play {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-accent-200); font-size: 13px;
+}
+.preview.reproduciendo { display: block; padding: 0; box-shadow: none; width: 100%; }
+.preview.reproduciendo iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--radius-lg); }
+
+/* --- La lista de pistas --------------------------------------------------- */
+.pistas-lista {
+  border-radius: var(--radius-lg); overflow: hidden;
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.pistas-titulo {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin: 0; padding: 13px 16px 11px;
+  font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-neutral-400); font-family: var(--font-heading);
+}
+.pistas-titulo span { font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--color-neutral-600); }
+.grupo-pistas h3 {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  padding: 9px 16px; background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-neutral-400); font-family: var(--font-body);
+}
+/* El punto de color dice a que familia pertenece el grupo sin gastar palabras. */
+.grupo-pistas h3::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--color-neutral-400); flex: none;
+}
+.grupo-pistas[data-familia="DISTORSIÓN"] h3::before { background: var(--color-accent); }
+.grupo-pistas[data-familia="LIMPIA"] h3::before { background: var(--color-accent-2); }
+.grupo-pistas h3 span { font-size: 10.5px; letter-spacing: 0; color: var(--color-neutral-600); }
+
+.fila-pista {
+  width: 100%; display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 0 14px; padding: 11px 16px;
+  text-align: left; border: 0; background: transparent; cursor: pointer;
+  font: inherit; color: var(--color-text);
+  box-shadow: inset 2px 0 0 transparent;
+}
+.fila-pista:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+.fila-pista b {
+  grid-row: 1 / 3; text-align: right; font-size: 12px; font-weight: 400;
+  color: var(--color-neutral-600); font-variant-numeric: tabular-nums;
+}
+.fila-pista .nombre-pista { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fila-pista small {
+  grid-column: 2; font-size: 11.5px; color: var(--color-neutral-500);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fila-pista em {
+  grid-column: 3 / 5; grid-row: 1 / 3; font-style: normal;
+  display: flex; align-items: center; gap: 10px;
+}
+/* La elegida se marca con un filo y un tinte, nunca con un relleno macizo. */
+.fila-pista.elegida { background: color-mix(in srgb, var(--color-accent) 10%, transparent); box-shadow: inset 2px 0 0 var(--color-accent); }
+.fila-pista.elegida b { color: var(--color-accent-300); }
+.fila-pista.elegida .nombre-pista { color: var(--color-accent-200); }
+.fila-pista.fuera-filtro { opacity: .58; }
+.fuera-etiqueta {
+  font-size: 10px; padding: 2px 7px; border-radius: calc(var(--radius-md) * 0.75);
+  border: 1px solid var(--color-divider); color: var(--color-neutral-500); white-space: nowrap;
+}
+
+/* El medidor son barras, no un numero repetido: se compara de un vistazo entre
+   filas sin leer. */
+.medidor { display: flex; align-items: center; gap: 2px; }
+.medidor i { width: 3px; height: 11px; border-radius: 1px; background: color-mix(in srgb, var(--color-text) 13%, transparent); }
+.medidor i.on { background: var(--color-accent); }
+.fila-pista em > span:last-child { width: 14px; font-size: 12px; color: var(--color-neutral-400); text-align: right; font-variant-numeric: tabular-nums; }
+
+.pista-unica { padding: 13px 16px 16px; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-surface) 55%, transparent); box-shadow: var(--shadow-sm); }
+.pista-unica strong { display: block; font-size: 14.5px; font-weight: 400; margin-bottom: 2px; }
+.pista-unica p:last-child { margin: 0; font-size: 11.5px; color: var(--color-neutral-500); }
+
+/* --- Acciones ------------------------------------------------------------- */
+.acciones {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 0 28px 18px; background: transparent; border: 0; min-height: 0;
+}
+.acciones kbd {
+  font: inherit; font-size: 10px; color: var(--color-neutral-500);
+  border: 1px solid var(--color-divider); border-radius: 3px; padding: 0 4px;
+}
+.acciones .acciones-sorteo { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+#todo { color: var(--color-neutral-400); font-size: 13px; white-space: nowrap; }
+#otra { gap: 8px; padding: 9px 16px; white-space: nowrap; }
+#otra kbd { color: var(--color-accent-300); border-color: color-mix(in srgb, var(--color-accent) 45%, transparent); padding: 0 5px; }
+#like.marcado svg { fill: var(--color-accent); stroke: var(--color-accent); }
+
+/* Por esta misma linea llegan dos cosas muy distintas: el conteo de canciones
+   (y el aviso inocuo de un envio abandonado a mitad) y el unico canal que
+   tenemos para decir que el amplificador quedo hasta 16 dB mas arriba. En el
+   mismo gris, aprender que la linea es inofensiva es aprender a no leer el
+   aviso que importa. Mismo rojo que .envio-estado.mal, que ya dice eso. */
+.hint { margin: 0 28px var(--space-2); font-size: 12px; color: var(--color-neutral-500); min-height: 1.2rem; }
+.hint.mal { color: var(--peligro); }
+
+/* --- El panel del amplificador -------------------------------------------- */
+.panel-ampli {
+  position: sticky; top: 14px;
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 18px; border: 0; border-radius: var(--radius-lg);
+  background: var(--color-surface); box-shadow: var(--shadow-sm);
+}
+.panel-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.panel-ampli h2 {
+  margin: 0; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-neutral-400); font-family: var(--font-heading);
+}
+#panel-conexion { font-size: 11px; color: var(--color-neutral-500); }
+#panel-conexion.conectado { color: var(--color-accent-300); }
+
+.panel-ampli .modelo { display: block; }
+.panel-ampli .modelo span {
+  display: block; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+.panel-ampli .modelo strong {
+  display: block; margin-top: 2px; font-family: var(--font-heading); font-weight: 500;
+  font-size: 22px; letter-spacing: -0.02em; color: var(--color-accent-200);
+}
+
+.perillas-panel { display: flex; flex-direction: column; gap: 11px; }
+.perilla { display: grid; grid-template-columns: 52px minmax(0, 1fr) 24px; align-items: center; gap: 12px; }
+.perilla .nombre { font-size: 12.5px; color: var(--color-neutral-400); }
+.perilla meter {
+  width: 100%; height: 2px; appearance: none; background: color-mix(in srgb, var(--color-text) 13%, transparent);
+}
+.perilla meter::-webkit-meter-bar { background: color-mix(in srgb, var(--color-text) 13%, transparent); height: 2px; border: 0; }
+.perilla meter::-webkit-meter-optimum-value { background: var(--color-accent); }
+.perilla meter::-moz-meter-bar { background: var(--color-accent); }
+.perilla .num { font-size: 12.5px; text-align: right; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.volumen-nota { margin: 0; font-size: 11px; color: var(--color-neutral-600); }
+
+.panel-ampli h3 {
+  margin: 0 0 8px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-neutral-500); font-family: var(--font-body); font-weight: 400;
+}
+/* La cadena en una sola columna: cinco filas se leen de arriba abajo sin saltar
+   la vista, y los nombres largos no se truncan. */
+.cadena-panel { display: flex; flex-direction: column; gap: 1px; list-style: none; margin: 0; padding: 0; }
+.cadena-panel li {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center;
+  gap: 10px; padding: 7px 9px; border-radius: var(--radius-sm); border: 0;
+}
+.cadena-panel li.ocupada { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+.cadena-panel li span { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); }
+.cadena-panel li strong {
+  font-size: 13px; font-weight: 400; color: var(--color-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cadena-panel li.ranura-vacia strong { color: var(--color-neutral-600); }
+
+.panel-envio { display: flex; flex-direction: column; gap: var(--space-2); }
+.enviar-ampli { min-height: 42px; font-size: 14.5px; gap: 9px; margin-top: 2px; white-space: nowrap; width: 100%; }
+.enviar-ampli kbd {
+  font: inherit; font-size: 10px; color: var(--color-accent-300);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  border-radius: 3px; padding: 0 5px;
+}
+.envio-estado { margin: 0; font-size: 12px; color: var(--color-neutral-500); }
+.envio-estado.mal { color: var(--peligro); }
+.panel-envio .descargo { margin: 0; font-size: 12px; line-height: 1.6; color: var(--color-neutral-500); }
+.panel-detalles { font-size: 12px; color: var(--color-neutral-500); }
+.panel-detalles summary { cursor: pointer; color: var(--color-neutral-400); font-size: 12px; list-style: none; }
+.panel-detalles summary::-webkit-details-marker { display: none; }
+.panel-detalles p { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
+.panel-vacio p { margin: 0 0 4px; color: var(--color-text); }
+.panel-vacio span { font-size: 12px; color: var(--color-neutral-500); }
+
+/* --- El panel de bandas --------------------------------------------------- */
+.bandas { margin: 0 28px 14px; padding: 14px; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+
+/* --- Adaptacion ----------------------------------------------------------- */
 @media (max-width: 75rem) {
-  .cabecera-app .stats { display: none; }
-  .cabecera-app .ampli-conectar { margin-left: auto; }
-  .barra-controles { gap: var(--e3); }
-  .columnas { grid-template-columns: minmax(0, 1fr) 21rem; }
-  .cancion-cabecera .preview { flex-basis: 10rem; width: 10rem; }
-  .fuera-etiqueta { max-width: 5rem; text-align: center; }
+  .cabecera-app .stats, .barra-controles .stats { display: none; }
+  .columnas { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 20px; }
+  .cancion-identidad h2 { font-size: 44px; }
 }
 @media (max-width: 60rem) {
-  .columnas { grid-template-columns: minmax(0, 1fr); min-height: 0; }
-  .panel-ampli { position: static; min-height: 0; border-left: 0; border-top: 1px solid var(--borde); }
-  .panel-envio { margin-top: var(--e3); }
-  .cabecera-app { flex-wrap: wrap; }
-  .cabecera-app .cancion-buscador { flex: 1; min-width: 12rem; }
+  .columnas { grid-template-columns: minmax(0, 1fr); }
+  .panel-ampli { position: static; }
+  .cancion-identidad h2 { font-size: 36px; }
 }
 @media (max-width: 38rem) {
-  body { padding: 0; }
-  .cabecera-app, .barra-controles, .columnas .tarjeta { padding: var(--e3); }
-  .cabecera-app { gap: var(--e2); }
-  .cabecera-app nav { margin-left: auto; }
-  .cabecera-app nav button { padding: var(--e2); }
-  .cabecera-app .cancion-buscador { order: 2; min-width: 100%; }
-  .cabecera-app .ampli-conectar { margin: 0; }
-  .barra-controles { gap: var(--e2) var(--e3); }
-  .rango-control { order: 3; flex-wrap: wrap; }
-  .dificultad-filtro button { height: 2rem; }
-  .barra-controles .calzan { width: auto; margin-left: auto; }
-  #bandas-panel { top: 13rem; right: var(--e3); width: calc(100% - 2rem); }
-  .cancion-cabecera { flex-wrap: wrap; gap: var(--e3); }
-  .cancion-cabecera .preview { flex-basis: 100%; max-width: 100%; width: 100%; aspect-ratio: 3 / 1; }
-  .cancion-cabecera .preview.reproduciendo { aspect-ratio: 16 / 9; }
-  .tarjeta h2 { font-size: var(--t-grande); }
-  .pistas-titulo > span { display: none; }
-  .fila-pista { padding: var(--e2); gap: 0 var(--e2); }
-  .fila-pista em { gap: var(--e1); }
-  .fila-pista .medidor { display: none; }
-  .fuera-etiqueta { max-width: 4.5rem; }
-  .acciones { position: static; gap: var(--e2); }
-  .acciones button { min-height: 2.75rem; padding: var(--e2); }
-  .acciones #todo { margin-left: 0; }
-  .acciones .principal { margin-left: auto; }
+  .cabecera-app, .barra-controles, .columnas, .acciones { padding-inline: 14px; }
+  .hint, .bandas { margin-inline: 14px; }
 }
-@keyframes aparece { from { opacity: 0; transform: translateY(-.25rem); } }

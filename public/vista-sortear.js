@@ -53,7 +53,11 @@ const pistaUnica = song => {
 export function pintarSortear(song, elegida) {
   if (!song) return '<p class="vacio">Nada que sortear con estos filtros.</p>'
 
-  const cuantas = `${song.pistas.length} pista${song.pistas.length === 1 ? '' : 's'} de guitarra`
+  /* La afinacion sube aqui, junto a la cuenta de pistas, como pide el diseño.
+     Es la de la pista ELEGIDA: `tuning` en null significa estandar, no
+     desconocida, y por eso se nombra en vez de callarse. */
+  const afinacion = song.pistas[elegida]?.tuning ?? 'E estándar'
+  const cuantas = `${song.pistas.length} pista${song.pistas.length === 1 ? '' : 's'} de guitarra · afinación ${esc(afinacion)}`
   const tags = song.tags.slice(0, 5).map(t => `<span class="chip">${esc(t)}</span>`).join('')
   const detalle = song.pistas.length === 1 ? pistaUnica(song) : listaDePistas(song.pistas, elegida)
 
