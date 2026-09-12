@@ -6,7 +6,8 @@ de tablaturas disponibles, elegir qué aprender es más difícil que aprenderlo.
 `song-suggest` sortea una canción al azar (con filtros de modo, dificultad y
 bandas, que miran las pistas de guitarra de la canción, no sólo la más tocada)
 y lleva la cuenta de lo que ya aprendiste, descartaste, dejaste para después
-o te gustó — para no volver a sortear lo mismo. Para la pista que elijas
+o te gustó — para no volver a sortear lo mismo. Y si ya sabes qué quieres
+tocar, la buscas por nombre (ver [Buscar una canción](#buscar-una-canción)). Para la pista que elijas
 practicar sugiere además un punto de partida de perillas para un Fender
 Mustang LT25, y sabe mandárselo al amplificador por USB (ver [Enviar los
 ajustes al amplificador](#enviar-los-ajustes-al-amplificador)). Y trae un
@@ -90,6 +91,35 @@ El botón **Sortear de todo** ignora el modo, la dificultad y las bandas por una
 vez, **sin tocar los controles**: al volver, tu configuración sigue donde la
 dejaste. El contador de "cuántas calzan" tampoco se mueve — sigue describiendo
 lo que tus controles prometen, no el sorteo que acabas de hacer.
+
+## Buscar una canción
+
+Entre los controles y la tarjeta hay una caja donde escribes el tema — o la
+banda y el tema juntos, `metallica fade` — y al elegirlo **se abre su tarjeta
+directo, sin sortear**: sus pistas, su dificultad, su afinación y sus ajustes de
+amplificador, listos para mandar.
+
+Ignora tildes y puntuación, igual que el buscador de bandas: `corazon` encuentra
+*Corazón Espinado*. Y hereda su misma limitación, por la misma razón: no hay
+transliteración, así que con teclado latino los temas en cirílico siguen siendo
+difíciles de alcanzar.
+
+Buscar es una **consulta**, no un sorteo, y de ahí salen sus dos reglas propias:
+
+- **Encuentra también lo que descartaste.** La pediste por nombre; esconderla
+  porque un día decidiste no aprenderla sería el buscador desobedeciendo. El
+  sorteo la sigue excluyendo — son dos preguntas distintas: *qué aprendo hoy* y
+  *con qué tono toco esto*.
+- **No gasta la canción.** No suma a la cuenta de veces mostrada ni la mete en
+  ninguna de tus listas. Mirar el tono de un tema que ya te sabes no es que el
+  sorteo te lo haya ofrecido.
+
+Lo que sí esconde es la basura del catálogo, y las canciones sin ninguna pista
+de guitarra: no habría tarjeta que abrir.
+
+Abrir una canción buscada **no mueve el contador de "cuántas calzan"** ni el
+aviso de abajo: ésos describen lo que tus filtros prometen, y esta canción no
+salió de ellos.
 
 ## Banderas del ETL
 
