@@ -182,3 +182,33 @@ export function selectorDePistas(pistas, elegida) {
     </div>
   `
 }
+
+/* Un enlace a la BUSQUEDA de Ultimate Guitar, no a una tab concreta.
+
+   No puede ser mejor que eso. Apuntar a la tab exacta exigiria consultar su
+   catalogo con la sesion del suscriptor, que es justo lo que esa suscripcion
+   paga. Y traer su pagina dentro de la nuestra tampoco es posible: su cabecera
+   declara `content-security-policy: frame-ancestors 'self' www.911tabs.com`,
+   asi que el navegador se niega a renderizarla en un iframe servido desde
+   localhost. Comprobado contra el sitio real el 2026-09-12; no es una
+   limitacion de este codigo sino una decision de ellos que el navegador aplica.
+
+   La banda viaja junto al titulo porque el catalogo tiene artistas oscuros
+   donde el titulo solo no alcanza. Contra el buscador real, las dos formas
+   ponen la correcta primera ("fear of the dark" y "iron maiden fear of the
+   dark"), asi que incluirla no cuesta nada y en los casos raros salva.
+
+   El titulo va TAL CUAL. Iba a limpiarle los parentesis hasta medirlo: de los
+   944 titulos del catalogo que los traen, casi todos son parentesis de verdad
+   -- "Welcome Home (Sanitarium)", "Snow (Hey Oh)", "My Own Summer (Shove It)"
+   -- y quitarlos empeoraria la busqueda. Los que repiten el nombre de la banda,
+   que si serian ruido, son 23 de 10.011: no valen un caso especial. */
+export function urlUltimateGuitar(artist, title) {
+  const banda = String(artist ?? '').trim()
+  const tema = String(title ?? '').trim()
+  // Sin uno de los dos no hay busqueda util: mandaria a una pagina de
+  // resultados vacia. Quien llama decide si dibuja el enlace o no.
+  if (!banda || !tema) return null
+  const q = encodeURIComponent(`${banda} ${tema}`)
+  return `https://www.ultimate-guitar.com/search.php?search_type=title&value=${q}`
+}

@@ -121,6 +121,27 @@ Abrir una canción buscada **no mueve el contador de "cuántas calzan"** ni el
 aviso de abajo: ésos describen lo que tus filtros prometen, y esta canción no
 salió de ellos.
 
+## Ultimate Guitar
+
+El pie de cada tarjeta trae, junto al enlace a Songsterr, uno que **busca la
+canción en Ultimate Guitar** — con la banda y el título juntos, porque el
+catálogo tiene artistas oscuros donde el título solo no alcanza.
+
+Es una búsqueda, no el enlace a la tab exacta, y no puede ser otra cosa:
+
+- **Apuntar a tu tab exacta** exigiría consultar su catálogo con tu sesión de
+  suscriptor, que es justamente lo que esa suscripción paga.
+- **Traer la tab dentro de esta app** tampoco se puede. Su servidor declara
+  `content-security-policy: frame-ancestors 'self' www.911tabs.com`, así que un
+  navegador se niega a renderizar su página dentro de un iframe servido desde
+  `localhost`. No es una limitación de este código: es una decisión de ellos que
+  el navegador aplica. (Comprobado el 2026-09-12.)
+
+El título viaja **tal cual**, sin limpiarle los paréntesis. De los 944 títulos
+del catálogo que los traen, casi todos son paréntesis de verdad — *Welcome Home
+(Sanitarium)*, *Snow (Hey Oh)* — y quitarlos empeoraría la búsqueda. Los que
+repiten el nombre de la banda, que sí serían ruido, son 23 de 10.011.
+
 ## Banderas del ETL
 
 `npm run etl -- <banderas>`
