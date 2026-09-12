@@ -54,6 +54,39 @@ const desbordes = () => {
   return malos
 }
 
+/* Contenido cortado y ademas inalcanzable.
+
+   `overflow: hidden` recorta y no da barra: lo que no cabe no existe para quien
+   mira. Una caja asi cuyo contenido no quepa es siempre un fallo, y no se
+   parece a un desborde horizontal -- la pagina se ve entera y correcta, solo
+   que le faltan cosas. Asi entraron dos pistas invisibles: la capa vieja dejaba
+   un `max-height: 22rem` y la nueva le puso `overflow: hidden` encima, de modo
+   que el scroll que rescataba las dos ultimas desaparecio sin que nada lo
+   delatara.
+
+   Solo se mira `hidden` y `clip`. Con `auto` o `scroll` el contenido sobra pero
+   se alcanza, y con `visible` se sale a la vista, que es otro problema y lo caza
+   la comprobacion de arriba. */
+const recortados = () => {
+  const malos = []
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el)
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue
+    if (!['hidden', 'clip'].includes(cs.overflowY)) continue
+    /* Los textos para lector de pantalla miden 1px: que su contenido no quepa
+       ahi es el mecanismo, no un fallo. */
+    if (el.clientHeight <= 1) continue
+    const sobra = el.scrollHeight - el.clientHeight
+    if (sobra > 1) {
+      malos.push({
+        el: el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''),
+        sobra,
+      })
+    }
+  }
+  return malos
+}
+
 /* Abre SIEMPRE la misma cancion, la de seis pistas.
 
    Sin esto los tests median lo que el sorteo diera, y nueve de las doce del
@@ -84,10 +117,25 @@ for (const ancho of ANCHOS) {
     const fuera = await page.evaluate(desbordes)
     expect(fuera, `contenido que se sale de su caja: ${JSON.stringify(fuera)}`).toEqual([])
 
-    // 3. Lo que tiene que verse, se ve.
-    await expect(page.locator('.acciones')).toBeInViewport()
-    await expect(page.locator('#otra')).toBeInViewport()
+    // 3. Nada queda cortado sin forma de llegar a ello.
+    const cortado = await page.evaluate(recortados)
+    expect(cortado, `contenido recortado e inalcanzable: ${JSON.stringify(cortado)}`).toEqual([])
+
+    /* 4. Lo que tiene que verse, se ve.
+
+       En dos columnas todo cabe de una vez y las acciones tienen que estar ahi
+       sin scrollear. Apilado (por debajo de 60rem) la pagina scrollea a
+       proposito, asi que lo exigible es que se LLEGUE a ellas: que existan y
+       que bajar las traiga a la vista. */
     await expect(page.locator('.panel-ampli')).toBeVisible()
+    if (ancho > 960) {
+      await expect(page.locator('.acciones')).toBeInViewport()
+      await expect(page.locator('#otra')).toBeInViewport()
+    } else {
+      await page.locator('#otra').scrollIntoViewIfNeeded()
+      await expect(page.locator('#otra')).toBeInViewport()
+      await expect(page.locator('.panel-ampli')).toBeVisible()
+    }
   })
 }
 

@@ -588,8 +588,12 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .columnas {
   flex: 1; width: 100%; max-width: var(--ancho); margin: 0 auto;
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  gap: 32px; align-items: start; padding: 16px 28px 28px;
+  gap: 32px; align-items: stretch; padding: 16px 28px 28px;
 }
+/* La columna de la cancion se estira a todo el alto y scrollea por dentro si
+   hace falta; el panel del ampli no, que es una ficha y estirarla solo alarga
+   el fondo. */
+#panel-ampli { align-self: start; }
 .col-cancion { display: flex; flex-direction: column; gap: 18px; min-width: 0; min-height: 0; }
 
 /* La tarjeta ENVUELVE: identidad y lista de pistas van lado a lado cuando hay
@@ -648,7 +652,13 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 /* --- La lista de pistas --------------------------------------------------- */
 .pistas-lista {
   flex: 3 1 460px; min-width: 0;
-  border-radius: var(--radius-lg); overflow: hidden;
+  /* `max-height` anula el tope de la capa vieja (22rem), que con el `overflow`
+     de aqui dejaba dos de seis pistas recortadas y SIN barra para llegar a
+     ellas. La lista crece con la cancion; quien scrollea, si no cabe, es la
+     columna. En horizontal se sigue recortando: es lo que redondea las
+     esquinas de las filas. */
+  max-height: none; overflow-x: hidden; overflow-y: auto;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-surface) 55%, transparent);
   box-shadow: var(--shadow-sm);
 }
@@ -836,6 +846,11 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 @media (max-width: 60rem) {
   .columnas { grid-template-columns: minmax(0, 1fr); }
   .panel-ampli { position: static; }
+  /* Apilados ya no caben en una pantalla, asi que la vista deja de recortar y
+     pasa a scrollear: con `overflow: hidden` el panel del ampli quedaba debajo
+     del borde y sin barra para bajar hasta el. */
+  #vista-sorteo { overflow-y: auto; }
+  #vista-sorteo .columnas { min-height: min-content; }
   .cancion-identidad h2 { font-size: 36px; }
 }
 @media (max-width: 38rem) {
