@@ -81,8 +81,10 @@ function pintarTarjeta(song, sinFiltros = false) {
     return
   }
   for (const id of ['aprendida', 'descartada', 'despues', 'like']) $(`#${id}`).disabled = false
+  /* Solo la clase: el corazon es un SVG que vive en el HTML, y el relleno lo
+     pone `#like.marcado svg` desde el CSS. Reescribir el innerHTML aqui lo
+     borraba y dejaba un caracter de texto que no cabe en el boton de icono. */
   $('#like').classList.toggle('marcado', !!song.liked)
-  $('#like').innerHTML = `${song.liked ? '♥' : '♡'} <kbd>L</kbd>`
   if (mismaCancion) {
     // Solo cambia la region de pistas. El iframe permanece en su nodo original.
     const region = tarjeta.querySelector('#detalle-pistas')
@@ -281,7 +283,6 @@ for (const [id, status] of [['aprendida', 'learned'], ['descartada', 'skipped'],
 $('#like').addEventListener('click', async () => {
   const marcado = $('#like').classList.toggle('marcado')
   actual.liked = marcado
-  $('#like').innerHTML = `${marcado ? '♥' : '♡'} <kbd>L</kbd>`
   await marcar({ liked: marcado })
 })
 
