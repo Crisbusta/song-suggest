@@ -29,6 +29,17 @@ const api = async (ruta, opts) => {
 
 let actual = null
 
+// El reproductor embebido, a partir de una URL ya armada. Compartido entre el
+// click de la miniatura y `pintarTarjeta` (que lo reconstruye al cambiar de
+// pista, para que un video sonando no vuelva a la miniatura silenciosa): dos
+// copias de este markup se desviarian.
+const iframePreviewHtml = url => `
+  <div class="preview">
+    <iframe src="${url}"
+            title="Reproductor de YouTube" allow="autoplay; encrypted-media"
+            referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+  </div>`
+
 /* Cual pista se esta mirando. Se reinicia en cada sorteo -- igual que el modo,
    la dificultad y las bandas, la eleccion no se recuerda entre sorteos ni
    entre recargas. */
@@ -66,6 +77,9 @@ function pintarCancion(song) {
 // Redibuja la tarjeta de la cancion que ya esta en pantalla, con la pista que
 // haya elegida. No toca el contador ni el aviso: el filtro no se movio.
 function pintarTarjeta(song) {
+  // Capturado ANTES de pisar `actual`: es la comparacion contra la cancion que
+  // HABIA en pantalla, no contra la que esta por entrar.
+  const mismaCancion = song != null && actual === song
   actual = song
 
   if (!song) {
@@ -238,7 +252,19 @@ function pintarTarjeta(song) {
        </div>`
     : ''
 
-  $('#tarjeta').className = 'tarjeta entra'
+  /* El panel del ampli y un video sonando describen la CANCION, no la pista:
+     perderlos en cada cambio de pista le cobraria un clic extra justo a la
+     comparacion de tonos que el selector existe para habilitar (ver el
+     docblock de arriba). Se leen ANTES de pisar el innerHTML -- despues los
+     nodos ya no existen -- y solo cuando es la misma cancion: una cancion
+     nueva de verdad tiene que abrir con el panel cerrado y la miniatura, no
+     heredar el estado de la anterior. */
+  const panelAbierto = mismaCancion && !!$('#tarjeta .ampli')?.open
+  const videoUrl = mismaCancion ? $('#tarjeta iframe')?.src : null
+
+  // Sin animacion de entrada cuando es la misma cancion: solo cambio la
+  // pista, y no hay "entrada" que reproducir.
+  $('#tarjeta').className = mismaCancion ? 'tarjeta' : 'tarjeta entra'
   $('#tarjeta').innerHTML = `
     <div>
       <h2>${esc(song.title)}</h2>
@@ -254,6 +280,17 @@ function pintarTarjeta(song) {
       <a href="${esc(song.url)}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
       ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
     </p>`
+
+  // Repone lo que se leyo antes de pisar el innerHTML. El panel es un simple
+  // atributo; el video reconstruye el iframe -- es un nodo nuevo, asi que
+  // arranca de nuevo (el ?autoplay=1 que ya trae `videoUrl` se encarga), pero
+  // sigue sonando en vez de volver a la miniatura silenciosa.
+  if (panelAbierto) { const d = $('#tarjeta .ampli'); if (d) d.open = true }
+  if (videoUrl) {
+    const bloque = $('#tarjeta [data-escuchar]')
+    if (bloque) bloque.outerHTML = iframePreviewHtml(videoUrl)
+  }
+
   $('#pista')?.addEventListener('change', e => {
     pistaElegida = Number(e.target.value)
     pintarTarjeta(actual)   // el mismo objeto: no se le pide nada al servidor
@@ -290,12 +327,7 @@ $('#tarjeta').addEventListener('click', e => {
   const bloque = e.target.closest('[data-escuchar]')
   if (!bloque) return
   const id = bloque.dataset.escuchar
-  bloque.outerHTML = `
-    <div class="preview">
-      <iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0"
-              title="Reproductor de YouTube" allow="autoplay; encrypted-media"
-              referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-    </div>`
+  bloque.outerHTML = iframePreviewHtml(`https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0`)
 })
 
 async function pintarStats() {
