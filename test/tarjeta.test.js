@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   esc, parametrosAmpQueViajan, NOMBRE_PERILLA_AMPLI, nombrePerillaAmpli,
   conjuncion, resumenEnvioAmpli, etiquetaDePista, selectorDePistas,
-  urlUltimateGuitar,
+  urlUltimateGuitar, etiquetasDePistas, listaDePistas,
 } from '../public/tarjeta.js'
 
 // --- esc ---------------------------------------------------------------
@@ -232,6 +232,48 @@ test('el nombre de la pista se escapa', () => {
   assert.ok(!html.includes('<img'), 'no puede quedar una etiqueta cruda del catalogo')
   assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/)
   assert.match(html, /M&amp;M/)
+})
+
+const pistaEtiqueta = (name, instrument = 'Distortion Guitar') => ({ name, instrument })
+test('etiquetasDePistas quita segmentos comunes y prefiere rol', () => {
+  assert.deepEqual(etiquetasDePistas([
+    pistaEtiqueta('Eric Clapton | Lead Nylon Guitar | C.F. Martin 000-42'),
+    pistaEtiqueta('Eric Clapton | Rhythm Nylon Guitar | C.F. Martin 000-42'),
+  ]), ['Lead Nylon Guitar', 'Rhythm Nylon Guitar'])
+})
+/* El paso 3 de la regla, que es el unico sin cubrir: cuando dos pistas quedan
+   con la misma etiqueta, se les antepone el primer segmento que LA HERMANA con
+   la que chocan no tiene. Caso real de Tears In Heaven -- las dos pistas de
+   pedal steel comparten musico y equipo, y solo las separa "1st"/"2nd". Sin
+   este paso caerian al ultimo recurso (el numero) y se perderia el dato util. */
+test('etiquetasDePistas desempata con el segmento que la hermana no tiene', () => {
+  const r = etiquetasDePistas([
+    pistaEtiqueta('JayDee Maness | 1st Guitar | Pedal Steel Guitar'),
+    pistaEtiqueta('JayDee Maness | 2nd Guitar | Pedal Steel Guitar'),
+  ])
+  assert.notEqual(r[0], r[1])
+  assert.match(r[0], /1st Guitar/)
+  assert.match(r[1], /2nd Guitar/)
+  assert.ok(!/ · \d+$/.test(r[0]), 'no debe caer al numero habiendo un segmento que las separa')
+})
+
+test('etiquetasDePistas usa instrumento vacio y nunca colisiona', () => {
+  assert.deepEqual(etiquetasDePistas([pistaEtiqueta(null, 'Acoustic Guitar (steel)')]), ['Acoustic Guitar (steel)'])
+  const etiquetas = etiquetasDePistas([pistaEtiqueta('Guitar'), pistaEtiqueta('Guitar')])
+  assert.equal(new Set(etiquetas).size, 2)
+})
+test('listaDePistas agrupa, marca y escapa datos del catalogo', () => {
+  const html = listaDePistas([
+    pistaDe({ name: '<img onerror=1>', tuning: null }),
+    pistaDe({ name: 'Otra', instrument: 'Acoustic Guitar (steel)', califica: false }),
+  ], 0)
+  assert.match(html, /DISTORSIÓN/)
+  assert.match(html, /ACÚSTICA/)
+  assert.match(html, /elegida/)
+  assert.match(html, /fuera del filtro/)
+  assert.match(html, /E estándar/)
+  assert.ok(!html.includes('<img onerror'))
+  assert.equal(listaDePistas([pistaDe()], 0), '')
 })
 
 /* La busqueda de Ultimate Guitar lleva banda y titulo juntos: en este catalogo

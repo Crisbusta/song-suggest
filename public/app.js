@@ -2,9 +2,11 @@ import { ampli } from './ampli-usb.js'
 import { montarEditor } from './editor.js'
 import { crearCatalogo, RANURAS, VACIA } from './catalogo-lt25.js'
 import {
-  esc, parametrosAmpQueViajan, resumenEnvioAmpli, selectorDePistas, urlUltimateGuitar,
+  esc, parametrosAmpQueViajan,
 } from './tarjeta.js'
 import { buscarArtistas, claveDeArtista } from './artistas.js'
+import { pintarSortear, iframePreviewHtml } from './vista-sortear.js'
+import { pintarPanelAmpli } from './panel-ampli.js'
 
 const $ = s => document.querySelector(s)
 
@@ -30,17 +32,6 @@ const api = async (ruta, opts) => {
 
 let actual = null
 
-// El reproductor embebido, a partir de una URL ya armada. Compartido entre el
-// click de la miniatura y `pintarTarjeta` (que lo reconstruye al cambiar de
-// pista, para que un video sonando no vuelva a la miniatura silenciosa): dos
-// copias de este markup se desviarian.
-const iframePreviewHtml = url => `
-  <div class="preview">
-    <iframe src="${url}"
-            title="Reproductor de YouTube" allow="autoplay; encrypted-media"
-            referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-  </div>`
-
 /* Cual pista se esta mirando. Se reinicia en cada sorteo -- igual que el modo,
    la dificultad y las bandas, la eleccion no se recuerda entre sorteos ni
    entre recargas. */
@@ -58,8 +49,8 @@ function pintar({ song, matching, hint }) {
   $('#hint').textContent = hint ?? ''
   // matching describe el filtro, no la cancion: se muestra con los controles.
   $('#calzan').textContent = matching === 1
-    ? '1 canción calza con estos filtros'
-    : `${matching.toLocaleString('es-CL')} canciones calzan con estos filtros`
+    ? '1 calza'
+    : `${matching.toLocaleString('es-CL')} calzan`
   pintarCancion(song)
 }
 
@@ -75,245 +66,41 @@ function pintarCancion(song, sinFiltros = false) {
   pintarTarjeta(song, sinFiltros)
 }
 
-// Redibuja la tarjeta de la cancion que ya esta en pantalla, con la pista que
-// haya elegida. No toca el contador ni el aviso: el filtro no se movio.
-// `sinFiltros` distingue el vacio del sorteo de todo (no hay filtro que
-// nombrar) del vacio de un sorteo filtrado -- son dos frases, no una.
+/* La vista v2 separa la practica del ampli. La cancion y la pista ya viven
+   completas en memoria: cambiar fila no consulta al servidor. */
 function pintarTarjeta(song, sinFiltros = false) {
-  // Capturado ANTES de pisar `actual`: es la comparacion contra la cancion que
-  // HABIA en pantalla, no contra la que esta por entrar.
   const mismaCancion = song != null && actual === song
   actual = song
-
+  const tarjeta = $('#tarjeta')
   if (!song) {
-    $('#tarjeta').innerHTML = sinFiltros
+    tarjeta.innerHTML = sinFiltros
       ? '<p class="vacio">No queda ninguna canción por sortear.</p>'
       : '<p class="vacio">Nada que sortear con estos filtros.</p>'
+    $('#panel-ampli').innerHTML = ''
     for (const id of ['aprendida', 'descartada', 'despues', 'like']) $(`#${id}`).disabled = true
     return
   }
   for (const id of ['aprendida', 'descartada', 'despues', 'like']) $(`#${id}`).disabled = false
-
-  const marcado = !!song.liked
-  $('#like').classList.toggle('marcado', marcado)
-  $('#like').textContent = marcado ? '♥' : '♡'
-
-  /* Todo lo que describe QUE se practica -- dificultad, instrumento,
-     afinacion y el tono del ampli -- sale de la pista elegida, no de la
-     cancion: la cancion ya no tiene esos campos, justamente para que la
-     cabecera y el selector no puedan contradecirse. */
-  const pista = song.pistas[pistaElegida]
-
-  // El selector: logica pura, ver tarjeta.js#selectorDePistas (que decide
-  // cuando no hay nada que elegir, cual opcion viene marcada y como se dicen
-  // las pistas que no cumplen el filtro).
-  const selectorPistas = selectorDePistas(song.pistas, pistaElegida)
-
-  // La dificultad decide si intentas la cancion o no, asi que deja de ser un
-  // chip igual a "90s" y pasa a medidor. El numero va al lado porque el color
-  // solo no debe cargar el significado.
-  const medidor = Array.from({ length: 10 }, (_, i) =>
-    `<i class="${i < pista.difficulty ? 'on' : ''}"></i>`).join('')
-
-  const dificultad = `
-    <div class="dificultad">
-      <span class="medidor" role="img" aria-label="Dificultad ${pista.difficulty} de 10">${medidor}</span>
-      <span class="valor">${pista.difficulty}<small>/10</small></span>
-      <span class="instrumento">${esc(pista.instrument)}</span>
-    </div>`
-
-  // La afinacion es informacion accionable: te dice si hay que reafinar antes
-  // de empezar. Sale del monton de chips y se vuelve un aviso propio.
-  const aviso = pista.tuning
-    ? `<p class="aviso-afinacion">
-         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-           <path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/>
-         </svg>
-         ${esc(pista.tuning)}
-       </p>`
-    : ''
-
-  const chips = song.tags.slice(0, 5)
-    .map(t => `<span class="chip">${esc(t)}</span>`).join('')
-
-  // Ajustes del ampli. Cerrado por defecto: la tarjeta ya esta densa y esto
-  // solo importa una vez que decidiste intentar la cancion. La frase del pie
-  // no es decoracion: es lo que hace defendible mostrar estos numeros.
-  const perilla = (nombre, v) => `
-    <div class="perilla">
-      <span class="nombre">${nombre}</span>
-      <span class="barra" role="img" aria-label="${nombre} ${v} de 10">${
-        Array.from({ length: 10 }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')
-      }</span>
-      <span class="num">${v}</span>
-    </div>`
-
-  const a = pista.ampli
-  /* Seis perillas de pantalla, pero no las seis viven en el mismo trato con
-     el boton. Lo que la planilla no declaro llega en null (comunidad) y no se
-     dibuja como si valiera algo -- de ahi el filtro (Mid en ruta de reglas
-     llega `undefined`, que el mismo `!= null` deja fuera solo). Reverb ni
-     siquiera entra a este filtro: se trata aparte, ver mas abajo. */
-  const perillas = a
-    ? [['Gain', a.gain], ['Volume', a.volume], ['Treble', a.treble], ['Bass', a.bass], ['Mid', a.mid]]
-        .filter(([, v]) => v != null)
-        .map(([n, v]) => perilla(n, v)).join('')
-    : ''
-
-  /* El Reverb sugerido y el envio se contradicen, y hay que decirlo -- pero no
-     poniendolo en la misma fila que Gain/Treble/Bass, que el boton SI escribe.
-     En el Mustang LT25 el reverb no es una perilla del panel: es la unidad de
-     la ranura `reverb`. Cuando la sugerencia sale de la tabla de reglas hay un
-     numero de Reverb del 1 al 10 pero no hay cadena, asi que el boton manda esa
-     ranura vacia -- despues de apretarlo no hay ni unidad de reverb que ajustar
-     a mano. El numero no se tira (es consejo real de la tabla), pero se saca de
-     la fila de perillas: lo deshonesto no es el numero, es presentarlo al lado
-     de los que si viajan, como si fuera lo mismo. Volume, en cambio, SI va en
-     la fila: tampoco se manda (esta en decibeles, sin curva conocida), pero el
-     envio no le contradice nada -- el ampli conserva el volumen que tenia.
-
-     Ronda de revision 1: la invitacion a elegir una unidad de reverb a mano
-     no puede callar que el PROXIMO envio la vuelve a vaciar -- si no, la
-     tarjeta pide una accion sin avisar que ese mismo boton la deshace. Se dice
-     aca, pegado a la invitacion, no solo en `.descargo` tres lineas mas abajo:
-     quien lee "elige tu una unidad" tiene que leer la contra en la misma
-     frase, no confiar en que la conecte con un parrafo aparte. */
-  const reverbSeVacia = a && a.reverb != null && !a.cadena?.reverb
-  const reverbHtml = reverbSeVacia
-    ? `<p class="reverb-aparte">
-         Reverb <strong>${a.reverb}</strong> de 10 es la sugerencia, pero el botón no la
-         manda: en este ampli el reverb es la unidad de la ranura <strong>reverb</strong>,
-         y este tono la deja vacía. Puedes elegir tú una unidad de reverb en el
-         ampli, pero el próximo envío te la vuelve a vaciar otra vez.
-       </p>`
-    : ''
-
-  // ranurasDeEfectos/hayEfectos/queSeManda: logica pura, ver
-  // tarjeta.js#resumenEnvioAmpli (y su comentario, con el historial completo
-  // de las rondas de revision 2, 3 y 4 que la motivaron).
-  const { ranurasDeEfectos, hayEfectos, queSeManda } = resumenEnvioAmpli(a)
-
-  // La cadena que ocupa este tono: todo lo que venga del CSV pasa por esc().
-  const cadenaHtml = a?.cadena
-    ? `<ul class="cadena">${hayEfectos
-        ? ranurasDeEfectos.map(r => `<li><span>${r}</span> <strong>${esc(a.cadena[r].nombre)}</strong></li>`).join('')
-        : '<li class="sin-efectos">sin efectos: este tono es el ampli pelado</li>'}</ul>`
-    : ''
-
-  const modeloHtml = a?.modelo != null
-    ? `<strong>${esc(a.modelo)}</strong>`
-    : `<strong class="sin-dato">no declarado</strong>`
-
-  // Nombrada distinto del modulo `ampli` importado arriba: un `const ampli`
-  // aqui lo taparia dentro de su propio inicializador (TDZ) justo donde el
-  // Step 1 necesita llamar a `ampli.soportado()`.
-  const bloqueAmpli = a
-    ? `<details class="ampli">
-         <summary>Ajustes para tu Mustang LT25</summary>
-         <div class="ampli-cuerpo">
-           <p class="modelo"><span>Modelo</span>${modeloHtml}</p>
-           ${perillas}
-           ${cadenaHtml}
-           ${reverbHtml}
-           <p class="descargo">
-             ${a.fuente === 'comunidad'
-               ? `${esc(a.procedencia)}.${a.incierto ? ' <strong>La propia planilla marca este preset como dudoso.</strong>' : ''}
-                  Es lo que a alguien le funcionó, no el tono de la grabación.`
-               : `Punto de partida, no el tono del disco. Deducido de: ${a.motivos.map(esc).join(', ')}.`}
-             <br>
-             ${queSeManda} El <strong>Volume</strong> no viaja: el botón no toca el volumen.
-             ${hayEfectos
-               ? ' Qué perillas de los efectos se pudieron convertir de verdad queda dicho en el estado del envío, no aquí.'
-               : ''}
-             Las ranuras que este tono no usa quedan vacías cada vez que envías,
-             así que no se te mezcla con la canción anterior: <strong>eso borra lo que
-             hayas dialado a mano en esas ranuras.</strong>
-             Cargar una unidad deja el resto de sus perillas en los valores por
-             defecto de esa unidad; tu volumen se lee antes y se devuelve, y si no
-             se puede, se te avisa y el modelo no se toca.
-           </p>
-           ${ampli.soportado()
-             ? `<p class="envio">
-                  <button type="button" id="enviar-ampli" class="enviar-ampli">Enviar al ampli</button>
-                  <span id="envio-estado" class="envio-estado"></span>
-                </p>`
-             : `<p class="envio-estado">Enviar los ajustes al ampli requiere Chrome o Edge.</p>`}
-         </div>
-       </details>`
-    : ''
-
-  // esc() para contextos HTML y encodeURIComponent() para los de URL: no son
-  // intercambiables. esc() convierte & en &amp;, que el navegador decodifica de
-  // vuelta a & al parsear el atributo, asi que un id con & o ? reestructuraria
-  // la direccion en vez de viajar como valor opaco.
-  // Miniatura con play encima: no cargamos el reproductor de YouTube (~1 MB de
-  // scripts) en cada tirada, solo una imagen liviana. El iframe entra al pulsar.
-  const preview = song.officialVideo
-    ? `<div class="preview" data-escuchar="${esc(song.officialVideo)}">
-         <img src="https://i.ytimg.com/vi/${encodeURIComponent(song.officialVideo)}/hqdefault.jpg"
-              alt="Escuchar ${esc(song.artist)} - ${esc(song.title)}" loading="lazy">
-         <button type="button" class="play" aria-label="Escuchar la canción">▶</button>
-       </div>`
-    : ''
-
-  // Una BUSQUEDA en Ultimate Guitar, no la tab exacta: ver el docblock de
-  // urlUltimateGuitar para por que no puede ser mejor que eso. Es null cuando
-  // falta la banda o el titulo, y entonces el enlace no se dibuja.
-  const urlUG = urlUltimateGuitar(song.artist, song.title)
-
-  /* El panel del ampli y un video sonando describen la CANCION, no la pista:
-     perderlos en cada cambio de pista le cobraria un clic extra justo a la
-     comparacion de tonos que el selector existe para habilitar (ver el
-     docblock de arriba). Se leen ANTES de pisar el innerHTML -- despues los
-     nodos ya no existen -- y solo cuando es la misma cancion: una cancion
-     nueva de verdad tiene que abrir con el panel cerrado y la miniatura, no
-     heredar el estado de la anterior. */
-  const panelAbierto = mismaCancion && !!$('#tarjeta .ampli')?.open
-  const videoUrl = mismaCancion ? $('#tarjeta iframe')?.src : null
-
-  // Sin animacion de entrada cuando es la misma cancion: solo cambio la
-  // pista, y no hay "entrada" que reproducir.
-  $('#tarjeta').className = mismaCancion ? 'tarjeta' : 'tarjeta entra'
-  $('#tarjeta').innerHTML = `
-    <div>
-      <h2>${esc(song.title)}</h2>
-      <p class="artista">${esc(song.artist)}</p>
-    </div>
-    ${selectorPistas}
-    ${dificultad}
-    ${aviso}
-    ${chips ? `<div class="meta">${chips}</div>` : ''}
-    ${bloqueAmpli}
-    ${preview}
-    <p class="enlaces">
-      <a href="${esc(song.url)}" target="_blank" rel="noopener">Ver la tablatura en Songsterr →</a>
-      ${urlUG ? ` · <a href="${esc(urlUG)}" target="_blank" rel="noopener">Buscarla en Ultimate Guitar</a>` : ''}
-      ${song.backingVideo ? ` · <a href="https://www.youtube.com/watch?v=${encodeURIComponent(song.backingVideo)}" target="_blank" rel="noopener">Pista de acompañamiento</a>` : ''}
-    </p>`
-
-  // Repone lo que se leyo antes de pisar el innerHTML. El panel es un simple
-  // atributo; el video reconstruye el iframe -- es un nodo nuevo, asi que
-  // arranca de nuevo (el ?autoplay=1 que ya trae `videoUrl` se encarga), pero
-  // sigue sonando en vez de volver a la miniatura silenciosa.
-  if (panelAbierto) { const d = $('#tarjeta .ampli'); if (d) d.open = true }
-  if (videoUrl) {
-    const bloque = $('#tarjeta [data-escuchar]')
-    if (bloque) bloque.outerHTML = iframePreviewHtml(videoUrl)
+  $('#like').classList.toggle('marcado', !!song.liked)
+  $('#like').innerHTML = `${song.liked ? '♥' : '♡'} <kbd>L</kbd>`
+  if (mismaCancion) {
+    // Solo cambia la region de pistas. El iframe permanece en su nodo original.
+    const region = tarjeta.querySelector('#detalle-pistas')
+    const temporal = document.createElement('div')
+    temporal.innerHTML = pintarSortear(song, pistaElegida)
+    region.replaceWith(temporal.querySelector('#detalle-pistas'))
+  } else {
+    tarjeta.className = 'tarjeta entra'
+    tarjeta.innerHTML = pintarSortear(song, pistaElegida)
   }
-
-  $('#pista')?.addEventListener('change', e => {
-    pistaElegida = Number(e.target.value)
-    pintarTarjeta(actual)   // el mismo objeto: no se le pide nada al servidor
-    /* El `<select>` se destruye a si mismo al redibujar, y el foco se caeria
-       al `<body>`. En Firefox y en el Chrome de Windows las flechas sobre un
-       desplegable cerrado disparan `change` en cada tecla: sin devolver el
-       foco, recorrer las pistas con el teclado se corta en la primera. */
-    $('#pista')?.focus()
+  const pista = song.pistas[pistaElegida]
+  const detallesAbiertos = mismaCancion && $('#panel-ampli details')?.open
+  $('#panel-ampli').innerHTML = pintarPanelAmpli(pista, {
+    soportado: ampli.soportado(), conectado: ampli.conectado(),
+    puedeEnviar: ampli.conectado() && hayQueEnviar(song),
+    posicion: Math.max(1, [...document.querySelectorAll('.fila-pista')].findIndex(f => Number(f.dataset.pista) === pistaElegida) + 1),
   })
-
-  // Reinicia la animacion de entrada en cada tirada.
-  void $('#tarjeta').offsetWidth
+  if (detallesAbiertos && $('#panel-ampli details')) $('#panel-ampli details').open = true
   pintarBotonEnviar()
   pintarSelectorPistas()
 }
@@ -335,14 +122,22 @@ function pintarTarjeta(song, sinFiltros = false) {
    hasta 64 s por un envio que no la afecta. Se compara contra `actual`, que
    ya es la cancion de ESTA tarjeta en el momento en que esto se llama. */
 function pintarSelectorPistas() {
-  const s = $('#pista')
-  if (s) s.disabled = enviando && actual === cancionEnviando
+  for (const fila of document.querySelectorAll('.fila-pista')) {
+    fila.disabled = enviando && actual === cancionEnviando
+  }
 }
 
 // Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
 // tarjeta porque el bloque se redibuja completo en cada tirada; y como se
 // redibuja, el iframe anterior muere solo y la canción anterior deja de sonar.
-$('#tarjeta').addEventListener('click', e => {
+$('#vista-sorteo').addEventListener('click', e => {
+  const fila = e.target.closest('[data-pista]')
+  if (fila) {
+    pistaElegida = Number(fila.dataset.pista)
+    pintarTarjeta(actual)
+    $(`[data-pista="${pistaElegida}"]`)?.focus()
+    return
+  }
   const bloque = e.target.closest('[data-escuchar]')
   if (!bloque) return
   const id = bloque.dataset.escuchar
@@ -405,15 +200,69 @@ function sincronizarRangos(cambiado) {
     if (cambiado === 'min') max.value = min.value
     else min.value = max.value
   }
-  $('#min-val').value = min.value
-  $('#max-val').value = max.value
+  pintarFichasDificultad()
 }
+
+function pintarFichasDificultad() {
+  const caja = $('#dificultad')
+  const min = Number($('#min').value), max = Number($('#max').value)
+  caja.innerHTML = Array.from({ length: 10 }, (_, i) => {
+    const valor = i + 1
+    const activa = valor >= min && valor <= max
+    return `<button type="button" data-dificultad="${valor}" aria-pressed="${activa}">${valor}</button>`
+  }).join('') + `<span>${min}–${max}</span>`
+}
+
+let extremoInicial = null
+$('#dificultad').addEventListener('click', e => {
+  const ficha = e.target.closest('button[data-dificultad]')
+  if (!ficha) return
+  const valor = Number(ficha.dataset.dificultad)
+  if (extremoInicial === null) {
+    extremoInicial = valor
+    $('#min').value = valor
+    $('#max').value = valor
+  } else {
+    $('#min').value = Math.min(extremoInicial, valor)
+    $('#max').value = Math.max(extremoInicial, valor)
+    extremoInicial = null
+  }
+  pintarFichasDificultad()
+  sortear()
+})
 
 for (const [id, ev] of [['min', 'min'], ['max', 'max']]) {
   $(`#${id}`).addEventListener('input', () => { sincronizarRangos(ev); sortearConEspera() })
 }
 $('#modo').addEventListener('change', sortear)
 $('#otra').addEventListener('click', sortear)
+
+$('#bandas-abrir').addEventListener('click', () => {
+  const panel = $('#bandas-panel'), abrir = panel.hidden
+  panel.hidden = !abrir
+  $('#bandas-abrir').setAttribute('aria-expanded', String(abrir))
+  if (abrir) $('#banda-q').focus()
+})
+
+document.addEventListener('keydown', e => {
+  const editable = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)
+  if (e.key === 'Escape') {
+    const panel = $('#bandas-panel')
+    if (!panel.hidden) { panel.hidden = true; $('#bandas-abrir').setAttribute('aria-expanded', 'false'); $('#bandas-abrir').focus() }
+    return
+  }
+  if ($('#vista-sorteo').hidden || editable || e.altKey || e.ctrlKey || e.metaKey || e.repeat) return
+  if (e.key === '/') { e.preventDefault(); $('#cancion-q').focus(); return }
+  if (/^[1-9]$/.test(e.key) && actual) {
+    const fila = [...document.querySelectorAll('.fila-pista')][Number(e.key) - 1]
+    if (fila) { e.preventDefault(); fila.click() }
+    return
+  }
+  const tecla = e.key.toLowerCase()
+  const acciones = { a: 'aprendida', n: 'descartada', d: 'despues', l: 'like', e: 'enviar-ampli' }
+  if (e.key === ' ') { e.preventDefault(); $('#otra').click() }
+  else if (acciones[tecla]) { e.preventDefault(); document.getElementById(acciones[tecla])?.click() }
+})
 
 /* Sortea ignorando los filtros SIN tocar los controles: los sliders, el modo y
    las fichas de bandas quedan donde estan para el proximo sorteo normal.
@@ -446,7 +295,8 @@ for (const [id, status] of [['aprendida', 'learned'], ['descartada', 'skipped'],
 
 $('#like').addEventListener('click', async () => {
   const marcado = $('#like').classList.toggle('marcado')
-  $('#like').textContent = marcado ? '♥' : '♡'
+  actual.liked = marcado
+  $('#like').innerHTML = `${marcado ? '♥' : '♡'} <kbd>L</kbd>`
   await marcar({ liked: marcado })
 })
 
@@ -500,8 +350,13 @@ function hayQueEnviar(cancion) {
 function pintarBotonEnviar() {
   const b = $('#enviar-ampli')
   if (!b) return
-  b.disabled = !(ampli.conectado() && hayQueEnviar(actual))
-  b.textContent = ampli.conectado() ? 'Enviar al ampli' : 'Conecta el ampli primero'
+  b.disabled = enviando || !(ampli.conectado() && hayQueEnviar(actual))
+  b.innerHTML = `${ampli.conectado() ? 'Enviar al ampli' : ampli.soportado() ? 'Conecta el ampli primero' : 'Requiere Chrome o Edge'} <kbd>E</kbd>`
+  const conexion = $('#panel-conexion')
+  if (conexion) {
+    conexion.textContent = ampli.conectado() ? 'Ampli conectado' : 'Sin conectar'
+    conexion.classList.toggle('conectado', ampli.conectado())
+  }
 }
 
 // Si el navegador no soporta WebHID el boton no aparece: un control inerte es
@@ -550,7 +405,7 @@ let enviando = false
 // en `pintarSelectorPistas()` para que una tarjeta nueva, sorteada mientras
 // otro envio sigue corriendo, no herede su bloqueo -- ver el docblock de ahi.
 let cancionEnviando = null
-$('#tarjeta').addEventListener('click', async e => {
+$('#vista-sorteo').addEventListener('click', async e => {
   if (e.target.id !== 'enviar-ampli') return
   if (!hayQueEnviar(actual)) return
   // Evita un segundo envio mientras el primero sigue vivo. Ya no es lo que
@@ -1063,6 +918,7 @@ $('#tarjeta').addEventListener('click', async e => {
     enviando = false
     cancionEnviando = null
     pintarSelectorPistas()
+    pintarBotonEnviar()
   }
 })
 
@@ -1108,7 +964,7 @@ async function cargarArtistas() {
    `buscar` puede ser asincrona -- la de canciones pregunta al servidor -- y de
    ahi salen las dos piezas que el buscador de bandas no necesitaba:
    `espera` (no preguntar en cada tecla) y el descarte de la respuesta vieja. */
-function crearBuscador({ entrada, lista, buscar, dibujar, vacio, alElegir, espera = 0 }) {
+function crearBuscador({ entrada, lista, buscar, dibujar, vacio, alElegir, espera = 0, soltarFoco = false }) {
   const caja = $(entrada)
   const desplegable = $(lista)
   let sugerido = -1      // fila resaltada, para las flechas
@@ -1148,9 +1004,14 @@ function crearBuscador({ entrada, lista, buscar, dibujar, vacio, alElegir, esper
     temporizador = setTimeout(pintar, espera)
   }
 
+  /* `soltarFoco` no es un capricho: los atajos de teclado no disparan mientras
+     el foco esta en un input, asi que tras abrir una cancion desde el buscador
+     pulsar "1" escribia un 1 en la caja en vez de cambiar de pista. El de
+     bandas NO lo suelta a proposito -- ahi es normal encadenar varias. */
   const elegir = valor => {
     caja.value = ''
     cerrar()
+    if (soltarFoco) caja.blur()
     alElegir(valor)
   }
 
@@ -1211,6 +1072,8 @@ function pintarBandas() {
   $('#banda-ayuda').textContent = bandas.length
     ? 'El sorteo se limita a estas bandas.'
     : 'Sin ninguna elegida, sortea de todo el catálogo.'
+  $('#bandas-estado').textContent = bandas.length === 0 ? 'todas'
+    : bandas.length === 1 ? bandas[0] : `${bandas.length} bandas`
 
   pintarAtajos()
 }
@@ -1265,6 +1128,7 @@ crearBuscador({
   dibujar: s => `<span>${esc(s.title)}</span><span class="cuantas">${esc(s.artist)}</span>`,
   vacio: 'Ninguna canción del catálogo se llama así.',
   alElegir: abrirCancion,
+  soltarFoco: true,
 })
 
 /* Abrir una cancion buscada NO toca el contador ni el aviso: describen lo que
@@ -1273,6 +1137,7 @@ crearBuscador({
 async function abrirCancion(songId) {
   try {
     const { song } = await api(`/api/song?songId=${encodeURIComponent(songId)}`)
+    cambiarVista('sorteo')
     $('#hint').classList.remove('mal')
     pintarCancion(song)
   } catch (err) {

@@ -31,11 +31,11 @@ pueden convivir sobre el mismo `songs.db` sin pisarse (usa WAL).
 
 ## Filtrar por bandas
 
-Debajo de los sliders hay una caja donde escribes unas letras y eliges bandas
-del catálogo; cada una queda como una ficha removible, y el sorteo se limita a
-las elegidas. Sin ninguna, sortea de todo. Se combina con el modo y la
-dificultad, y la línea de abajo te dice cuántas canciones calzan con la
-combinación completa.
+La barra superior junta modo, fichas de dificultad y el botón **Bandas**. Este
+último abre la caja donde escribes unas letras y eliges bandas del catálogo;
+cada una queda como una ficha removible, y el sorteo se limita a las elegidas.
+Sin ninguna, sortea de todo. Se combina con el modo y la dificultad, y la línea
+de abajo te dice cuántas canciones calzan con la combinación completa.
 
 Tres cosas que conviene saber:
 
@@ -59,7 +59,8 @@ dificultad.
 
 Casi ninguna canción tiene una sola guitarra. *Fade to Black* tiene seis pistas:
 dos acústicas para el intro y cuatro con distorsión para lo que viene después.
-La tarjeta te deja elegir cuál practicar, y cambia con ella la dificultad, el
+La tarjeta muestra la lista de pistas siempre visible, agrupada por instrumento,
+para elegir cuál practicar; cambia con ella la dificultad, el
 aviso de afinación y los ajustes que se le mandan al amplificador — elegir la
 acústica de Metallica te da un CHAMPION limpio, no el preset de banda a
 ganancia alta.
@@ -85,6 +86,13 @@ Tres cosas que conviene saber:
 La elección **no se recuerda** entre sorteos ni entre recargas, igual que el
 modo, la dificultad y las bandas.
 
+## Atajos
+
+Fuera de cajas de texto y selectores: `1`–`9` elige la fila visible de pista;
+`A` marca aprendida; `N`, no me tinca; `D`, después; `L`, me gusta; espacio
+sortea otra; `E` envía al ampli y `/` enfoca Buscar una canción. `Escape`
+cierra el panel de bandas.
+
 ## Sortear de todo
 
 El botón **Sortear de todo** ignora el modo, la dificultad y las bandas por una
@@ -94,7 +102,7 @@ lo que tus controles prometen, no el sorteo que acabas de hacer.
 
 ## Buscar una canción
 
-Entre los controles y la tarjeta hay una caja donde escribes el tema — o la
+En el encabezado hay una caja donde escribes el tema — o la
 banda y el tema juntos, `metallica fade` — y al elegirlo **se abre su tarjeta
 directo, sin sortear**: sus pistas, su dificultad, su afinación y sus ajustes de
 amplificador, listos para mandar.

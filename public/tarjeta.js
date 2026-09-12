@@ -183,6 +183,75 @@ export function selectorDePistas(pistas, elegida) {
   `
 }
 
+/* Palabras que distinguen el rol de una pista dentro de una cancion. */
+const ROLES = /\b(lead|rhythm|solo|clean|acoustic|electric|harmon|extra|overdub|intro|outro|slide|fingerstyle|nylon|steel|riff|melody|arpegg|chord)/i
+const segmentos = nombre => String(nombre ?? '').split('|').map(s => s.trim()).filter(Boolean)
+
+/* Devuelve etiquetas cortas y distintas para todas las pistas de una cancion.
+   El catalogo no mantiene el mismo orden para musico, equipo y rol, por eso
+   primero se descarta lo comun y solo despues se busca el rol. */
+export function etiquetasDePistas(pistas) {
+  const listas = pistas.map(p => segmentos(p.name))
+  let base = pistas.map((p, i) => {
+    const lista = listas[i]
+    if (!lista.length) return p.instrument
+    const comunes = pistas.length > 1
+      ? new Set(lista.filter(x => listas.every(hermana => hermana.includes(x))))
+      : new Set()
+    const quedan = lista.filter(x => !comunes.has(x))
+    const candidatas = quedan.length ? quedan : lista
+    return candidatas.find(x => ROLES.test(x)) ?? candidatas.at(-1)
+  })
+
+  base = base.map((etiqueta, i) => {
+    const choques = base.map((otra, j) => j !== i && otra === etiqueta ? j : -1).filter(j => j >= 0)
+    if (!choques.length) return etiqueta
+    const ajenos = new Set(choques.flatMap(j => listas[j]))
+    const propio = listas[i].find(x => x !== etiqueta && !ajenos.has(x))
+    return propio ? `${propio} · ${etiqueta}` : etiqueta
+  })
+
+  const cantidad = {}
+  for (const etiqueta of base) cantidad[etiqueta] = (cantidad[etiqueta] ?? 0) + 1
+  return base.map((etiqueta, i) => cantidad[etiqueta] > 1 ? `${etiqueta} · ${i + 1}` : etiqueta)
+}
+
+const familiaInstrumento = instrumento => {
+  const i = String(instrumento ?? '').toLowerCase()
+  if (i.includes('acoustic')) return 'ACÚSTICA'
+  if (i.includes('distortion')) return 'DISTORSIÓN'
+  if (i.includes('clean')) return 'LIMPIA'
+  return 'OTRAS'
+}
+
+/* Lista visible de pistas. La posicion es la promesa que usan los atajos 1-9. */
+export function listaDePistas(pistas, elegida) {
+  if (pistas.length <= 1) return ''
+  const etiquetas = etiquetasDePistas(pistas)
+  const grupos = new Map()
+  pistas.forEach((pista, indice) => {
+    const familia = familiaInstrumento(pista.instrument)
+    if (!grupos.has(familia)) grupos.set(familia, [])
+    grupos.get(familia).push({ pista, indice })
+  })
+  let posicion = 0
+  const orden = ['ACÚSTICA', 'DISTORSIÓN', 'LIMPIA', 'OTRAS']
+  const contenido = [...grupos].sort(([a], [b]) => orden.indexOf(a) - orden.indexOf(b)).map(([familia, filas]) => `
+    <section class="grupo-pistas" data-familia="${familia}"><h3>${familia} <span>· ${filas.length}</span></h3>
+      ${filas.map(({ pista, indice }) => {
+        posicion += 1
+        const ampli = pista.ampli?.modelo ? ` · ${esc(pista.ampli.modelo)}` : ''
+        return `<button type="button" class="fila-pista${indice === elegida ? ' elegida' : ''}${pista.califica ? '' : ' fuera-filtro'}"
+          data-pista="${indice}" title="${esc(pista.name || pista.instrument)}" aria-pressed="${indice === elegida}">
+          <b>${posicion}</b><span class="nombre-pista">${esc(etiquetas[indice])}</span>
+          <small>${esc(pista.instrument)} · ${esc(pista.tuning ?? 'E estándar')}${ampli}</small>
+          <em>${pista.califica ? '' : '<span class="fuera-etiqueta">fuera del filtro</span>'}${pista.difficulty != null ? `<span class="medidor" role="img" aria-label="Dificultad ${esc(pista.difficulty)} de 10">${Array.from({ length: 10 }, (_, i) => `<i class="${i < pista.difficulty ? 'on' : ''}"></i>`).join('')}</span><span>${esc(pista.difficulty)}</span>` : ''}</em>
+        </button>`
+      }).join('')}
+    </section>`).join('')
+  return `<div class="pistas-lista"><p class="pistas-titulo">Pistas · ${pistas.length}<span>teclas 1–${Math.min(9, pistas.length)} para cambiar</span></p><div class="pistas-filas${pistas.length > 6 ? ' con-scroll' : ''}">${contenido}</div></div>`
+}
+
 /* Un enlace a la BUSQUEDA de Ultimate Guitar, no a una tab concreta.
 
    No puede ser mejor que eso. Apuntar a la tab exacta exigiria consultar su

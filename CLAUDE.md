@@ -72,6 +72,9 @@ puede:** `app.js`, `ampli-usb.js`, `editor.js` tienen efectos a nivel de módulo
 testear lógica nueva de la tarjeta, **extráela a `tarjeta.js`** — es lo que ese
 módulo es.
 
+`vista-sortear.js` y `panel-ampli.js` producen fragmentos HTML sin efectos de
+módulo; su integración visual y sus eventos se verifican en el navegador real.
+
 **El amplificador:** el LT25 tiene 5 ranuras (`stomp`, `mod`, `amp`, `delay`,
 `reverb`). Cada envío las reescribe todas; las que la pista no usa quedan vacías, a
 propósito. Ninguna escritura se da por buena sin el ACK del equipo: sin

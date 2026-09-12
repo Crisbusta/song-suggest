@@ -2,89 +2,67 @@
 <html lang="es">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>song-suggest</title>
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3c7 0 12 4 12 10 0 7-7 16-12 16S4 20 4 13C4 7 9 3 16 3z" fill="%23d4a24a"/></svg>'>
+<title>song-suggest · Sortear</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3c7 0 12 4 12 10 0 7-7 16-12 16S4 20 4 13C4 7 9 3 16 3z" fill="%23e8a33d"/></svg>'>
 <link rel="stylesheet" href="/style.css">
-
-<header>
-  <div class="titulo">
-    <h1>¿Qué aprendo hoy?</h1>
-    <span id="stats" class="stats"></span>
-    <button id="ampli-conectar" class="ampli-conectar" hidden>Conectar ampli</button>
-  </div>
-  <nav>
+<header class="cabecera-app">
+  <h1>song-suggest</h1>
+  <nav aria-label="Vistas">
     <button id="ver-sorteo" class="activo">Sortear</button>
     <button id="ver-listas">Mis listas</button>
     <button id="ver-editor" hidden>Ampli</button>
   </nav>
-</header>
-
-<main id="vista-sorteo">
-  <section class="controles">
-    <label>
-      Modo
-      <select id="modo">
-        <option value="surprise">Sorpréndeme</option>
-        <option value="riffs">Riffs eléctricos</option>
-        <option value="acoustic">Acústica / fingerpicking</option>
-        <option value="solos">Solos y técnica</option>
-      </select>
-    </label>
-    <label>Dificultad mínima <input id="min" type="range" min="1" max="10" value="1"><output id="min-val">1</output></label>
-    <label>Dificultad máxima <input id="max" type="range" min="1" max="10" value="10"><output id="max-val">10</output></label>
-
-    <div class="bandas">
-      <label for="banda-q">Bandas</label>
-      <div class="banda-buscador">
-        <input id="banda-q" type="text" autocomplete="off" spellcheck="false"
-               placeholder="escribe unas letras y elige" aria-describedby="banda-ayuda">
-        <ul id="banda-sug" class="banda-sug" hidden></ul>
-      </div>
-      <p id="banda-ayuda" class="banda-ayuda">Sin ninguna elegida, sortea de todo el catálogo.</p>
-      <ul id="banda-fichas" class="banda-fichas"></ul>
-      <div id="banda-atajos" class="banda-atajos"></div>
-    </div>
-
-    <p id="calzan" class="calzan"></p>
-  </section>
-
-  <!-- Fuera de los controles a proposito: buscar una cancion no es un filtro
-       del sorteo, es la otra puerta de entrada a una tarjeta. No mueve el
-       contador de arriba ni el aviso de abajo. -->
   <div class="cancion-buscador">
-    <label for="cancion-q">Buscar una canción</label>
+    <label for="cancion-q" class="solo-lector">Buscar una canción o banda</label>
     <div class="cancion-caja">
-      <input id="cancion-q" type="text" autocomplete="off" spellcheck="false"
-             placeholder="escribe el tema o la banda y el tema"
-             aria-describedby="cancion-ayuda">
+      <span class="buscar-icono" aria-hidden="true">⌕</span>
+      <input id="cancion-q" type="text" autocomplete="off" spellcheck="false" placeholder="Buscar una canción o banda" aria-describedby="cancion-ayuda">
+      <kbd aria-hidden="true">/</kbd>
       <ul id="cancion-sug" class="banda-sug" hidden></ul>
     </div>
-    <p id="cancion-ayuda" class="banda-ayuda">
-      Abre su tarjeta directo, sin sortear. Encuentra también las que descartaste.
-    </p>
+    <p id="cancion-ayuda" class="solo-lector">Abre su tarjeta sin sortear. Encuentra también las que descartaste.</p>
   </div>
-
-  <section id="tarjeta" class="tarjeta"></section>
-  <p id="hint" class="hint"></p>
-
-  <section class="acciones">
-    <!-- Los tres de disposicion y el corazon arrancan deshabilitados: hasta que
-         cargue la primera cancion no hay nada que marcar, y pulsarlos reventaria
-         sobre un `actual` null. pintarTarjeta() los habilita al dibujar (la
-         llaman pintar() y pintarCancion(), asi que "se habilitan al dibujar" es
-         cierto para las dos, pero solo de forma transitiva). "Otra" y "Sortear
-         de todo" no: esos siempre se pueden pulsar. -->
-    <button id="aprendida" disabled>Ya la aprendí</button>
-    <button id="descartada" disabled>No me tinca</button>
-    <button id="despues" disabled>Después</button>
-    <button id="otra" class="principal">Otra</button>
+  <span id="stats" class="stats"></span>
+  <button id="ampli-conectar" class="ampli-conectar" hidden>Conectar ampli</button>
+</header>
+<main id="vista-sorteo">
+  <section class="barra-controles" aria-label="Filtros del sorteo">
+    <label>Modo <select id="modo">
+      <option value="surprise">Sorpréndeme</option>
+      <option value="riffs">Riffs eléctricos</option>
+      <option value="acoustic">Acústica / fingerpicking</option>
+      <option value="solos">Solos y técnica</option>
+    </select></label>
+    <input id="min" type="hidden" value="1"><input id="max" type="hidden" value="10">
+    <div class="rango-control"><span>Dificultad</span><div id="dificultad" class="dificultad-filtro" role="group" aria-label="Dificultad"></div></div>
+    <button id="bandas-abrir" type="button" aria-expanded="false" aria-controls="bandas-panel">Bandas <span id="bandas-estado">todas</span> <span aria-hidden="true">⌄</span></button>
+    <p id="calzan" class="calzan" aria-live="polite"></p>
+  </section>
+  <section id="bandas-panel" class="bandas" hidden>
+    <label for="banda-q">Filtrar por bandas</label>
+    <div class="banda-buscador">
+      <input id="banda-q" type="text" autocomplete="off" spellcheck="false" placeholder="escribe unas letras y elige" aria-describedby="banda-ayuda">
+      <ul id="banda-sug" class="banda-sug" hidden></ul>
+    </div>
+    <p id="banda-ayuda" class="banda-ayuda">Sin ninguna elegida, sortea de todo el catálogo.</p>
+    <ul id="banda-fichas" class="banda-fichas"></ul>
+    <div id="banda-atajos" class="banda-atajos"></div>
+  </section>
+  <div class="columnas">
+    <section id="tarjeta" class="tarjeta" aria-label="Canción para practicar"></section>
+    <aside id="panel-ampli" class="panel-ampli" aria-label="Ajustes del Mustang LT25"></aside>
+  </div>
+  <p id="hint" class="hint" aria-live="polite"></p>
+  <section class="acciones" aria-label="Acciones de la canción">
+    <button id="aprendida" disabled>Ya la aprendí <kbd>A</kbd></button>
+    <button id="descartada" disabled>No me tinca <kbd>N</kbd></button>
+    <button id="despues" disabled>Después <kbd>D</kbd></button>
+    <button id="like" class="like" title="Me gustó (L)" aria-label="Me gustó" disabled>♡ <kbd>L</kbd></button>
     <button id="todo" type="button">Sortear de todo</button>
-    <button id="like" class="like" title="Me gustó" disabled>♡</button>
+    <button id="otra" class="principal">Otra <kbd>espacio</kbd></button>
   </section>
 </main>
-
 <main id="vista-listas" hidden></main>
 <main id="vista-editor" hidden></main>
-
 <script type="module" src="/app.js"></script>
 </html>
