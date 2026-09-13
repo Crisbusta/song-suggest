@@ -562,6 +562,85 @@ test('a una pista con distorsion no se le toca el preset', () => {
   assert.equal(r.cadena.stomp?.nombre, 'MYTHIC DRIVE')
 })
 
+/* --- La pista con distorsion no se queda limpia -----------------------------
+
+   Espejo exacto del bloque de arriba, y el mismo defecto de raiz: la tabla de
+   reglas elige el ampli mirando SOLO el tag de genero, sin contrastarlo nunca
+   con el instrumento de la pista. Hay correccion para acustica y para limpia;
+   no habia ninguna para "la pista se llama Distortion Guitar y el genero te
+   dio un ampli de voz limpia".
+
+   Reportado tocando: en "Comfortably Numb" la lead casi no tiene distorsion.
+   Sale por `psychedelic rock` -> 60S UK CLEAN a gain 4 y sin ningun pedal.
+
+   Medido sobre las 25.061 pistas: 867 pistas de distorsion u overdrive
+   reciben de la TABLA un ampli de voz limpia (433 y 434), ninguna por encima
+   de gain 4. Las 2.054 equivalentes que vienen de un preset de la comunidad no
+   se tocan: ahi alguien eligio esa combinacion a proposito.
+
+   Que se les hace sale de la planilla, no de una opinion: 14 de sus presets
+   usan un ampli de voz limpia con gain >= 6, y 11 lo acompanan de un pedal
+   (8 de drive). Jimi Hendrix es 60S UK CLEAN a 6,5 con FUZZ; Carlos Santana,
+   CHAMPION a 7,5 con OVERDRIVE. Es la receta de Gilmour. Por eso se sube la
+   ganancia y se pone un pedal, y NO se cambia el ampli: el modelo que eligio
+   el genero (o la epoca) se respeta. */
+
+test('una pista con distorsion no se queda con un ampli limpio y sin pedal', () => {
+  const r = sugerirAjustes({ tags: ['psychedelic rock', 'classic rock', '70s'],
+    instrument: 'Distortion Guitar', tuning: null,
+    artist: 'Pink Floyd', title: 'Comfortably Numb' })
+  assert.equal(r.fuente, 'reglas')
+  assert.ok(r.gain >= 6, `una pista con distorsion necesita ganancia, dio ${r.gain}`)
+  assert.ok(r.cadena?.stomp, 'y un pedal que ensucie')
+  assert.ok(STOMPS_DE_DRIVE.includes(r.cadena.stomp.nombre), `${r.cadena.stomp.nombre} no ensucia nada`)
+  assert.match(r.procedencia, /distorsi/, 'y se dice por que')
+})
+
+test('el ampli que eligio el genero NO se cambia', () => {
+  // Se corrige la falta de suciedad, no la eleccion de ampli: subir la
+  // ganancia y poner un pedal es lo que hace la planilla en sus 14 presets de
+  // ampli limpio con gain alto.
+  const r = sugerirAjustes({ tags: ['psychedelic rock'], instrument: 'Distortion Guitar',
+    tuning: null, artist: 'Pink Floyd', title: 'Comfortably Numb' })
+  assert.equal(r.modelo, '60S UK CLEAN')
+})
+
+test('la correccion de epoca conserva la ultima palabra sobre el modelo', () => {
+  /* Una cancion de los 60 etiquetada thrash: la tabla da METAL 2000, la epoca
+     lo baja a 60S UK CLEAN -- y entonces la pista distorsionada se queda sin
+     suciedad. Se le pone el pedal SIN deshacer la correccion de epoca, que
+     existe por un caso real (Iron Butterfly, 1968, salia con un ampli que no
+     existia entonces). */
+  const r = sugerirAjustes({ tags: ['thrash metal', '60s'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(r.modelo, '60S UK CLEAN', 'la epoca manda sobre el modelo')
+  assert.ok(r.cadena?.stomp, 'pero la pista distorsionada igual recibe su pedal')
+  assert.ok(r.gain >= 6)
+})
+
+test('el overdrive lleva menos piso de ganancia que la distorsion', () => {
+  // No es lo mismo "Overdriven Guitar" que "Distortion Guitar", y los dos
+  // pisos estan dentro del rango que la propia tabla usa para generos sucios
+  // (blues rock 5, grunge/punk/hard rock 6).
+  const od = sugerirAjustes({ tags: ['psychedelic rock'], instrument: 'Overdriven Guitar', tuning: null })
+  const dist = sugerirAjustes({ tags: ['psychedelic rock'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(od.gain, 5)
+  assert.equal(dist.gain, 6)
+})
+
+test('a una pista limpia del mismo genero no se le pone nada', () => {
+  const r = sugerirAjustes({ tags: ['psychedelic rock'], instrument: 'Electric Guitar (clean)', tuning: null })
+  assert.equal(r.cadena, null, 'una pista limpia no necesita un pedal de drive')
+  assert.ok(r.gain <= 3)
+})
+
+test('una regla que ya da un ampli sucio no recibe pedal', () => {
+  // La correccion es para la contradiccion entre instrumento y ampli. Sin
+  // contradiccion no hay nada que corregir.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Distortion Guitar', tuning: null })
+  assert.equal(r.modelo, 'METAL 2000')
+  assert.equal(r.cadena, null)
+})
+
 test('los pedales de drive existen todos en el catalogo del equipo', () => {
   /* Misma disciplina que MODELOS_LT25: una lista escrita a mano que nombre una
      unidad inexistente no falla, se ignora en silencio -- y aqui el sintoma

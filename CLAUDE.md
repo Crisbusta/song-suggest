@@ -109,6 +109,11 @@ Parecen bugs si no las conoces. Cambiarlas es un retroceso:
   acotada a 3 y el pedal de drive fuera de la ranura `stomp` (`STOMPS_DE_DRIVE`).
   Es la misma razón que la anterior en otra dosis: sigue siendo la misma guitarra,
   sólo sobra la saturación. Un COMPRESSOR o un EQ **no** se quitan.
+- Y al revés: una pista de **distorsión u overdrive** a la que la tabla de reglas
+  le dio un ampli de voz limpia recibe un piso de ganancia (6 y 5) y un OVERDRIVE
+  en `stomp`. **El modelo no se cambia** — la época conserva la última palabra
+  sobre él. Sólo la tabla: si la contradicción viene de un preset de la comunidad
+  no se toca, porque ahí alguien eligió esa combinación a propósito.
 
 ## Documentación
 
