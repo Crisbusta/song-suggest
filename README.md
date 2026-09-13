@@ -65,6 +65,13 @@ aviso de afinación y los ajustes que se le mandan al amplificador — elegir la
 acústica de Metallica te da un CHAMPION limpio, no el preset de banda a
 ganancia alta.
 
+Lo mismo vale, en otra dosis, para las pistas eléctricas **limpias**: conservan el
+ampli de la banda, pero con la ganancia acotada a 3 y el pedal de drive fuera. El
+interludio limpio de *Master Of Puppets* salía si no con un 70S UK CLEAN a
+ganancia 10 y un MYTHIC DRIVE encima. Un compresor o un ecualizador sí se
+conservan: no saturan nada. Son 1.400 pistas del catálogo, y la tarjeta dice en
+cada una por qué se le bajó.
+
 **Los filtros miran todas las pistas.** Si pides dificultad 1-2, entra cualquier
 canción que tenga *una* pista de guitarra a ese nivel, aunque la más tocada sea
 más difícil. Eso suma 2.143 canciones al filtro fácil, 1.850 al modo Solos y

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sugerirAjustes, MODELOS_LT25, fenderIdDeModelo, TAGS_CON_REGLA } from '../lib/ampli.js'
+import { sugerirAjustes, MODELOS_LT25, fenderIdDeModelo, TAGS_CON_REGLA, STOMPS_DE_DRIVE } from '../lib/ampli.js'
 import { PRESETS_BANDA, auditoria } from '../lib/presets-comunidad.js'
 import { readFileSync } from 'node:fs'
 
@@ -493,13 +493,84 @@ test('un track acustico no recibe el preset electrico de la banda', () => {
 })
 
 test('un track electrico limpio SI conserva el preset de la banda', () => {
-  // Decision explicita y del lado contrario: sigue siendo una guitarra
-  // electrica, asi que el modelo de ampli de esa banda es plausible. Si esto
-  // cambia alguna vez, que cambie a la vista y no por arrastre del caso acustico.
+  // Decision explicita y del lado contrario al acustico: sigue siendo una
+  // guitarra electrica, asi que el modelo de ampli de esa banda es plausible.
+  // Lo que se le corrige es la saturacion, no el ampli -- ver los tres tests
+  // de abajo.
   const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (clean)',
     tuning: null, artist: 'Metallica', title: 'Enter Sandman' })
   assert.equal(r.fuente, 'comunidad')
   assert.equal(r.modelo, '90S ROCK')
+})
+
+/* --- La pista limpia no se satura ------------------------------------------
+
+   Reportado tocando: el interludio limpio de "Master Of Puppets" salia
+   saturadisimo. La correccion de ganancia para pistas limpias existia desde el
+   principio, pero SOLO en la rama de la tabla de reglas: cuando gana un preset
+   de la comunidad, `desdeElPreset` devolvia antes de llegar a ella. El
+   comentario del modulo daba por hecho lo contrario ("la tabla, cuando le
+   toca, le recorta la ganancia a 3") -- y a esa pista la tabla no le toca
+   nunca.
+
+   Medido sobre las 25.061 pistas de guitarra: 2.149 pistas limpias reciben un
+   preset de la comunidad; de esas, 428 con gain >= 6 y 791 con un pedal de
+   drive en la ranura stomp (117 con las dos cosas). Las 428 salen TODAS por
+   esta rama: ni una sola viene de la tabla de reglas. */
+
+test('una pista limpia no recibe la ganancia alta del preset de la banda', () => {
+  // Caso real: el generico de Metallica es 70S UK CLEAN a gain 10.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (clean)',
+    tuning: null, artist: 'Metallica', title: 'Master Of Puppets' })
+  assert.equal(r.fuente, 'comunidad', 'el preset de la banda se conserva')
+  assert.equal(r.modelo, '70S UK CLEAN', 'el ampli de la banda tambien')
+  assert.ok(r.gain <= 3, `una pista limpia no lleva esa ganancia, dio ${r.gain}`)
+  assert.match(r.procedencia, /limpia/, 'y se dice por que se le bajo')
+})
+
+test('una pista limpia pierde el pedal de drive pero conserva el resto de la cadena', () => {
+  /* Bajar el gain y dejar el MYTHIC DRIVE puesto no arregla nada: la
+     saturacion que se oye viene tanto del pedal como del ampli. Y al reves,
+     vaciar la ranura entera tampoco sirve: el stomp mas usado de la planilla
+     es el COMPRESSOR (17 filas), que en una pista limpia esta bien puesto. */
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (clean)',
+    tuning: null, artist: 'Metallica', title: 'Master Of Puppets' })
+  assert.equal(r.cadena.stomp, undefined, 'el MYTHIC DRIVE no debe seguir ahi')
+  assert.equal(r.cadena.reverb?.nombre, 'PLATE', 'el reverb del preset si se conserva')
+  assert.equal(r.cadena.amp?.nombre, '70S UK CLEAN', 'y el ampli')
+
+  // Y no se toca el preset compartido: PRESETS_BANDA lo lee todo el proceso.
+  const original = PRESETS_BANDA.find(p => /metallica/i.test(p.artista) && !p.cancion)
+  assert.equal(original.cadena.stomp?.nombre, 'MYTHIC DRIVE', 'el preset original no se muta')
+})
+
+test('una pista limpia conserva un stomp que no es de drive', () => {
+  // Billy Bragg: TWIN CLEAN a gain 3 con COMPRESSOR. La ganancia ya esta baja,
+  // asi que este test aisla la ranura: lo unico que se evalua es el pedal.
+  const r = sugerirAjustes({ tags: ['folk'], instrument: 'Electric Guitar (clean)',
+    tuning: null, artist: 'Billy Bragg', title: 'A New England' })
+  assert.equal(r.fuente, 'comunidad')
+  assert.equal(r.cadena.stomp?.nombre, 'COMPRESSOR', 'un compresor no satura nada')
+})
+
+test('a una pista con distorsion no se le toca el preset', () => {
+  // La correccion es del instrumento que vas a tocar, no una opinion sobre el
+  // preset: sobre una pista distorsionada no tiene nada que corregir.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Distortion Guitar',
+    tuning: null, artist: 'Metallica', title: 'Master Of Puppets' })
+  assert.equal(r.gain, 10, 'la ganancia del preset viaja intacta')
+  assert.equal(r.cadena.stomp?.nombre, 'MYTHIC DRIVE')
+})
+
+test('los pedales de drive existen todos en el catalogo del equipo', () => {
+  /* Misma disciplina que MODELOS_LT25: una lista escrita a mano que nombre una
+     unidad inexistente no falla, se ignora en silencio -- y aqui el sintoma
+     seria que el pedal NO se quita y la pista sigue saturada. */
+  const stomps = new Set(JSON.parse(readFileSync(new URL('../public/lt25-unidades.json', import.meta.url), 'utf8'))
+    .filter(u => u.info?.subcategory === 'stomp').map(u => u.info.displayName))
+  for (const nombre of STOMPS_DE_DRIVE) {
+    assert.ok(stomps.has(nombre), `"${nombre}" no es un stomp del LT25`)
+  }
 })
 
 // --- Lo que NO se manda al amplificador --------------------------------------

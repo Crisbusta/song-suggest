@@ -105,6 +105,10 @@ Parecen bugs si no las conoces. Cambiarlas es un retroceso:
   recibe en dB y mandarle un 0.4 como "4 de 10" puede ser un salto brutal.
 - Una pista **acústica** anula el preset de banda de la comunidad y cae a la tabla
   de reglas (`lib/ampli.js`): el tono de una banda es el de su equipo eléctrico.
+- Una pista eléctrica **limpia** conserva el preset de banda, pero con la ganancia
+  acotada a 3 y el pedal de drive fuera de la ranura `stomp` (`STOMPS_DE_DRIVE`).
+  Es la misma razón que la anterior en otra dosis: sigue siendo la misma guitarra,
+  sólo sobra la saturación. Un COMPRESSOR o un EQ **no** se quitan.
 
 ## Documentación
 
