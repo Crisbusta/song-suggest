@@ -27,6 +27,27 @@ const valor = (n, porDefecto) => {
 const limite = valor('limit', Infinity)
 const concurrencia = valor('concurrency', 3)
 
+/* `--patron` se puede repetir: `--patron "los prisioneros" --patron "victor jara"`.
+   No usa `valor` porque eso exige un entero. Un `--patron` sin texto detras es
+   un typo y muere aca, igual que los demas. */
+const textos = n => args.flatMap((a, i) => {
+  if (a !== `--${n}`) return []
+  const v = args[i + 1]
+  if (!v || v.startsWith('--')) {
+    console.error(`--${n} necesita un texto detras`)
+    process.exit(1)
+  }
+  return [v]
+})
+const patrones = textos('patron')
+
+/* El catalogo global ocupa los rank 0..9.999. Lo que solo aparece buscando por
+   patron va despues, y cada patron en su propio tramo para no pisarse entre
+   ellos: asi la cola de enriquecimiento sigue siendo "lo popular primero" y un
+   Ctrl-C conserva ese significado. */
+const BASE_PATRON = 1_000_000
+const TRAMO_PATRON = 10_000
+
 // Relativo al archivo, no al cwd: correr `node etl/index.js` desde otra
 // carpeta no debe empezar una bajada nueva en un songs.db distinto.
 const db = openDb(fileURLToPath(new URL('../songs.db', import.meta.url)))
@@ -37,17 +58,27 @@ if (flag('re-enriquecer')) {
 }
 
 if (!flag('solo-meta')) {
-  console.log('Fase 1: bajando el catalogo...')
-  try {
-    const r = await fetchCatalog(db, {
-      fetchPage: (from, size) => fetchJson(`${BASE}/songs?pattern=&size=${size}&from=${from}`),
-      onProgress: p => process.stdout.write(`\r  ${p.songs} canciones (${p.pages} paginas)`),
-    })
-    console.log(`\n  Listo: ${r.songs} canciones.`)
-  } catch (err) {
-    // Que la fase 1 falle no debe impedir enriquecer lo que ya hay en la base.
-    console.error(`\n  Fase 1 fallo: ${err.message}`)
-    console.error('  Sigo con la fase 2 sobre lo que ya esta en la base.')
+  /* Con `--patron` se bajan ESOS y no el catalogo global: el global ya lo
+     tienes, y son 50 paginas para volver a traer lo mismo. Sin patrones, el
+     comportamiento de siempre. */
+  const pasadas = patrones.length
+    ? patrones.map((patron, i) => ({ patron, rankBase: BASE_PATRON + i * TRAMO_PATRON }))
+    : [{ patron: '', rankBase: 0 }]
+
+  for (const { patron, rankBase } of pasadas) {
+    console.log(patron ? `Fase 1: bajando "${patron}"...` : 'Fase 1: bajando el catalogo...')
+    try {
+      const r = await fetchCatalog(db, {
+        fetchPage: (from, size) =>
+          fetchJson(`${BASE}/songs?pattern=${encodeURIComponent(patron)}&size=${size}&from=${from}`),
+        rankBase,
+        onProgress: p => process.stdout.write(`\r  ${p.songs} canciones (${p.pages} paginas)`),
+      })
+      console.log(`\n  Listo: ${r.songs} canciones.`)
+    } catch (err) {
+      // Que una pasada falle no debe impedir las demas ni la fase 2.
+      console.error(`\n  Fase 1${patron ? ` ("${patron}")` : ''} fallo: ${err.message}`)
+    }
   }
 }
 
