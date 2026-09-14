@@ -97,3 +97,45 @@ test('no borra enriched_at de una cancion ya enriquecida', async () => {
 
   assert.equal(db.prepare('SELECT enriched_at FROM songs WHERE song_id = 1').get().enriched_at, '2026-09-01')
 })
+
+/* --- Buscar por patron: canciones que el top 10.000 no alcanza --------------
+
+   El catalogo global (`pattern=` vacio) topa en 10.000 resultados -- la API
+   devuelve vacio en `from=10000`, verificado -- y ese top esta ordenado por
+   popularidad global. Medido contra Songsterr el 2026-09-13: de Los
+   Prisioneros entran 7 de sus 98 canciones, de Gustavo Cerati 3 de 96, y de
+   Victor Jara ninguna de 37.
+
+   `pattern` es busqueda de texto de verdad, asi que se puede pedir por banda.
+   Lo que eso rompe es el `catalog_rank`, que `etl/meta.js` usa para enriquecer
+   lo popular primero: una pasada por "prisioneros" numera desde 0, y sin
+   `rankBase` "Paramar" quedaria con rank 2 -- por delante de medio catalogo
+   real. Con base, las canciones que solo aparecen por patron se ordenan
+   DESPUES del top global, que es donde les corresponde. */
+
+test('rankBase desplaza el rango sin tocar el catalogo global', async () => {
+  const db = openDb(':memory:')
+  await fetchCatalog(db, { fetchPage: catalogoFalso(5), pageSize: 200, rankBase: 1_000_000 })
+  const r = db.prepare('SELECT MIN(catalog_rank) lo, MAX(catalog_rank) hi FROM songs').get()
+  assert.equal(r.lo, 1_000_000)
+  assert.equal(r.hi, 1_000_004)
+})
+
+test('un rank peor no pisa uno mejor que ya estaba', async () => {
+  /* La misma cancion puede salir en las dos pasadas. Si la segunda pisara el
+     rank, una cancion del top global recibiria el numero alto de su pasada por
+     banda y perderia su lugar en la cola de enriquecimiento -- que es lo unico
+     que garantiza que un Ctrl-C te deje lo popular ya listo. */
+  const db = openDb(':memory:')
+  await fetchCatalog(db, { fetchPage: catalogoFalso(5), pageSize: 200 })
+  await fetchCatalog(db, { fetchPage: catalogoFalso(5), pageSize: 200, rankBase: 1_000_000 })
+  assert.equal(db.prepare('SELECT catalog_rank FROM songs WHERE song_id = 1').get().catalog_rank, 0)
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM songs').get().c, 5, 'y no duplica')
+})
+
+test('y al reves: un rank mejor si mejora al que estaba', async () => {
+  const db = openDb(':memory:')
+  await fetchCatalog(db, { fetchPage: catalogoFalso(5), pageSize: 200, rankBase: 1_000_000 })
+  await fetchCatalog(db, { fetchPage: catalogoFalso(5), pageSize: 200 })
+  assert.equal(db.prepare('SELECT catalog_rank FROM songs WHERE song_id = 1').get().catalog_rank, 0)
+})

@@ -1,7 +1,17 @@
 import { parseCatalogPage } from './parse.js'
 
 export async function fetchCatalog(db, opts) {
-  const { fetchPage, pageSize = 200, maxFrom = 9800, onProgress } = opts
+  /* `maxFrom` no es una cifra elegida: la API topa CUALQUIER consulta en 10.000
+     resultados -- `from=10000` devuelve un arreglo vacio, verificado el
+     2026-09-13 contra el endpoint real, con patron y sin el. Subirlo no baja
+     ni una cancion mas.
+
+     `rankBase` desplaza el `catalog_rank` de esta pasada. Existe porque la
+     forma de pasar ese techo es pedir por `pattern`, y cada pasada por patron
+     numera desde 0: sin base, una cancion que solo aparece buscando su banda
+     recibiria un rank de dos digitos y se colaria al principio de la cola de
+     enriquecimiento, que `etl/meta.js` ordena por este campo. */
+  const { fetchPage, pageSize = 200, maxFrom = 9800, rankBase = 0, onProgress } = opts
 
   // has_chords no se actualiza en el ON CONFLICT: la fase 2 (/api/meta, la
   // fuente mas completa) es la dueña de esa columna. Si la fase 1 la pisara
@@ -12,7 +22,12 @@ export async function fetchCatalog(db, opts) {
     ON CONFLICT(song_id) DO UPDATE SET
       artist = excluded.artist,
       title = excluded.title,
-      catalog_rank = excluded.catalog_rank
+      -- El MEJOR rank que le haya dado cualquier pasada, no el ultimo. Una
+      -- cancion puede salir en el catalogo global Y en la busqueda por su
+      -- banda; si la segunda pisara el valor, una cancion del top perderia su
+      -- lugar en la cola de enriquecimiento y un Ctrl-C dejaria de
+      -- garantizarte que lo popular ya esta listo.
+      catalog_rank = MIN(catalog_rank, excluded.catalog_rank)
   `)
   const borrarTracks = db.prepare('DELETE FROM tracks WHERE song_id = ?')
   const insertTrack = db.prepare(`
@@ -38,7 +53,7 @@ export async function fetchCatalog(db, opts) {
     db.exec('BEGIN')
     try {
       for (const s of songs) {
-        upsertSong.run(s.songId, s.artistId, s.artist, s.title, s.hasChords, s.catalogRank)
+        upsertSong.run(s.songId, s.artistId, s.artist, s.title, s.hasChords, s.catalogRank + rankBase)
         borrarTracks.run(s.songId)
       }
       for (const t of tracks) {
