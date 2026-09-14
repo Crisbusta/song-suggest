@@ -120,7 +120,8 @@ Parecen bugs si no las conoces. Cambiarlas es un retroceso:
 `README.md` es la referencia de comportamiento y documenta límites, no sólo
 funciones. `docs/superpowers/specs/` tiene el diseño de cada feature con sus
 mediciones y lo que se descartó; `plans/` el plan de implementación.
-`docs/brief-visual.md` es el brief del rediseño pendiente.
+`docs/diseno/` guarda el material visual: el brief y los mocks que han
+entregado los diseñadores.
 
 ## Commits
 

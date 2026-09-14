@@ -2,8 +2,8 @@
 
 **Estado:** aprobado en conversación, pendiente de plan de implementación.
 **Fecha:** 2026-09-12
-**Referencia visual:** `docs/mock-v2.html` (bundle de React, **sólo de referencia**)
-**Brief que lo originó:** `docs/brief-visual.md`
+**Referencia visual:** `docs/diseno/mock-v2.html` (bundle de React, **sólo de referencia**)
+**Brief que lo originó:** `docs/diseno/brief-visual.md`
 
 ---
 
