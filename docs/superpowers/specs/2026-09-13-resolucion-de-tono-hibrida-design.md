@@ -1,10 +1,23 @@
 # Resolución de tono híbrida — diagnóstico y diseño
 
-> Estado: **propuesta**. No hay nada implementado. Todas las cifras están
-> medidas contra el `songs.db` real el 2026-09-13 (10.011 canciones, 9.788 con
-> pista de guitarra, 25.061 pistas de guitarra) y contra los dos CSV de
-> `data/`. Los scripts de medición son de un solo uso y no quedaron en el repo;
-> cada cifra dice contra qué se midió para poder rehacerla.
+> Estado: **propuesta**. No hay nada implementado.
+>
+> **Enmendada el 2026-09-16.** El catálogo casi se duplicó desde la primera
+> redacción (de 10.011 canciones y 25.061 pistas de guitarra a **19.976 y
+> 42.580**), así que las cifras que salen de `songs.db` están **re-medidas** a
+> esa fecha: §1.2 (a), (b) y (c), y las que las citan en §9 y §10. Las que salen
+> de los dos CSV de `data/` **no** se re-midieron y no hacía falta: ese
+> directorio no se toca desde el 2026-09-06 (`git log -- data/`), es zona
+> protegida, y sigue siendo el mismo trabajo de terceros. El diagnóstico no
+> cambió de signo: donde cambió, empeoró.
+>
+> La enmienda además añade a `user_tone` una firma de pista contra la deriva del
+> índice (§4.4), crea la tabla de juicios (§4.6), inserta la **fase 0 de
+> medición** (§9) y reescribe el cierre sobre el acierto (§10), que era el
+> límite declarado de la versión anterior.
+>
+> Los scripts de medición son de un solo uso y no quedaron en el repo; cada
+> cifra dice contra qué se midió para poder rehacerla.
 
 ---
 
@@ -30,10 +43,11 @@ Ese acoplamiento es la causa de todo lo que sigue.
 
 **(a) El tono casi no distingue entre pistas de la misma canción.**
 
-De las 7.891 canciones con dos o más pistas de guitarra, **5.704 (72,3%)
+De las 15.400 canciones con dos o más pistas de guitarra, **12.501 (81,2%)
 reciben exactamente el mismo tono en todas sus pistas**. El promedio es de
-**1,31 tonos distintos para 2,94 pistas**. Es el problema que abriste con Fade
-to Black, y no es un caso raro: es la norma.
+**1,22 tonos distintos para 2,52 pistas**. Es el problema que abriste con Fade
+to Black, y no es un caso raro: es la norma — y en el catálogo ampliado es
+**más** norma que antes (era 72,3%).
 
 La razón es directa: los únicos datos por pista que entran a `sugerirAjustes`
 son `instrument` y `tuning`. Dos pistas `Distortion Guitar` en E estándar son
@@ -44,16 +58,19 @@ indistinguibles para el resolutor, se llamen "Rhythm Guitar" o "Guitar Solo".
 `sugerirAjustes` recibe `{ tags, instrument, tuning, artist, title }`. `name` no
 está en esa lista y `pistasDeLaCancion` no se lo pasa. Sin embargo:
 
-| señal en `track.name` | pistas | % de 25.061 |
+| señal en `track.name` | pistas | % de 42.580 |
 |---|---:|---:|
-| lead / solo / harmony / melody | 6.193 | 24,7% |
-| rhythm / riff / chord | 4.485 | 17,9% |
-| acoustic / nylon / classical | 890 | 3,6% |
-| clean | 882 | 3,5% |
-| dist / overdrive / crunch / heavy | 592 | 2,4% |
-| **clasificable con regex simple** | **13.042** | **52,1%** |
-| nombre sin señal de rol | 11.060 | 44,1% |
-| sin nombre | 959 | 3,8% |
+| lead / solo / harmony / melody | 10.427 | 24,5% |
+| rhythm / riff / chord | 8.961 | 21,0% |
+| acoustic / nylon / classical | 1.168 | 2,7% |
+| clean | 1.204 | 2,8% |
+| dist / overdrive / crunch / heavy | 993 | 2,3% |
+| **clasificable con regex simple** | **21.987** | **51,6%** |
+| nombre sin señal de rol | 13.440 | 31,6% |
+| sin nombre | 7.153 | 16,8% |
+
+Las categorías se solapan (una pista puede decir "Clean Rhythm"), así que las
+cinco primeras filas suman más que la de clasificables.
 
 Más de la mitad del catálogo trae escrito el rol de la pista y hoy se tira.
 `public/tarjeta.js` ya tiene una regex de roles (`ROLES`, línea 187) — pero la
@@ -61,17 +78,28 @@ usa para **elegir una etiqueta legible**, no para decidir el tono.
 
 **(c) La elección es "preset entero o nada", y por debajo no hay efectos.**
 
+Medido sobre las **26.696 pistas de guitarra de canciones ya enriquecidas**,
+que es el universo correcto para juzgar la lógica de tono — ver el aviso de
+abajo sobre las que faltan por enriquecer:
+
 | fuente que gana | pistas | % |
 |---|---:|---:|
-| reglas de género | 13.655 | 54,5% |
-| tono de la comunidad por género | 6.933 | 27,7% |
-| preset de la comunidad (artista o canción) | 2.442 | 9,7% |
-| sin sugerencia | 2.031 | 8,1% |
+| reglas de género | 14.162 | 53,0% |
+| tono de la comunidad por género | 7.033 | 26,3% |
+| preset de la comunidad (artista o canción) | 2.448 | 9,2% |
+| sin sugerencia | 3.053 | 11,4% |
+
+> **Aviso de medición.** 9.072 de las 19.976 canciones (15.884 pistas de
+> guitarra) **nunca pasaron la fase meta del ETL** y por eso no tienen ningún
+> tag. Contadas sobre el catálogo entero, las cifras salen 33,3% / 22,3% /
+> 44,4% "sin sugerencia" — y ese 44,4% no describe la lógica de tono, describe
+> un `npm run etl --solo-meta` pendiente. No confundir las dos lecturas: sobre
+> el catálogo entero ninguna cifra de este documento es interpretable.
 
 La tabla `REGLAS` **no opina sobre efectos**: produce modelo + gain, volume,
-treble, bass, reverb, y `cadena: null`. O sea que **el 54,5% de las pistas no
-recibe ninguna información de stomp, mod, delay ni reverb**, aunque la planilla
-de la comunidad sí la tenga para ese artista:
+treble, bass, reverb, y `cadena: null`. O sea que **el 49,3% de las pistas
+enriquecidas no recibe ninguna información de stomp, mod, delay ni reverb**,
+aunque la planilla de la comunidad sí la tenga para ese artista:
 
 | ranura | presets que la declaran (de 87) |
 |---|---:|
@@ -101,13 +129,18 @@ modulación que el preset traía y que sí servían.
 ### 1.3 Lo que el diagnóstico NO dice
 
 - No dice que las reglas de género estén mal. Dice que son la fuente de más
-  baja resolución y que hoy ganan el 54,5% de las veces sin poder combinarse
+  baja resolución y que hoy ganan el 53,0% de las veces sin poder combinarse
   con nada.
 - No dice que haya que tocar el envío. El camino WebHID funciona y está en zona
   protegida.
-- No hay ninguna medición de **acierto** aquí, y no la puede haber: no existe
-  fuente de verdad de "el tono correcto de esta pista". Todo lo que sigue mejora
-  la *resolución* y la *explicabilidad*, no un acierto demostrable.
+- No hay ninguna medición de **acierto** aquí. La versión anterior de este
+  documento concluía que no la podía haber, porque no existe fuente de verdad
+  del tono de una grabación. Eso sigue siendo cierto y **la conclusión que se
+  sacaba de ello era errónea**: esta app tiene un solo usuario, y la verdad
+  operativa no es el disco, es *el tono que ese usuario dialó y aprobó*. Esa sí
+  existe, es falsable, y el equipo ya la sabe leer (`ampli.leerPreset()`).
+  Construirla es la **fase 0** (§9), y es lo que convierte el resto del plan de
+  acto de fe en algo puntuable. Ver el cierre reescrito en §10.
 
 ---
 
@@ -126,7 +159,7 @@ de las siete piezas del camino actual no se tocan.
 | `lib/presets-comunidad.js` — mitad resolutora | **se envuelve** | `buscarPreset` y `presetDeGenero` siguen existiendo y siguen devolviendo lo mismo. Lo que cambia es quién los llama y qué hace con la respuesta. |
 | `lib/ampli.js` — `REGLAS` | **se reinterpreta** | Las 24 filas se quedan; cambia lo que emiten. |
 | `lib/tuning.js` | **intacto** | `describeTuning` ya devuelve `null` para estándar, que es la semántica correcta. |
-| `public/ampli-usb.js` — `ampli.leerPreset()` | **intacto, reutilizado** | **Hallazgo relevante para la fase 3**: el editor ya lee el preset completo del equipo (`opLeerPreset`, línea 611, usado por `releerYRedibujar`). "Guardar mi tono" no necesita protocolo nuevo. |
+| `public/ampli-usb.js` — `ampli.leerPreset()` | **intacto, reutilizado** | **Hallazgo relevante para la fase 0**: el editor ya lee el preset completo del equipo (`opLeerPreset`, línea 611, usado por `releerYRedibujar`). "Guardar mi tono" no necesita protocolo nuevo. |
 
 Lo único que desaparece es la **decisión** dentro de `sugerirAjustes`. La
 función sobrevive como fachada (§6.4).
@@ -297,6 +330,7 @@ más emite **una** evidencia.
 CREATE TABLE IF NOT EXISTS user_tone (
   song_id     INTEGER NOT NULL,
   track_index INTEGER NOT NULL,
+  track_sig   TEXT    NOT NULL,   -- instrument + '\u001f' + name de la pista al guardar
   cadena      TEXT    NOT NULL,   -- JSON: la cadena LT25 tal cual quedó en el equipo
   descriptor  TEXT,               -- JSON: el descriptor del que salió, si lo hubo
   origen      TEXT    NOT NULL CHECK (origen IN ('leido','editado')),
@@ -305,6 +339,21 @@ CREATE TABLE IF NOT EXISTS user_tone (
   PRIMARY KEY (song_id, track_index)
 );
 ```
+
+**`track_sig` es una corrección de la versión anterior, y es un fallo serio que
+tenía.** `etl/catalog.js:32` hace `DELETE FROM tracks WHERE song_id = ?` y
+reinserta con el `trackIndex` que venga de Songsterr. La clave
+`(song_id, track_index)` protegía la fila del borrado pero **no de la deriva**:
+si Songsterr reordena las pistas o inserta una, el tono guardado pasa a
+aplicarse **a otra pista distinta, en silencio**. No lanza, no se nota, y el
+síntoma es "el tono que guardé dejó de servir" — exactamente la clase de fallo
+que este proyecto persigue en `resolverUnidad` y en los nombres de modelo.
+
+La regla: al leer, `track_sig` se compara con la pista actual. Si no calza, la
+fila **no se aplica** y se marca como desfasada para que la interfaz lo diga.
+Se avisa, no se adivina, y no se borra: el tono sigue ahí por si la pista
+vuelve, y porque un tono que costó dialar no se tira por una reordenación
+ajena.
 
 Dos decisiones que copian a `song_state` a propósito:
 
@@ -339,6 +388,55 @@ CREATE TABLE IF NOT EXISTS tone_profile (
 chorus guarda sólo `mod`. Es la representación natural de "esta fuente sabe una
 cosa", y es lo que permite que un perfil de artista y un preset de canción
 convivan sin pisarse.
+
+### 4.6 Juicios de tono (fase 0)
+
+```sql
+CREATE TABLE IF NOT EXISTS tone_judgment (
+  id          INTEGER PRIMARY KEY,
+  song_id     INTEGER NOT NULL,
+  track_index INTEGER NOT NULL,
+  track_sig   TEXT    NOT NULL,   -- igual que en user_tone, por la misma razón
+  eje         TEXT    NOT NULL CHECK (eje IN ('global','suciedad','modulacion','delay','reverb')),
+  direccion   TEXT    NOT NULL CHECK (direccion IN ('bien','sobra','falta')),
+  juzgado     TEXT    NOT NULL,   -- JSON: la cadena que estaba en pantalla
+  fuente      TEXT    NOT NULL,   -- quién la produjo: 'reglas' | 'comunidad' | 'usuario'
+  sugeridor   TEXT    NOT NULL,   -- versión del sugeridor que la produjo
+  creado_en   TEXT    NOT NULL,
+  CHECK ((eje =  'global' AND direccion =  'bien')
+      OR (eje <> 'global' AND direccion <> 'bien'))
+);
+```
+
+Cuatro decisiones, cada una con su motivo:
+
+**(1) El veredicto es DIRECCIONAL, no una nota.** "Está mal" no se puede
+puntuar. "Sobra suciedad" sí, porque de cualquier candidato se puede preguntar
+*¿se movió hacia donde pedía?* — y esa pregunta tiene respuesta sí/no sin
+ambigüedad. El `CHECK` compuesto fija las dos únicas formas con sentido: o es
+un `bien` global, o es una queja con eje y dirección.
+
+**(2) `bien` es un veredicto de primera clase.** Un corpus que sólo registra
+errores no puede castigar a un candidato que arruina lo que ya funcionaba. Sin
+ejemplos positivos se aprende a huir, no a acertar.
+
+**(3) Se guarda QUÉ se juzgó (`juzgado`, `fuente`, `sugeridor`).** Un
+"sobra suciedad" sin la cadena que lo provocó es ininterpretable en cuanto el
+sugeridor cambie: *¿más limpio que qué?* Es el mismo principio que `procedencia`
+en el resto del documento, aplicado al juicio en vez de a la sugerencia.
+
+**(4) Es un registro, no un estado: se acumula, no se pisa.** Sin clave por
+pista y sin `UPDATE`. La misma pista juzgada tres veces a lo largo de tres
+versiones del sugeridor son tres filas, y esa historia **es** el dato — es lo
+que permite preguntar si una versión mejoró sobre la anterior.
+
+Los ejes son los de §4.2 a propósito, no por comodidad: si el juicio habla el
+idioma del descriptor, el evaluador puede comprobar el movimiento eje por eje,
+y la fase 5 —que emite en ese mismo vocabulario— se puntúa con exactamente la
+misma regla que las reglas de género. Un solo idioma de punta a punta.
+
+Entra a **zona protegida** por la misma razón que `user_tone`, y con más fuerza:
+el ETL no puede reconstruir horas de escucha.
 
 ---
 
@@ -549,7 +647,7 @@ fases 1-2 se pueden detener ahí sin dejar nada a medias.
 **C. Ranking de presets candidatos.** Puntuar los 87 presets de la planilla
 contra la pista y elegir el mejor. Barato, y explicable. **Descartada**:
 mantiene el LT25 como representación interna —justo lo que pides evitar—, no
-puede combinar dos fuentes, y su techo es la planilla (87 filas para 25.061
+puede combinar dos fuentes, y su techo es la planilla (87 filas para 42.580
 pistas).
 
 **Recomendación:** A, con la fase 1 y la 2 diseñadas para que detenerse después
@@ -558,6 +656,65 @@ de la 2 deje un sistema coherente, no un esqueleto.
 ---
 
 ## 9. Plan por fases
+
+### Fase 0 — Corpus de juicios y marcador
+
+**Sin cambio en la lógica de tono.** El objetivo es poder medir. Va primero
+porque todas las fases siguientes cambian el resultado y **ninguna puede
+demostrar hoy que lo mejora**: la 2 mueve el 53% de las pistas de una vez.
+
+- **Crear:** migraciones de `user_tone` (§4.4) y `tone_judgment` (§4.6);
+  `db/tono-usuario.js`; endpoints `GET/PUT/DELETE /api/tono` y
+  `POST /api/juicio`; `lib/tono/ejes.js` — de una cadena LT25 a los ejes de
+  §4.2 (familia del ampli, ordinal de suciedad, ocupación de cada ranura);
+  `tools/evaluar-tono.mjs` y `npm run tono:evaluar`.
+- **Modificar:** `public/panel-ampli.js` y `public/app.js` — el veredicto
+  aparece **donde hoy vive `#envio-estado`**, al confirmar el ACK, y el botón
+  "Guardar mi tono" junto a "Enviar al ampli", llamando al `ampli.leerPreset()`
+  que ya existe; `CLAUDE.md` (dos tablas a zona protegida) y `npm run backup`,
+  **en el mismo commit que las crea**; y `db/queries.js`, para el corto-circuito
+  de abajo.
+- **Tu tono guardado SÍ manda, desde la fase 0.** Y no hace falta el resolutor
+  para eso: es un corto-circuito en `pistasDeLaCancion()` — si hay fila de
+  `user_tone` con `track_sig` que calza, se devuelve esa cadena y no se llama a
+  `sugerirAjustes`. Trivial de escribir y de quitar.
+
+  Va aquí y no en la fase 3 por una razón que no es técnica: si capturar un tono
+  no arregla la canción **hoy**, no vas a capturar cuarenta, y sin corpus no hay
+  ninguna de las fases siguientes. La fase 3 sustituye este corto-circuito por
+  una fuente de verdad en el resolutor; el comportamiento visible no cambia.
+- **Cómo puntúa.** Dos verdades, dos reglas. Un **tono capturado** es un
+  objetivo exacto y se mide la distancia *en ejes*, no en perillas crudas:
+  `DELUXE CLN` contra `TWIN CLEAN` son los dos limpios y penalizarlo igual que
+  confundir limpio con metal sería ruido. Un **veredicto** es una restricción:
+  `(suciedad, sobra)` se cumple si el candidato es **estrictamente** más limpio
+  que la cadena juzgada — empatar es fallar —, y un `bien` se cumple si el
+  candidato no se aleja en ningún eje.
+- **La salida es un informe, no una nota**: cumplidas / violadas / sin efecto,
+  con ejemplos de cada tipo. Un número solo escondería las regresiones, que son
+  lo que venimos a cazar.
+- **Riesgos.** (1) **Sobreajuste**, y es el central: con ~50 juicios y una tabla
+  de reglas editable a mano, hacer subir el marcador es trivial. Mitigación
+  obligatoria: el informe lleva **siempre** al lado el recuento del barrido
+  completo del catálogo; un cambio que mejora 12 pistas del corpus y mueve 8.000
+  del catálogo no está probado, está sin probar. Un marcador sin ese contrapeso
+  es peor que ninguno, porque da confianza falsa. (2) Guardar lo **enviado** en
+  vez de lo **leído** — el LT25 descarta en silencio lo que no entiende, así que
+  registraría un tono que el equipo pudo no haber aceptado. (3) Un veredicto sin
+  su `juzgado` nace ininterpretable. (4) Que el panel del ampli crezca de alto:
+  por eso el veredicto ocupa la línea del estado de envío en vez de añadir una.
+- **Tests:** las funciones de puntuación contra un corpus sintético; que un
+  `bien` detecte una regresión que los veredictos negativos no ven; que una
+  `track_sig` desfasada no se aplique y se reporte; determinismo ante empates.
+  El evaluador **no es un test** y no entra en `npm test`: lee `songs.db`, y
+  `CLAUDE.md` lo prohíbe. Es una herramienta.
+- **Compatibilidad:** total. Con las dos tablas vacías el sistema se comporta
+  exactamente como hoy.
+- **Relación con la fase 3.** La fase 0 se lleva la captura entera (tabla,
+  botón y corto-circuito). Lo que queda en la fase 3 es cambiar **cómo** se
+  aplica: de corto-circuito a fuente de máxima prioridad dentro del resolutor,
+  que no existe hasta la fase 2. Mismo efecto visible, distinto sitio — y desde
+  la fase 3 un tono tuyo parcial puede combinarse en vez de ganar entero.
 
 ### Fase 1 — Clasificador de pista + extraer el renderer
 
@@ -577,7 +734,7 @@ de la 2 deje un sistema coherente, no un esqueleto.
 - **Tests:** clasificador sobre nombres reales (fixtures, no `songs.db`);
   cobertura de los términos de rol; el renderer emite sólo FenderIds del
   catálogo.
-- **Compatibilidad:** barrido de las 25.061 pistas antes y después y diff
+- **Compatibilidad:** barrido de las 42.580 pistas antes y después y diff
   byte a byte de la salida. La misma prueba que se usó para el refactor de
   `vista-sortear.js`. Si el diff no es vacío, la fase no está terminada.
 
@@ -598,7 +755,7 @@ de la 2 deje un sistema coherente, no un esqueleto.
 - **Riesgos:** **el más alto de todo el plan.** (1) La descompilación cambia el
   resultado donde hoy es exacto — lo mitiga el anclaje, y hay que medir cuántas
   pistas quedan ancladas y cuántas descompiladas. (2) Las reglas de género
-  ganan hoy el 54,5%; convertirlas a evidencias mueve ese 54,5% entero de una
+  ganan hoy el 53,0%; convertirlas a evidencias mueve ese 53,0% entero de una
   vez. (3) El resolutor corre por pista, hasta 11 veces por canción y en cada
   sorteo: la evidencia de artista y género es idéntica entre pistas de la misma
   canción y hay que memoizarla por canción, no recalcularla por pista.
@@ -606,7 +763,7 @@ de la 2 deje un sistema coherente, no un esqueleto.
   nivel peor nunca sobreescriba a una mejor; que las restricciones se apliquen
   siempre y dejen traza; el caso acústico (que **conserve** mod/delay/reverb y
   **corte** el gain); determinismo ante empates.
-- **Compatibilidad:** el mismo barrido de 25.061 pistas, pero aquí el diff
+- **Compatibilidad:** el mismo barrido de 42.580 pistas, pero aquí el diff
   **no** puede ser vacío — cambiar el resultado es el punto. Lo que se exige es
   un **informe de diferencias** revisable: cuántas pistas cambian, en qué
   grupo, y una muestra por cada tipo de cambio. Y dos invariantes duras: ninguna
@@ -615,19 +772,29 @@ de la 2 deje un sistema coherente, no un esqueleto.
 
 ### Fase 3 — Presets del usuario
 
-- **Crear:** migración de `user_tone`, `db/tono-usuario.js`,
-  `fuentes/usuario.js`, endpoints `GET/PUT/DELETE /api/tono`.
-- **Modificar:** `public/panel-ampli.js` y `public/app.js` (botón "Guardar mi
-  tono", que llama a `ampli.leerPreset()` —ya existe— y persiste lo que el
-  equipo **tiene de verdad**, no lo que se le mandó); `CLAUDE.md` (zona
-  protegida); `npm run backup`.
-- **Riesgos:** guardar lo enviado en vez de lo leído (registraría un tono que
-  el equipo pudo no haber aceptado: el LT25 descarta en silencio lo que no
-  entiende). Y el clásico: que un `git clean` o un ETL se lleve la tabla — de
-  ahí la zona protegida y el backup **en el mismo commit**.
+> La tabla, los endpoints, el botón "Guardar mi tono" y el corto-circuito que
+> lo aplica ya existen desde la fase 0. Aquí no se añade una capacidad nueva: se
+> muda de sitio.
+
+- **Crear:** `fuentes/usuario.js`.
+- **Modificar:** el resolutor, para que `user_tone` entre con la prioridad
+  máxima de la escala de §5.1; `db/queries.js`, para **retirar** el
+  corto-circuito de la fase 0 en el mismo commit que lo sustituye — dejar los
+  dos caminos vivos es garantizar que se desvíen.
+- **Lo que esto habilita** (y es la razón de moverlo): dentro del resolutor, un
+  tono tuyo puede ser **parcial**. Si lo único que corregiste fue la modulación,
+  la fase 3 puede quedarse con esa opinión y dejar que el ampli lo siga
+  decidiendo la comunidad. El corto-circuito no puede: gana entero o no gana.
+- Una fila con `track_sig` desfasada (§4.4) no se aplica, aquí tampoco.
+- **Riesgos:** que la mudanza cambie el resultado sin querer. El tono guardado
+  ya se aplicaba en la fase 0, así que aquí **el diff del barrido tiene que ser
+  vacío** sobre las pistas con fila en `user_tone` — si no lo es, la fase no
+  está terminada. (Los riesgos de guardar lo enviado en vez de lo leído, y de
+  que un `git clean` o un ETL se lleve la tabla, se resolvieron en la fase 0.)
 - **Tests:** prioridad máxima del preset de usuario; que sobreviva a un
   re-ETL; borrar vuelve a la sugerencia anterior; el round-trip
-  leer → guardar → resolver → renderizar devuelve la misma cadena.
+  leer → guardar → resolver → renderizar devuelve la misma cadena; y que un
+  tono **parcial** deje intacto lo que no declara.
 - **Compatibilidad:** total. Sin filas en `user_tone`, el sistema se comporta
   igual que en la fase 2.
 
@@ -663,10 +830,10 @@ de la 2 deje un sistema coherente, no un esqueleto.
 
 **A favor**
 
-- Resuelve las cuatro consecuencias medidas, y la (a) —72,3% de canciones con
+- Resuelve las cuatro consecuencias medidas, y la (a) —81,2% de canciones con
   un solo tono para todas sus pistas— es la que abriste tú con Fade to Black.
-- Recupera el 52,1% de señal de rol que hoy se tira.
-- El 54,5% que hoy no recibe **ninguna** información de efectos pasa a poder
+- Recupera el 51,6% de señal de rol que hoy se tira.
+- El 49,3% que hoy no recibe **ninguna** información de efectos pasa a poder
   recibirla de una fuente distinta de la que le da el amplificador.
 - La explicabilidad deja de ser una frase y pasa a ser estructura.
 - La fase 5 queda segura por diseño, no por disciplina.
@@ -683,15 +850,36 @@ de la 2 deje un sistema coherente, no un esqueleto.
   Por eso existe el anclaje; pero cualquier pista que caiga fuera del anclaje
   pierde esa precisión. Es una pérdida real, y es la contraparte de poder
   combinar.
-- Riesgo concentrado en la fase 2: mueve el 54,5% de las pistas de una vez. El
+- Riesgo concentrado en la fase 2: mueve el 53,0% de las pistas de una vez. El
   informe de diferencias es obligatorio, no opcional.
-- Más superficie de tests: estimo entre 40 y 60 casos nuevos sobre los 359 de
-  hoy.
+- Más superficie de tests: estimo entre 40 y 60 casos nuevos sobre los 373 de
+  `npm test` y los 25 de `npm run test:ui` de hoy, más los de la fase 0.
 
-**Lo que NO mejora**
+**Sobre el acierto** *(reescrito en la enmienda del 2026-09-16; la versión
+anterior de este párrafo concluía que el acierto no se podía medir)*
 
-El acierto. No hay forma de medirlo: no existe fuente de verdad del tono de una
-grabación, y ésa es la premisa desde la primera línea de `lib/ampli.js`. Esto
-mejora la resolución (más tonos distintos, más ajustados a la pista) y la
-honestidad (se puede decir de dónde salió cada parte). Si alguna vez algo aquí
-dice que "acierta más", está mintiendo.
+Sigue sin existir fuente de verdad del tono de **la grabación**, y ésa es la
+premisa desde la primera línea de `lib/ampli.js`. Pero de ahí no se sigue que no
+haya nada medible, y la versión anterior de este documento dio ese paso de más.
+
+Esta app tiene **un solo usuario**. La verdad que importa no es el disco: es *el
+tono que ese usuario dialó y aprobó*. Eso existe, es falsable, y el equipo ya lo
+sabe leer. La fase 0 lo captura y lo puntúa.
+
+Así que a partir de la fase 0 sí se puede afirmar algo, y conviene decirlo con
+las palabras exactas, porque la distancia entre las dos frases es todo lo que
+este documento defiende:
+
+> **Se puede demostrar** que un cambio coincide más con lo que aprobaste.
+> **No se puede demostrar** que suene más como el disco.
+
+Un informe que diga "acierta más" a secas sigue mintiendo. Uno que diga "cumple
+47 de 52 de tus juicios, frente a 39 de 52 del anterior, moviendo 3.100 pistas
+del catálogo" no miente, y alcanza para decidir.
+
+Eso también reencuadra la fase 5. Sin marcador, un modelo que propone tonos es
+exactamente lo que la cabecera de `lib/ampli.js` descartó: *acierta a veces y no
+hay forma de saber cuándo*. Con marcador deja de ser un acto de fe — propone en
+vocabulario cerrado y **entra sólo si le gana al sugeridor vigente sobre el
+corpus**. El descarte del 2026-09-04 no se revierte: se le pone la condición que
+le faltaba.
