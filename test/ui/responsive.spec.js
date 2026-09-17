@@ -14,8 +14,8 @@ import { test, expect } from '@playwright/test'
    contenido se estira hasta que las filas quedan vacias por el medio.
    --------------------------------------------------------------------------- */
 
-// De un monitor grande a una ventana estrecha. 1136 y 944 estan a proposito
-// justo por debajo de los cortes (75rem = 1200, 60rem = 960): un breakpoint mal
+// De un monitor grande a una ventana estrecha. 1280 y 1024 estan a proposito
+// justo por debajo de los cortes (84rem = 1344, 68rem = 1088): un breakpoint mal
 // puesto se nota en el pixel siguiente, no en el redondo.
 const ANCHOS = [2560, 1920, 1600, 1440, 1280, 1136, 1024, 944, 860, 768, 640]
 
@@ -43,6 +43,15 @@ const desbordes = () => {
     /* Los textos para lector de pantalla miden 1px con `clip-path`: que su
        contenido no quepa ahi es el mecanismo, no un fallo. */
     if (el.clientWidth <= 1) continue
+    /* Lo mismo con lo que se trunca A PROPOSITO: `text-overflow: ellipsis`
+       SIEMPRE mide `scrollWidth > clientWidth` cuando actua -- es la
+       definicion de que hay algo que truncar. Los nombres de pista y las
+       etiquetas del catalogo son texto de terceros, largo y sin cortes
+       posibles, y por eso se declaran truncables: la elipsis se ve y dice
+       que hay mas. Sin esta excepcion el chequeo delata el mecanismo en vez
+       del fallo, y solo pasaba de casualidad porque los nombres del fixture
+       son cortos. */
+    if (cs.textOverflow === 'ellipsis') continue
     const sobra = el.scrollWidth - el.clientWidth
     if (sobra > 1) {
       malos.push({
@@ -123,21 +132,71 @@ for (const ancho of ANCHOS) {
 
     /* 4. Lo que tiene que verse, se ve.
 
-       En dos columnas todo cabe de una vez y las acciones tienen que estar ahi
-       sin scrollear. Apilado (por debajo de 60rem) la pagina scrollea a
-       proposito, asi que lo exigible es que se LLEGUE a ellas: que existan y
-       que bajar las traiga a la vista. */
+       Lo exigible en cualquier ancho es que se LLEGUE: que exista y que bajar
+       lo traiga a la vista. Que ademas no haga falta bajar DENTRO de una
+       columna lo cubre el test de mas abajo, que es donde vive esa promesa. */
     await expect(page.locator('.panel-ampli')).toBeVisible()
-    if (ancho > 960) {
-      await expect(page.locator('.acciones')).toBeInViewport()
-      await expect(page.locator('#otra')).toBeInViewport()
-    } else {
-      await page.locator('#otra').scrollIntoViewIfNeeded()
-      await expect(page.locator('#otra')).toBeInViewport()
-      await expect(page.locator('.panel-ampli')).toBeVisible()
-    }
+    await page.locator('#otra').scrollIntoViewIfNeeded()
+    await expect(page.locator('#otra')).toBeInViewport()
+    await expect(page.locator('.panel-ampli')).toBeVisible()
   })
 }
+
+/* La identidad y el ampli no scrollean por dentro; la lista de pistas SI.
+
+   La distincion no es un detalle: la identidad y el panel del ampli son dos
+   bloques de datos sueltos, sin orden que seguir, y uno partido por una barra
+   de scroll se lee como una ficha rota -- por eso lo que no cabe ahi se
+   resuelve bajando de densidad (`ajustarDensidad()` en app.js). La lista de
+   pistas es una lista numerada: scrollearla es el gesto que cualquiera espera,
+   y apretarla hasta que quepan nueve filas las dejaba ilegibles.
+
+   Se prueba a lo ALTO, no a lo ancho: el alto de la ventana es lo que aprieta,
+   y 700px es un portatil corriente. */
+for (const alto of [900, 800, 700]) {
+  test(`con la ventana de ${alto}px de alto solo scrollea la lista de pistas`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: alto })
+    await abrirSeisPistas(page)
+
+    const scrollan = await page.evaluate(() =>
+      [...document.querySelectorAll('.columnas > .ficha:not(#col-pistas)')]
+        .map(c => ({ col: c.id || c.className, sobra: c.scrollHeight - c.clientHeight }))
+        .filter(x => x.sobra > 1))
+    expect(scrollan, `columnas con scroll propio: ${JSON.stringify(scrollan)}`).toEqual([])
+  })
+}
+
+/* Y cuando la lista scrollea, su cabecera se queda arriba sin tapar nada.
+
+   Es exactamente el bug que se veia con "Fight Fire With Fire" (9 pistas): la
+   cabecera se colocaba con un margen negativo que `sticky` luego ignoraba al
+   repintarla, asi que acababa 26px por debajo de donde el flujo la habia
+   dejado y la primera fila quedaba medio escondida detras. Nada lo cazaba
+   porque no es un desborde: las dos cajas miden bien, solo se solapan. */
+test('la cabecera de la lista no tapa la primera pista al scrollear', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 640 })
+  await abrirSeisPistas(page)
+
+  const m = await page.evaluate(() => {
+    const col = document.querySelector('#col-pistas')
+    const tit = () => col.querySelector('.pistas-titulo').getBoundingClientRect()
+    const primera = () => col.querySelector('.fila-pista').getBoundingClientRect()
+    /* Sin scrollear: la primera fila empieza DEBAJO de la cabecera. Una fila
+       que se mete bajo una cabecera opaca porque la has scrolleado es lo
+       correcto; que lo este de entrada es el bug. */
+    const solapeEnReposo = Math.round(tit().bottom - primera().top)
+    col.scrollTop = 80
+    return {
+      scrollea: col.scrollHeight - col.clientHeight > 1,
+      solapeEnReposo,
+      // Y scrolleada sigue pegada al borde de la ficha, no se va con las filas.
+      separacion: Math.round(tit().top - col.getBoundingClientRect().top),
+    }
+  })
+  expect(m.scrollea, 'el fixture no llega a scrollear: el test no prueba nada').toBe(true)
+  expect(m.solapeEnReposo, `la cabecera pisa la primera pista ${m.solapeEnReposo}px`).toBeLessThanOrEqual(0)
+  expect(m.separacion, `la cabecera se despega del borde: ${m.separacion}px`).toBeLessThanOrEqual(2)
+})
 
 /* En un monitor ancho el contenido se capa y se centra en vez de estirarse: una
    fila de pista de 2400px deja el nombre a la izquierda y la dificultad a la

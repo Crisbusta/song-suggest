@@ -5,7 +5,7 @@ import {
   esc, parametrosAmpQueViajan,
 } from './tarjeta.js'
 import { buscarArtistas, claveDeArtista } from './artistas.js'
-import { pintarSortear, iframePreviewHtml } from './vista-sortear.js'
+import { pintarSortear, pintarPistas, iframePreviewHtml } from './vista-sortear.js'
 import { pintarPanelAmpli } from './panel-ampli.js'
 
 const $ = s => document.querySelector(s)
@@ -76,7 +76,9 @@ function pintarTarjeta(song, sinFiltros = false) {
     tarjeta.innerHTML = sinFiltros
       ? '<p class="vacio">No queda ninguna canción por sortear.</p>'
       : '<p class="vacio">Nada que sortear con estos filtros.</p>'
+    $('#col-pistas').innerHTML = ''
     $('#panel-ampli').innerHTML = ''
+    $('#pie-sorteo').hidden = true
     for (const id of ['aprendida', 'descartada', 'despues', 'like']) $(`#${id}`).disabled = true
     return
   }
@@ -85,16 +87,14 @@ function pintarTarjeta(song, sinFiltros = false) {
      pone `#like.marcado svg` desde el CSS. Reescribir el innerHTML aqui lo
      borraba y dejaba un caracter de texto que no cabe en el boton de icono. */
   $('#like').classList.toggle('marcado', !!song.liked)
-  if (mismaCancion) {
-    // Solo cambia la region de pistas. El iframe permanece en su nodo original.
-    const region = tarjeta.querySelector('#detalle-pistas')
-    const temporal = document.createElement('div')
-    temporal.innerHTML = pintarSortear(song, pistaElegida)
-    region.replaceWith(temporal.querySelector('#detalle-pistas'))
-  } else {
+  /* Cambiar de PISTA solo redibuja la segunda columna. La primera -- donde
+     vive el iframe de YouTube -- no se toca, asi que un video sonando
+     sobrevive al cambio sin ningun truco de reemplazo parcial. */
+  if (!mismaCancion) {
     tarjeta.className = 'tarjeta entra'
     tarjeta.innerHTML = pintarSortear(song, pistaElegida)
   }
+  $('#col-pistas').innerHTML = pintarPistas(song, pistaElegida)
   const pista = song.pistas[pistaElegida]
   const detallesAbiertos = mismaCancion && $('#panel-ampli details')?.open
   $('#panel-ampli').innerHTML = pintarPanelAmpli(pista, {
@@ -105,7 +105,115 @@ function pintarTarjeta(song, sinFiltros = false) {
   if (detallesAbiertos && $('#panel-ampli details')) $('#panel-ampli details').open = true
   pintarBotonEnviar()
   pintarSelectorPistas()
+  $('#pie-sorteo').hidden = false
+  pintarPistaNav()
+  ajustarDensidadEstable()
+  verPistaElegida()
 }
+
+/* Las tres fichas miden lo mismo y ese alto no se estira. Para la identidad y
+   el ampli lo que sobra no puede resolverse con una barra de scroll: son dos
+   bloques de datos sueltos, sin orden que seguir, y uno partido por la mitad
+   se lee como si la ficha estuviera rota. Asi que la columna que no cabe BAJA
+   DE DENSIDAD hasta caber -- solo esa, y solo en la cancion que lo pide.
+   Cuatro niveles, del mas barato al mas caro (en el CSS, `[data-densidad]`):
+
+   - Identidad: primero se aprietan los espacios y baja el titulo; despues
+     las etiquetas, que ya eran un recorte (5 de 9,6 de promedio).
+   - Ampli: primero los espacios; despues la nota del volumen, que tambien
+     esta dentro de "Qué se manda y qué se pisa"; por ultimo el rotulo
+     "Efectos", que las cuatro ranuras de abajo ya nombran.
+
+   LA COLUMNA DE PISTAS NO ENTRA AQUI, a proposito. Es una lista: tiene orden,
+   tiene numeros, y scrollearla es el gesto que cualquiera espera de ella. Con
+   9 u 11 pistas la densidad la apretaba hasta dejar las filas ilegibles para
+   ahorrar un scroll que nadie estaba pidiendo. Ahora scrollea, con la
+   cabecera fija arriba -- ver `.pistas-titulo` en el CSS.
+
+   Se mide, no se adivina: si cabe no se toca nada. Sorteando 80 canciones del
+   catalogo real en cada tamaño, ninguna de las dos desbordo nunca, y lo que
+   pidieron fue:
+
+     1728x960   las dos en 0, las 160 veces, y la lista de pistas no scrolleo
+                ni una. En la pantalla de trabajo nada de esto se enciende.
+     1280x800   el ampli al 3 en 75 de 80; la identidad al 1 en 18; la lista
+                scrolleo en 2.
+     1440x720   lo mas apretado que se probo: el ampli al 4 en 71 de 80, la
+                identidad en 0 solo 4 veces, la lista scrolleo en 3.
+
+   Por debajo de 68rem de ancho no hay tres columnas ni alto fijo: la pagina
+   scrollea entera y la densidad no se usa. */
+const DENSIDAD_MAXIMA = 4
+function ajustarDensidad() {
+  const columnas = [...document.querySelectorAll('.columnas > .ficha:not(#col-pistas)')]
+  for (const col of columnas) delete col.dataset.densidad
+  /* Las tres fichas comparten el alto de la fila, asi que apretar UNA encoge
+     la fila y puede desbordar a otra que ya habia medido bien -- pasaba: el
+     ampli bajaba a densidad 3, la fila se encogia 45px y la identidad se
+     salia con densidad 0. Por eso se repasan todas en cada vuelta y se para
+     cuando ninguna pide mas, en vez de resolver cada columna una sola vez. */
+  for (let vuelta = 0; vuelta < DENSIDAD_MAXIMA * columnas.length; vuelta++) {
+    let cambio = false
+    for (const col of columnas) {
+      const nivel = Number(col.dataset.densidad ?? 0)
+      if (nivel >= DENSIDAD_MAXIMA || col.scrollHeight <= col.clientHeight) continue
+      col.dataset.densidad = nivel + 1
+      cambio = true
+    }
+    if (!cambio) break
+  }
+}
+/* Y una segunda pasada en el cuadro siguiente, porque la primera puede medir
+   un alto que todavia no es el definitivo. Repasar cuesta una lectura de
+   `scrollHeight` por columna y, si ya cabe, no cambia nada. */
+const ajustarDensidadEstable = () => {
+  ajustarDensidad()
+  requestAnimationFrame(ajustarDensidad)
+}
+/* Inter llega de Google Fonts con `display: swap`, asi que el primer dibujo
+   se mide con la tipografia de respaldo y el alto cambia cuando la real
+   aterriza. Una sola remedida al terminar la carga, no en cada sorteo. */
+document.fonts?.ready.then(() => { if (actual) ajustarDensidad() })
+/* Al cambiar el tamaño de la ventana cambia cuanto cabe: se vuelve a medir
+   desde cero (las clases se quitan al empezar) en vez de quedarse con la
+   densidad de un alto que ya no existe. */
+window.addEventListener('resize', () => { if (actual) ajustarDensidad() })
+/* Desplegar "Qué se manda y qué se pisa" cambia el alto del panel tanto como
+   cambiarlo de cancion, asi que se vuelve a medir igual. `toggle` no burbujea,
+   por eso se escucha en captura. */
+document.addEventListener('toggle', e => {
+  if (actual && e.target.matches?.('.panel-detalles')) ajustarDensidadEstable()
+}, true)
+
+/* La navegacion "‹ pista N de M ›" del pie: lee el MISMO orden visible que ya
+   usan los atajos 1-9 (querySelectorAll('.fila-pista'), no `song.pistas`
+   crudo), asi que "siguiente" es exactamente la fila de abajo en la lista
+   que el usuario esta mirando. Con una sola pista no hay nada que navegar. */
+function pintarPistaNav() {
+  const nav = $('#pista-nav')
+  const filas = [...document.querySelectorAll('.fila-pista')]
+  if (filas.length <= 1) { nav.innerHTML = ''; return }
+  const indice = filas.findIndex(f => Number(f.dataset.pista) === pistaElegida)
+  const etiqueta = filas[indice]?.querySelector('.nombre-pista')?.textContent ?? ''
+  nav.innerHTML = `
+    <button type="button" id="pista-prev" class="btn btn-icon btn-secondary" aria-label="Pista anterior" ${indice <= 0 ? 'disabled' : ''}>‹</button>
+    <span class="pista-nav-actual">Pista <b>${indice + 1}</b> de ${filas.length} · ${esc(etiqueta)}</span>
+    <button type="button" id="pista-siguiente" class="btn btn-icon btn-secondary" aria-label="Pista siguiente" ${indice >= filas.length - 1 ? 'disabled' : ''}>›</button>
+  `
+}
+
+// Delegado porque el contenido de #pista-nav se reescribe entero en cada
+// redibujado: un listener puesto sobre los botones de arriba moriria con
+// ellos. Reusa el click de la fila -- el mismo camino que ya usan los
+// atajos 1-9 -- asi que no hay una segunda forma de "elegir pista".
+$('#pista-nav').addEventListener('click', e => {
+  const boton = e.target.closest('button')
+  if (!boton || boton.disabled) return
+  const filas = [...document.querySelectorAll('.fila-pista')]
+  const indice = filas.findIndex(f => Number(f.dataset.pista) === pistaElegida)
+  if (boton.id === 'pista-prev') filas[indice - 1]?.click()
+  else if (boton.id === 'pista-siguiente') filas[indice + 1]?.click()
+})
 
 /* El selector se bloquea mientras hay un envio EN CURSO SOBRE ESTA TARJETA,
    igual que el boton de enviar. No es cosmetico: cambiar de pista redibuja la
@@ -127,6 +235,17 @@ function pintarSelectorPistas() {
   for (const fila of document.querySelectorAll('.fila-pista')) {
     fila.disabled = enviando && actual === cancionEnviando
   }
+}
+
+/* Con la lista scrolleada, la pista elegida puede quedar fuera de la vista:
+   pasa al cambiar de pista con los atajos o con "‹ pista N de M ›" del pie,
+   donde no hay un click que traiga el foco. `nearest` no mueve nada si ya se
+   ve. Solo se llama cuando la COLUMNA scrollea: por debajo de 68rem quien
+   scrollea es la pagina entera, y ahi esto daria un salto en cada tirada. */
+function verPistaElegida() {
+  const col = $('#col-pistas')
+  if (!col || col.scrollHeight <= col.clientHeight) return
+  col.querySelector('.fila-pista.elegida')?.scrollIntoView({ block: 'nearest' })
 }
 
 // Al pulsar la miniatura se reemplaza por el reproductor y suena. Delegado en la
@@ -224,18 +343,34 @@ for (const cual of ['min', 'max']) {
 $('#modo').addEventListener('change', sortear)
 $('#otra').addEventListener('click', sortear)
 
-$('#bandas-abrir').addEventListener('click', () => {
-  const panel = $('#bandas-panel'), abrir = panel.hidden
+// El chip de perfil: mismo patron de disclosure de siempre, para el
+// estado de conexion del ampli y el boton real de conectar (que sigue siendo
+// el mismo elemento de siempre, solo que ahora vive aca dentro).
+$('#perfil-abrir').addEventListener('click', () => {
+  const panel = $('#perfil-panel'), abrir = panel.hidden
   panel.hidden = !abrir
-  $('#bandas-abrir').setAttribute('aria-expanded', String(abrir))
-  if (abrir) $('#banda-q').focus()
+  $('#perfil-abrir').setAttribute('aria-expanded', String(abrir))
+})
+document.addEventListener('click', e => {
+  if (!$('#perfil-panel').hidden && !e.target.closest('.perfil')) {
+    $('#perfil-panel').hidden = true
+    $('#perfil-abrir').setAttribute('aria-expanded', 'false')
+  }
+})
+
+$('#atajos-abrir').addEventListener('click', () => {
+  const panel = $('#atajos-panel'), abrir = panel.hidden
+  panel.hidden = !abrir
+  $('#atajos-abrir').setAttribute('aria-expanded', String(abrir))
 })
 
 document.addEventListener('keydown', e => {
   const editable = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)
   if (e.key === 'Escape') {
-    const panel = $('#bandas-panel')
-    if (!panel.hidden) { panel.hidden = true; $('#bandas-abrir').setAttribute('aria-expanded', 'false'); $('#bandas-abrir').focus() }
+    const perfil = $('#perfil-panel')
+    if (!perfil.hidden) { perfil.hidden = true; $('#perfil-abrir').setAttribute('aria-expanded', 'false') }
+    const atajos = $('#atajos-panel')
+    if (!atajos.hidden) { atajos.hidden = true; $('#atajos-abrir').setAttribute('aria-expanded', 'false') }
     return
   }
   if ($('#vista-sorteo').hidden || editable || e.altKey || e.ctrlKey || e.metaKey || e.repeat) return
@@ -356,6 +491,9 @@ if (ampli.soportado()) {
     $('#ampli-estado').textContent = conectado ? 'Ampli conectado' : 'Conectar ampli'
     $botonAmpli.classList.toggle('conectado', conectado)
     $botonAmpli.title = conectado ? 'Pulsa para desconectar' : 'Conectar el Mustang LT25 por USB'
+    // El boton de arriba desaparece conectado (ver su comentario en el CSS);
+    // sin esto el desplegable quedaba vacio, sin decir nada.
+    $('#perfil-conectado').hidden = !conectado
     pintarBotonEnviar()
   })
   $botonAmpli.addEventListener('click', async () => {
@@ -924,7 +1062,7 @@ $('#vista-sorteo').addEventListener('click', async e => {
    usuario no pidio esto y no tiene nada que hacer al respecto. */
 function refrescarArtistas() {
   api('/api/artists')
-    .then(({ artists }) => { indiceArtistas = artists; pintarAtajos() })
+    .then(({ artists }) => { indiceArtistas = artists; pintarPillsBandas() })
     .catch(() => {})
 }
 
@@ -1060,28 +1198,41 @@ function pintarBandas() {
   $('#banda-ayuda').textContent = bandas.length
     ? 'El sorteo se limita a estas bandas.'
     : 'Sin ninguna elegida, sortea de todo el catálogo.'
-  $('#bandas-estado').textContent = bandas.length === 0 ? 'todas'
-    : bandas.length === 1 ? bandas[0] : `${bandas.length} bandas`
 
-  pintarAtajos()
+  pintarPillsBandas()
 }
 
-/* Los atajos salen de lo que ya hiciste: `shown_count` y `liked` viven en
-   `song_state` desde antes. Solo aparecen cuando aportan algo -- una banda que
-   ya elegiste no se ofrece de nuevo. */
-function pintarAtajos() {
-  const caja = $('#banda-atajos')
+/* "Todas" + las bandas con mas canciones, en pastillas siempre visibles --
+   como el mock, pero con datos reales en vez de una lista fija: el orden ya
+   viene de `/api/artists` (ORDER BY canciones DESC), asi que "las primeras 4
+   que no elegiste" SON las bandas mas grandes del catalogo, no un adorno.
+
+   Es de un solo click, a proposito: pulsar una pastilla REEMPLAZA el filtro
+   (bandas = [esa]), no lo suma. El buscador de mas arriba sigue permitiendo
+   elegir varias a la vez -- eso cae en fichas removibles aparte -- pero la
+   fila de pastillas es la eleccion rapida de una sola banda, y por eso a lo
+   mas UNA aparece marcada. */
+function pintarPillsBandas() {
+  const caja = $('#banda-pills')
   const puestas = new Set(bandas.map(claveDeArtista))
   const libres = indiceArtistas.filter(a => !puestas.has(a.clave))
+  const unaSola = bandas.length === 1 ? bandas[0] : null
 
-  const fila = (rotulo, lista) => lista.length
-    ? `<p>${rotulo}: ${lista.map(a =>
-        `<button type="button" data-agregar="${esc(a.nombre)}">${esc(a.nombre)}</button>`
-      ).join(' · ')}</p>`
-    : ''
+  const pastilla = (etiqueta, activa, valor) =>
+    `<li><button type="button" class="pill-banda${activa ? ' activa' : ''}" data-pill="${esc(valor ?? '')}">${esc(etiqueta)}</button></li>`
 
-  caja.innerHTML = fila('Con más canciones', libres.slice(0, 5))
+  caja.innerHTML = pastilla('Todas', bandas.length === 0, '')
+    + libres.slice(0, 4).map(a => pastilla(a.nombre, a.nombre === unaSola, a.nombre)).join('')
 }
+
+$('#banda-pills').addEventListener('click', e => {
+  const boton = e.target.closest('[data-pill]')
+  if (!boton) return
+  const valor = boton.dataset.pill
+  bandas = valor ? [valor] : []
+  pintarBandas()
+  sortear()
+})
 
 /* El de bandas busca en el indice que ya esta en memoria, asi que no espera
    nada: la respuesta es sincrona y preguntar en cada tecla es gratis. */
@@ -1139,15 +1290,10 @@ $('#banda-fichas').addEventListener('click', e => {
   if (b) quitarBanda(b.dataset.quitar)
 })
 
-$('#banda-atajos').addEventListener('click', e => {
-  const b = e.target.closest('button[data-agregar]')
-  if (b) agregarBanda(b.dataset.agregar)
-})
-
 sincronizarRangos('min')
 sortear()
 pintarStats()
-cargarArtistas().then(pintarAtajos)
+cargarArtistas().then(pintarPillsBandas)
 
 const LISTAS = [
   ['learned', 'Aprendidas'],
@@ -1208,6 +1354,12 @@ function cambiarVista(cual) {
     $(`#vista-${v}`).hidden = v !== cual
     $(`#ver-${v}`).classList.toggle('activo', v === cual)
   }
+  /* La fila de filtros (modo, bandas, dificultad) describe el SORTEO: en
+     "Mis listas" y en el editor no cambia nada de lo que se ve, y dejarla
+     ahi es ofrecer controles que no hacen nada. Las fichas de banda elegidas
+     la acompañan. */
+  $('.fila-bandas').hidden = cual !== 'sorteo'
+  $('#banda-fichas').hidden = cual !== 'sorteo'
   if (cual === 'listas') pintarListas()
   if (cual === 'editor') montarEditor()
 }

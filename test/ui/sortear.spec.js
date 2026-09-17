@@ -118,9 +118,14 @@ test('una cancion de una sola pista no muestra la lista', async ({ page }) => {
   await expect(page.locator('.fila-pista')).toHaveCount(0)
 })
 
-/* El alto se reparte: la pagina no scrollea y la botonera nunca se va de la
-   vista. Antes esto lo decidia un `calc(100vh - 12rem)` que no cuadraba con lo
-   que las barras miden de verdad, y sobraban 16px de scroll vacio. */
+/* El alto se reparte: a este ancho y con esta cancion (titulo corto, 6
+   pistas) la pagina no scrollea y la botonera no se va de la vista. No es
+   una promesa universal -- con un titulo largo real o menos alto de ventana
+   `.col-cancion` scrollea a proposito en vez de encoger la tarjeta (ver
+   responsive.spec.js) -- pero este caso concreto, al ancho por defecto de
+   los tests, tiene que seguir cabiendo sin scroll. Antes esto lo decidia un
+   `calc(100vh - 12rem)` que no cuadraba con lo que las barras miden de
+   verdad, y sobraban 16px de scroll vacio. */
 test('la pagina cabe en la pantalla y la botonera se ve siempre', async ({ page }) => {
   await abrirCancion(page, 'Seis Pistas')
 

@@ -2,19 +2,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --color-bg: #161826;
-  --color-surface: #232532;
-  --color-text: #e9e9ed;
-  --color-accent: #9184d9; /* review round 7 (Barron): the accent moves to
-     the product's blurple — OKLCH hue 289.2, the hue of the app's own Pro
-     accent (#9a8fe0, --om-accent-pro) — at the same lightness the steel
-     accent held (L 0.660, so the documented ratios survive) and chroma
-     in the product blurple's own range (its token sits at C 0.118; the
-     accent takes 0.125, from the old steel's 0.030):
-     the accent now reads as an accent rather than another neutral. */
-  --color-accent-2: #a7a1db; /* the machine-derived stand-in follows: same
-     hue, same L 0.734, chroma at the same 2:3 proportion it held */
-  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  /* Rediseño v3: los tres tonos de fondo salen del mock (mock-v3.png). El
+     ground baja a casi negro y la superficie de tarjeta sube apenas lo justo
+     para separarse de el -- las tres columnas son fichas sobre ese fondo, y
+     esa diferencia de 8 puntos de luminancia es toda la separacion que
+     necesitan. */
+  --color-bg: #0f1117;
+  --color-surface: #171a24;
+  --color-text: #e8e9ed;
+  --color-accent: #f5a623; /* el naranja del mock, no el ambar apagado de la
+     pasada anterior (#d4a24a). Medido hoy: 9.31:1 contra --color-bg y los
+     mismos 9.31:1 con --color-bg como texto ENCIMA del acento (el boton
+     solido lleva texto oscuro, igual que el mock) -- AAA en los dos
+     sentidos. Texto claro encima del acento da 1.67:1 y no se usa. */
+  --color-accent-2: #8b7fd4; /* violeta: en el mock NO es decoracion suelta --
+     es lo que pinta los medidores de dificultad de la lista y la ranura de
+     efecto ocupada. Naranja = accion y pista elegida; violeta = medida.
+     5.03:1 sobre la superficie de tarjeta. */
+  --color-divider: color-mix(in srgb, #e8e9ed 10%, transparent);
+  /* Borde de ficha: mas tenue que el divisor de texto, como en el mock. */
+  --color-borde-ficha: color-mix(in srgb, #e8e9ed 7%, transparent);
 
   /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
      same step of any role matches the others in visual value. */
@@ -28,25 +35,25 @@
   --color-neutral-800: #3f424d;
   --color-neutral-900: #292b31;
 
-  --color-accent-100: #f5f4ff;
-  --color-accent-200: #e7e5fe;
-  --color-accent-300: #d2cefd;
-  --color-accent-400: #b5abfc;
-  --color-accent-500: #968ae0;
-  --color-accent-600: #796cbf;
-  --color-accent-700: #5d5294;
-  --color-accent-800: #423a6a;
-  --color-accent-900: #2b2741;
+  --color-accent-100: #fef7eb;
+  --color-accent-200: #fdedd3;
+  --color-accent-300: #fbddac;
+  --color-accent-400: #f9c876;
+  --color-accent-500: #f6b03c;
+  --color-accent-600: #ea960b;
+  --color-accent-700: #b47408;
+  --color-accent-800: #7f5106;
+  --color-accent-900: #4e3204;
 
-  --color-accent-2-100: #f5f4ff;
-  --color-accent-2-200: #e7e5fe;
-  --color-accent-2-300: #d2cefd;
-  --color-accent-2-400: #b5afe8;
-  --color-accent-2-500: #9690c9;
-  --color-accent-2-600: #7972a9;
-  --color-accent-2-700: #5c5783;
-  --color-accent-2-800: #423e5d;
-  --color-accent-2-900: #2b293a;
+  --color-accent-2-100: #f1f0fa;
+  --color-accent-2-200: #e0ddf3;
+  --color-accent-2-300: #c4bee9;
+  --color-accent-2-400: #9e94db;
+  --color-accent-2-500: #7566cc;
+  --color-accent-2-600: #4f3eb7;
+  --color-accent-2-700: #3d2f8d;
+  --color-accent-2-800: #2b2163;
+  --color-accent-2-900: #1a153d;
 
   /* Deck section-divider ground — review round 3: saturation as presence.
      Dividers take a saturated deep indigo (hue 277, the neutral ramp's own
@@ -146,9 +153,18 @@ figcaption {
 }
 .btn svg { display: block; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary { color: var(--color-accent); border-color: var(--color-accent); }
-.btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
-.btn-primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+/* Rediseño v3: la CTA solida del mock -- fondo de acento, texto oscuro encima
+   (7.60:1, ver la nota de --color-accent). Los dos botones que la usan (Otra,
+   Enviar al ampli) son las dos acciones que de verdad hacen algo con un clic;
+   el resto queda en outline (btn-secondary/btn-ghost) para que la jerarquia
+   visual diga la verdad sobre cual boton importa. */
+.btn-primary {
+  color: var(--color-bg); font-weight: 600; border-color: transparent;
+  /* Degradado, como el CTA del mock: el naranja se calienta hacia abajo. */
+  background: linear-gradient(180deg, var(--color-accent-400), var(--color-accent));
+}
+.btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, var(--color-accent-300), var(--color-accent-400)); }
+.btn-primary:active:not(:disabled) { background: linear-gradient(180deg, var(--color-accent), var(--color-accent-600)); }
 .btn-secondary { border-color: var(--color-divider); }
 .btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
