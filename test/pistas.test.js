@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { openDb } from '../db/open.js'
-import { roll, mark, getList, listarArtistas, getStats } from '../db/queries.js'
+import { roll, mark, getList, listarArtistas, getStats, getSong } from '../db/queries.js'
+import { guardarTono } from '../db/tono-usuario.js'
 
 let siguienteId = 1
 
@@ -272,4 +273,36 @@ test('cada pista trae exactamente los campos que la tarjeta lee', () => {
     Object.keys(pistas[0]).sort(),
     ['ampli', 'califica', 'difficulty', 'instrument', 'name', 'trackIndex', 'tuning']
   )
+})
+
+test('un tono guardado pisa la sugerencia de esa pista', () => {
+  const db = base()
+  const songId = agregarConPistas(db, {
+    artist: 'Radiohead', title: 'Weird Fishes',
+    pistas: [{ instrument: 'Electric Guitar (clean)', name: 'Lead Guitar 1' }],
+  })
+  guardarTono(db, {
+    songId, trackIndex: 0,
+    instrument: 'Electric Guitar (clean)', name: 'Lead Guitar 1',
+    cadena: { amp: { fenderId: 'DUBS_Twin', nombre: 'TWIN CLEAN', valores: { gain: 2 } } },
+    origen: 'leido',
+  })
+  const pista = getSong(db, songId).pistas[0]
+  assert.equal(pista.ampli.cadena.amp.nombre, 'TWIN CLEAN')
+  assert.equal(pista.ampli.deUsuario, true)
+})
+
+test('un tono desfasado NO se aplica: la pista vuelve a la sugerencia', () => {
+  const db = base()
+  const songId = agregarConPistas(db, {
+    artist: 'Radiohead', title: 'Weird Fishes',
+    pistas: [{ instrument: 'Electric Guitar (clean)', name: 'Lead Guitar 1' }],
+  })
+  guardarTono(db, {
+    songId, trackIndex: 0,
+    instrument: 'Electric Guitar (clean)', name: 'OTRA PISTA DISTINTA',
+    cadena: { amp: { nombre: 'TWIN CLEAN', valores: {} } }, origen: 'leido',
+  })
+  const pista = getSong(db, songId).pistas[0]
+  assert.notEqual(pista.ampli?.deUsuario, true, 'una firma que no calza no puede aplicarse')
 })
