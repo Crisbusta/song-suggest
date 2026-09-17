@@ -180,3 +180,80 @@ test('GET /api/song sin songId da 400', () => conApp(async url => {
   assert.equal(res.status, 400)
   assert.match((await res.json()).error, /songId/)
 }))
+
+test('PUT /api/tono guarda y GET lo devuelve', () => conApp(async (url, db) => {
+  const put = await fetch(`${url}/api/tono`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      songId: 1, trackIndex: 0,
+      instrument: 'Distortion Guitar', name: 'Lead Guitar',
+      cadena: { amp: { nombre: 'TWIN CLEAN', valores: { gain: 3 } } },
+      origen: 'leido',
+    }),
+  })
+  assert.equal(put.status, 200)
+
+  const q = new URLSearchParams({
+    songId: '1', trackIndex: '0',
+    instrument: 'Distortion Guitar', name: 'Lead Guitar',
+  })
+  const leido = await (await fetch(`${url}/api/tono?${q}`)).json()
+  assert.equal(leido.tono.cadena.amp.nombre, 'TWIN CLEAN')
+  assert.equal(leido.tono.desfasada, false)
+}))
+
+test('GET /api/tono avisa cuando la pista ya no es la que se guardo', () => conApp(async url => {
+  await fetch(`${url}/api/tono`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      songId: 1, trackIndex: 0,
+      instrument: 'Distortion Guitar', name: 'Lead Guitar',
+      cadena: { amp: { nombre: 'TWIN CLEAN', valores: {} } }, origen: 'leido',
+    }),
+  })
+  const q = new URLSearchParams({
+    songId: '1', trackIndex: '0',
+    instrument: 'Distortion Guitar', name: 'OTRA PISTA',
+  })
+  const leido = await (await fetch(`${url}/api/tono?${q}`)).json()
+  assert.equal(leido.tono.desfasada, true)
+}))
+
+test('PUT /api/tono sin songId entero responde 400', () => conApp(async url => {
+  const r = await fetch(`${url}/api/tono`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ trackIndex: 0 }),
+  })
+  assert.equal(r.status, 400)
+}))
+
+test('DELETE /api/tono devuelve la pista a no tener tono propio', () => conApp(async url => {
+  const cuerpo = {
+    songId: 1, trackIndex: 0,
+    instrument: 'Distortion Guitar', name: 'Lead Guitar',
+    cadena: { amp: { nombre: 'TWIN CLEAN', valores: {} } }, origen: 'leido',
+  }
+  await fetch(`${url}/api/tono`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cuerpo) })
+  const del = await fetch(`${url}/api/tono`, {
+    method: 'DELETE', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ songId: 1, trackIndex: 0 }),
+  })
+  assert.equal(del.status, 200)
+  const q = new URLSearchParams({ songId: '1', trackIndex: '0', instrument: 'Distortion Guitar', name: 'Lead Guitar' })
+  assert.equal((await (await fetch(`${url}/api/tono?${q}`)).json()).tono, null)
+}))
+
+test('POST /api/juicio guarda el veredicto', () => conApp(async (url, db) => {
+  const r = await fetch(`${url}/api/juicio`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      songId: 1, trackIndex: 0,
+      instrument: 'Distortion Guitar', name: 'Lead Guitar',
+      eje: 'suciedad', direccion: 'sobra',
+      juzgado: { amp: { nombre: '90S ROCK' } },
+      fuente: 'comunidad', sugeridor: 'v1',
+    }),
+  })
+  assert.equal(r.status, 200)
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM tone_judgment').get().n, 1)
+}))

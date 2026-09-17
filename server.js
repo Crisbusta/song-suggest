@@ -5,6 +5,7 @@ import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openDb } from './db/open.js'
 import { roll, mark, getList, getStats, listarArtistas, buscarCanciones, getSong } from './db/queries.js'
+import { guardarTono, leerTono, borrarTono, guardarJuicio } from './db/tono-usuario.js'
 
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url))
 const RAIZ = realpathSync(PUBLIC)   // sin barra final: realpath la quita
@@ -85,6 +86,50 @@ export function createApp(db) {
           return json(res, 400, { error: 'falta songId' })
         }
         mark(db, body)
+        return json(res, 200, { ok: true })
+      }
+
+      /* El tono del usuario. `instrument` y `name` viajan tambien en el GET
+         porque `leerTono` los necesita para decidir si la fila quedo
+         desfasada -- sin ellos habria que confiar en el track_index a secas,
+         que es justo lo que la firma existe para no hacer. */
+      if (ruta === '/api/tono') {
+        if (req.method === 'GET') {
+          const songId = Number(url.searchParams.get('songId'))
+          const trackIndex = Number(url.searchParams.get('trackIndex'))
+          if (!Number.isInteger(songId) || !Number.isInteger(trackIndex)) {
+            return json(res, 400, { error: 'falta songId o trackIndex' })
+          }
+          return json(res, 200, { tono: leerTono(db, {
+            songId, trackIndex,
+            instrument: url.searchParams.get('instrument'),
+            name: url.searchParams.get('name'),
+          }) })
+        }
+        if (req.method === 'PUT') {
+          const body = await leerCuerpo(req)
+          if (!body || !Number.isInteger(body.songId) || !Number.isInteger(body.trackIndex) || !body.cadena) {
+            return json(res, 400, { error: 'falta songId, trackIndex o cadena' })
+          }
+          guardarTono(db, body)
+          return json(res, 200, { ok: true })
+        }
+        if (req.method === 'DELETE') {
+          const body = await leerCuerpo(req)
+          if (!body || !Number.isInteger(body.songId) || !Number.isInteger(body.trackIndex)) {
+            return json(res, 400, { error: 'falta songId o trackIndex' })
+          }
+          borrarTono(db, body)
+          return json(res, 200, { ok: true })
+        }
+      }
+
+      if (ruta === '/api/juicio' && req.method === 'POST') {
+        const body = await leerCuerpo(req)
+        if (!body || !Number.isInteger(body.songId) || !body.eje || !body.direccion) {
+          return json(res, 400, { error: 'falta songId, eje o direccion' })
+        }
+        guardarJuicio(db, body)
         return json(res, 200, { ok: true })
       }
 
