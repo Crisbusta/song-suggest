@@ -54,3 +54,34 @@ export function leerTono(db, { songId, trackIndex, instrument, name }) {
 export function borrarTono(db, { songId, trackIndex }) {
   db.prepare('DELETE FROM user_tone WHERE song_id = ? AND track_index = ?').run(songId, trackIndex)
 }
+
+/* Los juicios se ACUMULAN: sin clave por pista y sin UPDATE. La misma pista
+   juzgada tres veces a lo largo de tres versiones del sugeridor son tres
+   filas, y esa historia es el dato -- es lo que permite preguntar si una
+   version mejoro sobre la anterior.
+
+   Se guarda `juzgado`, la cadena que estaba en pantalla, y no solo el
+   veredicto: un "sobra suciedad" sin ella es ininterpretable en cuanto el
+   sugeridor cambie, porque no se sabe mas limpio QUE. */
+export function guardarJuicio(db, { songId, trackIndex, instrument, name, eje, direccion, juzgado, fuente, sugeridor }) {
+  db.prepare(`
+    INSERT INTO tone_judgment (song_id, track_index, track_sig, eje, direccion, juzgado, fuente, sugeridor, creado_en)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(songId, trackIndex, firmaDePista({ instrument, name }), eje, direccion,
+         JSON.stringify(juzgado ?? null), fuente, sugeridor, new Date().toISOString())
+}
+
+export function leerJuicios(db) {
+  return db.prepare('SELECT * FROM tone_judgment ORDER BY id ASC').all().map(f => ({
+    id: f.id,
+    songId: f.song_id,
+    trackIndex: f.track_index,
+    trackSig: f.track_sig,
+    eje: f.eje,
+    direccion: f.direccion,
+    juzgado: JSON.parse(f.juzgado),
+    fuente: f.fuente,
+    sugeridor: f.sugeridor,
+    creadoEn: f.creado_en,
+  }))
+}
