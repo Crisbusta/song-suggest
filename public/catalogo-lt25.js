@@ -18,19 +18,42 @@ export const VACIA = 'DUBS_Passthru'
 
 const RANURAS_DE_EFECTO = ['stomp', 'mod', 'delay', 'reverb']
 
-/* Pares [cable, pantalla] medidos contra el equipo (Task 1, docs/lt25-curvas.md
-   cuando exista). Se interpola linealmente entre puntos consecutivos en vez de
-   aplicar una fórmula: la fórmula es una hipótesis, los pares son lo que el
-   equipo hizo.
+/* Pares [cable, pantalla] MEDIDOS contra el amplificador real el 2026-09-17.
+   Se interpola linealmente entre puntos consecutivos en vez de aplicar una
+   formula: la formula es una hipotesis, los pares son lo que el equipo hizo.
 
-   Arranca vacía a propósito, y eso no es un pendiente: es el estado correcto
-   hasta que se midan curvas contra el equipo real. Cargar pares acá no cambia
-   nada del código de más abajo, sólo agrega filas — los parámetros afectados
-   pasan solos a mostrarse en la escala de pantalla en vez de en crudo.
-   Formato, con el volume de los veinte modelos de amplificador como ejemplo:
-     't20r/t20ri': [[-60, 1], [-45, 3.2], [-30, 5.1], [-15, 7.4], [-6, 9.0], [0, 10]],
-*/
-const CURVAS = {}
+   Como se midieron: se escribio el valor de cable por USB (`ponerParametro`),
+   se releyo del equipo para confirmar que la escritura habia aterrizado, y se
+   leyo a mano el numero de la pantalla del amplificador. La unidad usada para
+   cada curva va anotada en su fila.
+
+   Las cinco son monotonas y clavan los dos extremos (cable minimo -> pantalla
+   1, cable maximo -> pantalla 10). Ademas `t30r/t30ri` resulto ser el reverso
+   de `t30/t30i` dentro de 0,044 en escala 0..1 -- y se midieron en unidades
+   DISTINTAS, sin conocerse: dos mediciones independientes que se confirman.
+
+   Lo que NO se hizo, a proposito: extrapolar. El par `t10` no cumple esa misma
+   relacion de reverso (se desvia 0,145), asi que cada curva esta medida
+   aparte. Antes aqui habia un ejemplo con pinta de dato bueno
+   ([-45, 3.2], [-30, 5.1], [-15, 7.4]...) que resulto falso: para -8,57 dB
+   predecia 8,54 y el equipo marca 6,5. Un numero plausible en un comentario es
+   igual de peligroso que uno inventado en el codigo. */
+const CURVAS = {
+  // volume de los 20 modelos de ampli. Medido en TWIN CLEAN, dB -60..0.
+  't20r/t20ri': [[-60, 1], [-48, 1.3], [-36, 2], [-30, 2.5], [-24, 3.2], [-18, 4.1], [-12, 5.5], [-8.573037, 6.5], [-6, 7.4], [-3, 8.6], [0, 10]],
+  // level de CHORUS, TREMOLO, FLANGER, VIBRATONE y FUZZ, y un gain. Medido en CHORUS.level, 0..1.
+  't30/t30i': [[0, 1], [0.1, 3], [0.2, 4.4], [0.3, 5.5], [0.4, 6.4], [0.5, 7.2], [0.65, 8.2], [0.8, 8.8], [0.85, 9.3], [0.9, 9.5], [0.95, 9.8], [1, 10]],
+  // gain del OVERDRIVE. Medido en OVERDRIVE.gain, 0..1.
+  't30r/t30ri': [[0, 1], [0.1, 1.4], [0.2, 1.8], [0.3, 2.3], [0.35, 2.6], [0.4, 2.9], [0.45, 3.2], [0.5, 3.6], [0.55, 4], [0.65, 5], [0.8, 6.7], [1, 10]],
+  // rate de CHORUS, PHASER, STEP FILTER y FLANGER. Medido en CHORUS.rateHz, 0,08..10 Hz (la pantalla lo llama SPEED).
+  't10/t10i': [[0.08, 1], [0.3, 3.1], [0.6, 4.4], [1, 5.4], [1.5, 6.2], [2, 6.7], [2.5, 7.2], [4.5, 8.4], [6, 9], [8, 9.5], [10, 10]],
+  /* rotor del VIBRATONE. Medido en VIBRATONE.rotor, 0,67..5,67 Hz (pantalla:
+     SPEED). Tiene TRAMOS PLANOS: la pantalla marca 1.0 para todo el rango
+     0,67..2 Hz. No es un error de medida -- el equipo de verdad no distingue
+     ahi --, pero significa que la vuelta pantalla -> cable pierde resolucion
+     en ese tramo y no puede ser exacta. Ver el test de ida y vuelta. */
+  't10r/t10ri': [[0.67, 1], [1, 1], [1.5, 1], [2, 1], [2.5, 1.1], [3, 1.2], [3.5, 1.4], [4, 1.9], [4.5, 2.8], [5, 4.6], [5.67, 10]],
+}
 
 const interpolar = (pares, i, j, v) => {
   if (v <= pares[0][i]) return pares[0][j]
@@ -55,10 +78,17 @@ const acotar = (v, min, max) => Math.min(Math.max(v, min), max)
    Cuando `remap.taper` está declarado y es distinto del `taper` del cable
    (p.ej. 't20r' contra 't20ri'), cada lado aplica una curva DIFERENTE sobre
    esa posición, y la relación entre cable y pantalla ya no se puede derivar:
-   hace falta medirla. Verificado contra el catálogo: exactamente 34 de los
+   hace falta medirla.
+
+   El `taper` del cable tiene que EXISTIR para que haya dos curvas que
+   comparar. Sin él no hay curva de cable, así que el cable es lineal y sólo
+   cambia el rango: es el caso de recta de arriba. Esta guarda faltaba, y por
+   eso el `level` del OVERDRIVE y el del REVERSE pasaban por raros
+   (`undefined !== 't50'`) y se mostraban en crudo — cuando medirlos contra el
+   equipo dio una recta perfecta, error 0,0177 sobre nueve puntos. Verificado contra el catálogo: exactamente 34 de los
    183 parámetros continuos caen en este segundo caso, entre ellos el `volume`
    de los veinte modelos de amplificador; los otros 149 son rectas. */
-const curvasDistintas = p => !!(p.remap?.taper && p.taper !== p.remap.taper)
+const curvasDistintas = p => !!(p.taper && p.remap?.taper && p.taper !== p.remap.taper)
 
 function conversores(p) {
   const dMin = p.remap?.min ?? p.min
