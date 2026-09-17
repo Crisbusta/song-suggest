@@ -10,7 +10,7 @@
     "test": "node --test test/*.test.js",
     "etl": "node etl/index.js",
     "start": "node server.js",
-    "backup": "cp songs.db \"songs-$(date +%Y%m%d-%H%M%S).db.bak\"",
+    "backup": "node tools/backup.mjs",
     "test:ui": "playwright test"
   },
   "devDependencies": {

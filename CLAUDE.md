@@ -47,6 +47,8 @@ El ETL corre en dos fases y es reanudable (Ctrl-C en cualquier momento). Bandera
 | Qué | Por qué |
 |---|---|
 | Tabla `song_state` (esquema y PK) | Lo único que el ETL no puede reconstruir: meses de historial de aprendidas, descartadas y me-gusta. Nunca migrar sin una razón enorme. |
+| Tabla `user_tone` (esquema y PK) | El tono que dialaste y aprobaste, leído del equipo. El ETL no lo reconstruye: cada fila son minutos frente al amplificador. La PK es `(song_id, track_index)`, pero `track_index` no es estable — el ETL borra y reinserta `tracks` con el orden que venga de Songsterr —, así que la columna `track_sig` guarda la identidad de la pista y una fila que no calza no se aplica. |
+| Tabla `tone_judgment` (esquema) | Tus juicios sobre los tonos propuestos. Es el único patrón de medida que existe para saber si un cambio de tono mejora o empeora; sin él, cualquier cambio vuelve a ser opinión. |
 | `public/fender-protocolo.js`, `despachador.js`, `ampli-usb.js` | Bytes capturados del amplificador real. Equivocarse aquí no lanza: el equipo descarta el mensaje en silencio y el síntoma es idéntico a "no contesta". Los tests son la única forma de saber que el formato sigue siendo el que acepta. |
 | `data/*.csv`, `public/lt25-unidades.json` | Trabajo de terceros copiado tal cual (planilla de la comunidad del Mustang LT y volcado del firmware de Fender). No reformatear. Ver `data/PROCEDENCIA.md`. Por esto el repo es privado. |
 

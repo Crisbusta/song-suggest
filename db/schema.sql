@@ -67,3 +67,44 @@ FROM (
   FROM guitar_tracks
 )
 WHERE rn = 1;
+
+-- El tono que el usuario dialo y aprobo, leido del equipo. Zona protegida:
+-- el ETL no puede reconstruirlo. Sin FOREIGN KEY hacia songs, igual que
+-- song_state: el catalogo se puede rebajar entero sin perder esto.
+--
+-- track_sig es instrument + el separador de unidades + name de la pista al
+-- guardarla. etl/catalog.js borra y reinserta `tracks` con el trackIndex que
+-- venga de Songsterr, asi que (song_id, track_index) NO es estable: si
+-- Songsterr reordena, la fila se aplicaria a otra pista en silencio. Al leer
+-- se compara la firma y, si no calza, la fila no se aplica y se avisa.
+CREATE TABLE IF NOT EXISTS user_tone (
+  song_id     INTEGER NOT NULL,
+  track_index INTEGER NOT NULL,
+  track_sig   TEXT    NOT NULL,
+  cadena      TEXT    NOT NULL,
+  descriptor  TEXT,
+  origen      TEXT    NOT NULL CHECK (origen IN ('leido','editado')),
+  nota        TEXT,
+  updated_at  TEXT    NOT NULL,
+  PRIMARY KEY (song_id, track_index)
+);
+
+-- Los juicios rapidos. Es un REGISTRO, no un estado: se acumula, no se pisa.
+-- La misma pista juzgada tres veces a lo largo de tres versiones del sugeridor
+-- son tres filas, y esa historia ES el dato -- es lo que permite preguntar si
+-- una version mejoro sobre la anterior. Zona protegida por la misma razon que
+-- user_tone, y con mas fuerza: el ETL no reconstruye horas de escucha.
+CREATE TABLE IF NOT EXISTS tone_judgment (
+  id          INTEGER PRIMARY KEY,
+  song_id     INTEGER NOT NULL,
+  track_index INTEGER NOT NULL,
+  track_sig   TEXT    NOT NULL,
+  eje         TEXT    NOT NULL CHECK (eje IN ('global','suciedad','modulacion','delay','reverb')),
+  direccion   TEXT    NOT NULL CHECK (direccion IN ('bien','sobra','falta')),
+  juzgado     TEXT    NOT NULL,
+  fuente      TEXT    NOT NULL,
+  sugeridor   TEXT    NOT NULL,
+  creado_en   TEXT    NOT NULL,
+  CHECK ((eje =  'global' AND direccion =  'bien')
+      OR (eje <> 'global' AND direccion <> 'bien'))
+);
