@@ -667,8 +667,8 @@ $('#vista-sorteo').addEventListener('click', async e => {
        van de -15,88 dB (SUPER HEAVY) a 0 (SUPER CLEAN), casi 16 dB de
        diferencia entre los extremos. Cambiar de modelo sin devolver el tuyo
        puede ser ese salto de golpe, con la guitarra enchufada. El volumen no
-       se sugiere -- su curva es de las que todavia no sabemos convertir --
-       pero eso no es excusa para moverlo sin querer.
+       se sugiere -- ver `parametrosAmpQueViajan`, que lo excluye a proposito
+       --, pero eso no es excusa para moverlo sin querer.
 
        Devolverlo tal cual es correcto porque los veinte modelos declaran la
        MISMA escala para `volume`: -60..0 dB con curva t20r. Es el hecho que
@@ -682,13 +682,17 @@ $('#vista-sorteo').addEventListener('click', async e => {
        Y hasta ahi llega, que es lo que hay que decir claro: proteger el
        parametro `volume` NO es proteger lo que sale por el parlante. Cargar
        un OVERDRIVE delante del ampli sube el nivel aunque el `volume` se haya
-       devuelto perfecto, y las perillas que lo gobiernan (`level`, `gain` de
-       OVERDRIVE y VARIFUZZ, `level` de los moduladores) son justo de las que
-       este proyecto todavia no sabe convertir: no se mandan, y la unidad
-       recien cargada se queda en SU valor por defecto -- media carrera, no la
-       salida baja que el preset pedia. Eso no se puede arreglar sin medir las
-       curvas, pero si se puede DECIR, y va en rojo y aparte: ver `porDefecto`
-       mas abajo. */
+       devuelto perfecto.
+
+       Lo que SI se arreglo: las perillas que gobiernan ese nivel (`level`,
+       `gain` de OVERDRIVE, `level` de los moduladores) ya se pueden convertir
+       y por lo tanto YA SE MANDAN -- sus curvas se midieron contra el equipo
+       el 2026-09-17, ver CURVAS en catalogo-lt25.js. Antes se saltaban y la
+       unidad recien cargada se quedaba en SU valor por defecto, que es media
+       carrera y no la salida que el preset pedia; eran 116 de las 661
+       escrituras que la planilla declara para las ranuras de efecto. Lo que
+       queda sin mandar, si algun dia vuelve a haberlo, se sigue diciendo en
+       rojo y aparte: ver `porDefecto` mas abajo. */
     let notaModelo = '', malModelo = false
 
     // La misma lectura resuelve las dos preguntas: que unidad hay en cada
@@ -964,9 +968,12 @@ $('#vista-sorteo').addEventListener('click', async e => {
 
         const d = descriptorDe(u.fenderId, parametro)
         if (!d) { noViaja(sinConversion); continue }
-        // `crudo` es exactamente el marcador de "la curva de pantalla de esta
-        // perilla no se midio todavia": su `aCable` devuelve el valor tal cual
-        // y mandarlo seria tratar un numero de pantalla como si fuera de cable.
+        /* `crudo` es exactamente el marcador de "la curva de pantalla de esta
+           perilla no se midio": su `aCable` devuelve el valor tal cual y
+           mandarlo seria tratar un numero de pantalla como si fuera de cable.
+           Hoy ninguna perilla del catalogo cae aqui -- las seis curvas estan
+           medidas --, pero la guarda se queda: es la respuesta correcta el dia
+           que Fender publique un taper nuevo. */
         if (d.crudo) { noViaja(sinCurva); continue }
         // Una lista o un interruptor no traen `aCable`: su valor de pantalla
         // es un indice, no un punto de una curva. Hoy la planilla no declara
