@@ -1269,3 +1269,24 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
   .hint { margin-inline: 14px; }
   .fila-bandas, #banda-fichas { padding-inline: 14px; }
 }
+
+/* --- Veredicto de tono ----------------------------------------------------
+   Se añade a la línea del estado de envío en vez de ocupar una fila propia:
+   el panel del ampli acaba de pasar por un rediseño entero para caber sin
+   scroll, y una fila fija más lo devolvería al problema. Los tests de
+   navegador que miden el alto son los que lo vigilan. */
+.veredicto { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: 8px; }
+.btn-juicio {
+  font: inherit; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  cursor: pointer; color: var(--color-neutral-300); background: transparent;
+  border: 1px solid var(--color-divider);
+}
+.btn-juicio:hover { border-color: var(--color-accent); color: var(--color-text); }
+.juicio-efectos { font: inherit; font-size: 11px; }
+/* Secundario de verdad: "Enviar" es la acción, guardar es lo que haces
+   después y de vez en cuando. */
+.guardar-tono {
+  background: none; color: var(--color-neutral-300);
+  border: 1px solid var(--color-divider); min-height: 32px; font-size: 13px;
+}
+.guardar-tono:not(:disabled):hover { border-color: var(--color-accent); color: var(--color-text); }

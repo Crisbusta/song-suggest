@@ -1,4 +1,5 @@
 import { describeTuning } from '../lib/tuning.js'
+import { leerTono } from './tono-usuario.js'
 import { sugerirAjustes, paraElAmpli } from '../lib/ampli.js'
 /* Vive en `public/` y no en `lib/` porque el navegador tambien lo necesita
    -- el buscador de bandas filtra la lista en el cliente -- y el servidor
@@ -155,6 +156,42 @@ function pistasDeLaCancion(db, fila, tags, califican) {
 
   return filas.map(p => {
     const tuning = describeTuning(p.tuning ? JSON.parse(p.tuning) : null)
+
+    /* Corto-circuito: si guardaste un tono para esta pista, ese manda y no se
+       pregunta nada mas. Es deliberadamente tosco -- gana entero o no gana --
+       y la fase 3 lo sustituye por una fuente del resolutor, que ademas podra
+       combinar un tono tuyo PARCIAL. Ver §9 Fase 3 de la spec.
+
+       Va aqui y no en la fase 3 por una razon que no es tecnica: si capturar
+       un tono no arregla la cancion HOY, no se capturan cuarenta, y sin corpus
+       no hay ninguna de las fases siguientes.
+
+       Una fila desfasada -- la pista que hay hoy en ese track_index no es la
+       que guardaste -- no se aplica: se cae a la sugerencia normal. */
+    const mio = leerTono(db, {
+      songId: fila.song_id, trackIndex: p.track_index,
+      instrument: p.instrument, name: p.name,
+    })
+    if (mio && !mio.desfasada) {
+      return {
+        trackIndex: p.track_index,
+        instrument: p.instrument,
+        name: p.name,
+        difficulty: p.difficulty,
+        tuning,
+        califica: califican ? califican.has(p.track_index) : true,
+        /* `paraElAmpli` es null y no es un pendiente: la cadena guardada ya
+           viene en valores de CABLE leidos del equipo, asi que no hay nada
+           que convertir. Quien la envia la usa tal cual. */
+        ampli: {
+          cadena: mio.cadena,
+          deUsuario: true,
+          fuente: 'usuario',
+          procedencia: 'lo dialaste tu y lo guardaste',
+          paraElAmpli: null,
+        },
+      }
+    }
     /* `artist` y `title` no son opcionales: son lo unico con lo que
        sugerirAjustes puede buscar un preset de la comunidad. Sin ellos la
        busqueda nunca recibe un artista y todo el camino de los presets queda
