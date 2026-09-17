@@ -1,6 +1,8 @@
 # Resolución de tono híbrida — diagnóstico y diseño
 
-> Estado: **propuesta**. No hay nada implementado.
+> Estado: **fase 0 implementada** el 2026-09-17 (ver
+> `docs/superpowers/plans/2026-09-17-fase-0-corpus-y-marcador.md`). Las fases
+> 1 a 5 siguen siendo propuesta.
 >
 > **Enmendada el 2026-09-16.** El catálogo casi se duplicó desde la primera
 > redacción (de 10.011 canciones y 25.061 pistas de guitarra a **19.976 y

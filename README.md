@@ -297,9 +297,11 @@ equivocarse cuesta caro.
 
 `songs.db` es dato local — no está en git (ver `.gitignore`) — y se puede
 reconstruir corriendo `npm run etl` de nuevo... excepto por una tabla:
-`song_state`. Ahí vive todo lo que aprendiste, descartaste o te gustó: meses
-de historial que ninguna corrida del ETL puede recrear. Si el archivo se
-corrompe o se borra sin backup, ese historial se pierde para siempre.
+`song_state`, `user_tone` y `tone_judgment`. Ahí vive todo lo que aprendiste,
+descartaste o te gustó, más los tonos que dialaste y aprobaste y tus juicios
+sobre los propuestos: historial que ninguna corrida del ETL puede recrear. Si
+el archivo se corrompe o se borra sin backup, todo eso se pierde para
+siempre.
 
 Respáldalo de vez en cuando con:
 
@@ -307,8 +309,11 @@ Respáldalo de vez en cuando con:
 npm run backup
 ```
 
-Esto copia `songs.db` a `songs-<fecha>.db.bak` (ignorado por git también).
-No hay respaldo automático — es responsabilidad de quien usa la app.
+Esto vuelca el WAL y copia `songs.db` a `songs-<fecha>.db.bak` (ignorado por
+git también). El volcado no es opcional: la base corre en WAL, y un `cp` a
+secas del archivo principal se lleva la base tal como estaba en el último
+checkpoint — medido el 2026-09-17, 5,3 MB de escrituras sin volcar. No hay
+respaldo automático; es responsabilidad de quien usa la app.
 
 ## Tests
 
@@ -316,6 +321,11 @@ No hay respaldo automático — es responsabilidad de quien usa la app.
 npm test        # la suite: node:test, sin red ni navegador
 npm run test:ui # los de navegador: Playwright sobre una base de prueba
 ```
+
+`npm run tono:evaluar` no es un test y no entra en la suite — lee `songs.db`,
+que los tests tienen prohibido tocar. Puntúa el sugeridor de tono contra tus
+juicios y tus tonos guardados. No demuestra que un tono suene como el disco:
+demuestra que coincide más con lo que aprobaste.
 
 Corre con `node:test`, ningún test toca la red. El front end (`public/`)
 **casi no tiene tests automatizados**, por decisión de diseño: es vainilla, sin
