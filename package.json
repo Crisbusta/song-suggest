@@ -11,6 +11,7 @@
     "etl": "node etl/index.js",
     "start": "node server.js",
     "backup": "node tools/backup.mjs",
+    "tono:evaluar": "node tools/evaluar-tono.mjs",
     "test:ui": "playwright test"
   },
   "devDependencies": {
