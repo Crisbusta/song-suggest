@@ -26,19 +26,21 @@ const perillas = a => [['Gain', a.gain], ['Treble', a.treble], ['Bass', a.bass],
   .map(([nombre, valor]) => perilla(nombre, valor))
   .join('')
 
-/* Las cinco ranuras, siempre las cinco.
+/* Las cuatro ranuras de EFECTOS, siempre las cuatro -- `amp` queda afuera de
+   esta grilla porque ya se muestra arriba, en `.modelo`: repetirla aca abajo
+   era la misma informacion dos veces.
 
    Se recorren desde `RANURAS` y no desde las claves de `a.cadena` porque
    `cadena` SOLO trae las ranuras usadas: las vacias no llegan como null, no
    llegan. Y que una ranura salga "vacía" es justo lo que hay que ver, porque el
-   envio la vacia de verdad y borra lo que hubiera dialado a mano ahi.
-
-   `amp` es la excepcion: nunca queda vacia -- no existe un amplificador sin
-   modelo -- asi que cuando el preset no lo declara dice "sin cambiar". */
-const ranuras = a => RANURAS.map(ranura => {
-  const nombre = a.cadena?.[ranura]?.nombre ?? (ranura === 'amp' ? a.modelo : null)
-  const texto = nombre ?? (ranura === 'amp' ? 'sin cambiar' : 'vacía')
-  return `<li class="${nombre ? 'ocupada' : 'ranura-vacia'}"><span>${ranura}</span><strong>${esc(texto)}</strong></li>`
+   envio la vacia de verdad y borra lo que hubiera dialado a mano ahi. */
+const ranuras = a => RANURAS.filter(r => r !== 'amp').map(ranura => {
+  const nombre = a.cadena?.[ranura]?.nombre ?? null
+  const texto = nombre ?? 'vacía'
+  /* El `title` no es decorativo: con la ficha apretada las cuatro ranuras
+     pasan a una sola fila y un nombre largo ("SMALL ROOM") se corta con
+     elipsis. Ahi es la unica forma de leerlo entero. */
+  return `<li class="${nombre ? 'ocupada' : 'ranura-vacia'}"><span>${ranura}</span><strong title="${esc(texto)}">${esc(texto)}</strong></li>`
 }).join('')
 
 /* De donde sale este tono. Un preset de la comunidad es OPINION de alguien, no
@@ -54,7 +56,15 @@ const queSePisa = a => {
   const reverbSuelto = a.reverb != null && !a.cadena?.reverb
     ? `<p>Reverb ${esc(a.reverb)}/10 es una sugerencia manual: no se envía y este tono vacía esa ranura, incluso si la ajustaste a mano.</p>`
     : ''
-  return `<details class="panel-detalles"><summary>Qué se pisa al enviar</summary><p>Las ranuras de efectos que este tono no usa quedan vacías: esto borra lo que hayas ajustado a mano en ellas. Cargar una unidad devuelve sus otras perillas a los valores de fábrica. Tu volumen se lee y se restaura; si no se puede leer, el modelo no cambia.</p>${reverbSuelto}<p>${procedencia(a)}</p></details>`
+  /* La frase de "que se manda" entro aca dentro: decia lo mismo que este
+     desplegable -- que hace el boton -- y suelta ocupaba tres lineas fijas
+     en un panel que no daba abasto. Va primero porque es la promesa; lo que
+     sigue son las consecuencias. */
+  /* El cuerpo va en su propia caja porque al desplegarse mide mas que la
+     ficha entera, y ningun nivel de densidad puede absorber eso. Cuando no
+     cabe scrollea ESTA caja, no la columna: el desplegable lo abriste tu y
+     el resto del panel se queda donde estaba. */
+  return `<details class="panel-detalles"><summary>Qué se manda y qué se pisa</summary><div class="panel-detalles-cuerpo"><p>${resumenEnvioAmpli(a).queSeManda}</p><p>Las ranuras de efectos que este tono no usa quedan vacías: esto borra lo que hayas ajustado a mano en ellas. Cargar una unidad devuelve sus otras perillas a los valores de fábrica. Tu volumen se lee y se restaura; si no se puede leer, el modelo no cambia.</p>${reverbSuelto}<p>${procedencia(a)}</p></div></details>`
 }
 
 /* `estado` lo pone app.js: si hay equipo conectado, si el boton puede pulsarse,
@@ -70,13 +80,40 @@ export function pintarPanelAmpli(pista, estado = {}) {
 
   const dibujadas = perillas(a)
   const modelo = a.modelo != null ? esc(a.modelo) : 'no declarado'
+  /* "Ideal para esta pista" no es una medicion: es el tono que esta cancion
+     trae asignado, mostrado con confianza SOLO cuando la planilla no lo marco
+     como dudoso. Con `incierto`, el aviso rojo de mas abajo ya dice lo que hay
+     que decir -- poner las dos frases juntas se contradiria. */
+  const ideal = a.modelo != null && !a.incierto ? '<span class="badge-ideal">Ideal para esta pista</span>' : ''
+
+  /* El cabezal es decorativo y vive JUNTO al nombre del modelo, no en un
+     bloque aparte: cuando estaba abajo repetia ese mismo nombre en un campo
+     "Modelo" y se llevaba 88px de una ficha que ya no daba abasto -- el
+     panel desbordaba en 93 de cada 100 canciones. El dato estaba dos veces;
+     el sitio, una sola. */
+  const cabezal = `<svg class="ampli-icono" width="46" height="52" viewBox="0 0 72 80" fill="none" aria-hidden="true">
+      <rect x="1" y="1" width="70" height="78" rx="5" fill="#141414" stroke="#3a3a3a"></rect>
+      <rect x="7" y="7" width="58" height="52" rx="3" fill="#0b0b0b"></rect>
+      <circle cx="20" cy="20" r="6" fill="#181818" stroke="#333"></circle>
+      <circle cx="52" cy="20" r="6" fill="#181818" stroke="#333"></circle>
+      <circle cx="36" cy="40" r="11" fill="#181818" stroke="#333"></circle>
+      <rect x="7" y="63" width="58" height="3" rx="1.5" fill="#f5a623"></rect>
+    </svg>`
 
   return `${cabecera}
-    <div class="modelo"><span>Modelo · pista ${esc(estado.posicion ?? 1)}</span><strong>${modelo}</strong></div>
-    ${dibujadas ? `<div class="perillas-panel">${dibujadas}</div>` : ''}
-    <p class="volumen-nota">Volume no viaja al ampli.</p>
-    <h3>Ranuras</h3><ul class="cadena cadena-panel">${ranuras(a)}</ul>
+    <div class="modelo">
+      ${cabezal}
+      <div class="modelo-texto">
+        <span>Modelo · pista ${esc(estado.posicion ?? 1)}</span>
+        <strong>${modelo}</strong>
+      </div>
+      ${ideal}
+    </div>
+    ${dibujadas ? `<div class="perillas-panel">${dibujadas}<p class="volumen-nota">Volume no viaja al ampli.</p></div>` : ''}
+    <div class="efectos-bloque">
+      <h3>Efectos</h3><ul class="cadena cadena-panel">${ranuras(a)}</ul>
+    </div>
     ${a.incierto ? '<p class="envio-estado mal">La planilla marca este preset como dudoso.</p>' : ''}
     ${queSePisa(a)}
-    <div class="panel-envio"><button type="button" id="enviar-ampli" class="btn btn-primary btn-block enviar-ampli" ${estado.puedeEnviar ? '' : 'disabled'}>Enviar al ampli <kbd>E</kbd></button><p id="envio-estado" class="envio-estado" role="status">Sin enviar todavía</p><p class="descargo">${resumenEnvioAmpli(a).queSeManda}</p></div>`
+    <div class="panel-envio"><button type="button" id="enviar-ampli" class="btn btn-primary btn-block enviar-ampli" ${estado.puedeEnviar ? '' : 'disabled'}>Enviar al ampli <kbd>E</kbd></button><p id="envio-estado" class="envio-estado" role="status">Sin enviar todavía</p></div>`
 }

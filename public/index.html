@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>song-suggest · Sortear</title>
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3c7 0 12 4 12 10 0 7-7 16-12 16S4 20 4 13C4 7 9 3 16 3z" fill="%239184d9"/></svg>'>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 3c7 0 12 4 12 10 0 7-7 16-12 16S4 20 4 13C4 7 9 3 16 3z" fill="%23d4a24a"/></svg>'>
 <!-- El sistema de diseño va primero y sin tocar: es la fuente de verdad del
      aspecto. `style.css` sólo añade lo que esta app tiene y el sistema no. -->
 <link rel="stylesheet" href="/nocturne.css">
@@ -22,84 +22,174 @@
     </label>
     <p id="cancion-ayuda" class="solo-lector">Abre su tarjeta sin sortear. Encuentra también las que descartaste.</p>
 
-    <p id="calzan" class="calzan" aria-live="polite"></p>
-    <!-- El diseño da por conectado el ampli y no le deja sitio. Este boton solo
-         aparece cuando NO lo esta: WebHID exige un gesto del usuario, asi que
-         tiene que existir en alguna parte. Conectado, desaparece y el estado lo
-         dice el panel. -->
-    <button id="ampli-conectar" class="btn btn-ghost ampli-conectar" hidden>
-      <span class="punto" aria-hidden="true"></span><span id="ampli-estado">Conectar ampli</span>
-    </button>
+    <!-- Agrupados para que el buscador quede centrado en la fila (grid de 3
+         columnas: marca / buscador / controles) y no corrido hacia la
+         izquierda por el ancho de la marca sola. Las pestañas viven aca
+         adentro -- en la misma fila que el buscador, como en el mock -- y no
+         en una fila propia como en la pasada anterior. -->
+    <div class="cabecera-controles">
+      <nav aria-label="Vistas">
+        <button id="ver-sorteo" class="activo">Descubrir</button>
+        <button id="ver-listas">Mis listas</button>
+        <button id="ver-editor" hidden>Amplis</button>
+      </nav>
+
+      <!-- Puramente decorativo: no hay tema claro implementado todavia. El
+           titulo lo dice en vez de fingir una funcion que el boton no tiene. -->
+      <button type="button" class="btn btn-icon btn-secondary tema-toggle" title="Tema claro (aún no disponible)" aria-disabled="true">
+        <svg width="15" height="15" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><circle cx="128" cy="128" r="48"></circle><line x1="128" y1="32" x2="128" y2="16"></line><line x1="195.9" y1="60.1" x2="207.2" y2="48.8"></line><line x1="224" y1="128" x2="240" y2="128"></line><line x1="195.9" y1="195.9" x2="207.2" y2="207.2"></line><line x1="128" y1="224" x2="128" y2="240"></line><line x1="60.1" y1="195.9" x2="48.8" y2="207.2"></line><line x1="32" y1="128" x2="16" y2="128"></line><line x1="60.1" y1="60.1" x2="48.8" y2="48.8"></line></svg>
+      </button>
+
+      <!-- El chip de perfil reemplaza al contador suelto y al boton de conectar:
+           los junta en un solo control, como en el mock. El boton real de
+           conectar (mismo id, mismo comportamiento de siempre) vive DENTRO del
+           desplegable -- WebHID exige un gesto del usuario y tiene que existir
+           en alguna parte, pero no necesita ser lo primero que se ve. -->
+      <div class="perfil">
+        <button id="perfil-abrir" type="button" class="perfil-chip" aria-expanded="false" aria-controls="perfil-panel" aria-label="Cuenta y ampli">
+          <span class="perfil-avatar" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z"></path></svg></span>
+          <p id="calzan" class="calzan" aria-live="polite"></p>
+          <svg class="perfil-chevron" width="11" height="11" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"></path></svg>
+        </button>
+        <div id="perfil-panel" class="perfil-panel" hidden>
+          <button id="ampli-conectar" class="btn btn-ghost ampli-conectar" hidden>
+            <span class="punto" aria-hidden="true"></span><span id="ampli-estado">Conectar ampli</span>
+          </button>
+          <p id="perfil-conectado" class="perfil-conectado" hidden>Ampli conectado</p>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="fila-pestanas">
-    <nav aria-label="Vistas">
-      <button id="ver-sorteo" class="activo">Sortear</button>
-      <button id="ver-listas">Mis listas</button>
-      <button id="ver-editor" hidden>Ampli</button>
-    </nav>
-
-    <div class="filtros" aria-label="Filtros del sorteo">
+  <!-- Fila de filtros, siempre visible -- como el mock. Antes "Bandas" abria
+       un panel aparte; ahora el buscador y las pastillas de banda viven aca
+       directo, sin un clic de mas, y el rango de dificultad se le suma a la
+       derecha porque es la misma fila en la captura. El rotulo "Filtrar por
+       bandas" es texto visible, no de lector de pantalla -- el mock lo
+       muestra y no hay razon para escondertelo. -->
+  <div class="fila-bandas">
+    <div class="fila-bandas-controles" aria-label="Filtrar por bandas">
+      <p class="fila-bandas-rotulo">Filtrar por bandas</p>
       <label class="solo-lector" for="modo">Modo</label>
-      <select id="modo" class="input pastilla">
+      <select id="modo" class="input pastilla modo-select">
         <option value="surprise">Sorpréndeme</option>
         <option value="riffs">Riffs eléctricos</option>
         <option value="acoustic">Acústica / fingerpicking</option>
         <option value="solos">Solos y técnica</option>
       </select>
 
+      <label class="solo-lector" for="banda-q">Filtrar por bandas</label>
+      <div class="banda-buscador">
+        <svg class="buscar-icono" width="13" height="13" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path></svg>
+        <input id="banda-q" class="input" type="text" autocomplete="off" spellcheck="false" placeholder="Escribe unas letras..." aria-describedby="banda-ayuda">
+        <ul id="banda-sug" class="banda-sug" hidden></ul>
+      </div>
+
+      <span class="fila-bandas-separador" aria-hidden="true"></span>
+
+      <!-- "Todas" + las bandas con mas canciones que todavia no elegiste --
+           `pintarPillsBandas()` en app.js las dibuja: dato real (conteo de
+           `/api/artists`), no una lista fija como en el mock. -->
+      <ul id="banda-pills" class="banda-pills" aria-label="Bandas rapidas"></ul>
+
       <!-- Un rango es UN control: los dos extremos van dentro de la misma
            pastilla, con su rotulo, en vez de sueltos con un guion en medio. -->
       <span class="rango">
-        <span class="rango-rotulo">dificultad</span>
+        <span class="rango-rotulo">Dificultad</span>
         <select id="min" class="input" aria-label="Dificultad mínima"></select>
         <span class="guion" aria-hidden="true">–</span>
         <select id="max" class="input" aria-label="Dificultad máxima"></select>
       </span>
-
-      <button id="bandas-abrir" class="input pastilla" type="button" aria-expanded="false" aria-controls="bandas-panel">Bandas <span id="bandas-estado">todas</span></button>
-      <span id="stats" class="stats" hidden></span>
     </div>
   </div>
+  <span id="stats" class="stats" hidden></span>
+  <!-- Las bandas elegidas a mano por el buscador (mas de una a la vez) que no
+       caben como pastilla rapida: se ven como fichas removibles, y solo
+       cuando hay alguna -- `:empty` la esconde el resto del tiempo. -->
+  <ul id="banda-fichas" class="banda-fichas"></ul>
+  <p id="banda-ayuda" class="solo-lector" aria-live="polite">Sin ninguna elegida, sortea de todo el catálogo.</p>
 </header>
 
 <main id="vista-sorteo">
-  <section id="bandas-panel" class="bandas" hidden>
-    <label for="banda-q">Filtrar por bandas</label>
-    <div class="banda-buscador">
-      <input id="banda-q" class="input" type="text" autocomplete="off" spellcheck="false" placeholder="escribe unas letras y elige" aria-describedby="banda-ayuda">
-      <ul id="banda-sug" class="banda-sug" hidden></ul>
-    </div>
-    <p id="banda-ayuda" class="banda-ayuda">Sin ninguna elegida, sortea de todo el catálogo.</p>
-    <ul id="banda-fichas" class="banda-fichas"></ul>
-    <div id="banda-atajos" class="banda-atajos"></div>
-  </section>
 
+  <!-- Tres columnas de verdad, una por ficha, como el mock: identidad ·
+       pistas · ampli. Antes eran DOS celdas de grid y la lista de pistas
+       viajaba dentro de la primera, apoyada en un flex-wrap: con pocas
+       pistas o un titulo largo esa fila se reacomodaba sola y las "tres
+       columnas" dejaban de leerse como tales. Ahora cada una es su propia
+       celda: el ancho no depende del contenido de la vecina. -->
   <div class="columnas">
-    <div class="col-cancion">
+    <div class="col-cancion ficha">
+      <!-- El corazon va arriba a la derecha de la ficha -- mismo sitio que el
+           mock -- posicionado contra `.col-cancion`, que ahora SI tiene un
+           ancho propio y definido. Sigue siendo el mismo boton estatico de
+           siempre: nunca se re-crea al redibujar la cancion. -->
+      <button id="like" class="btn btn-icon like-flotante" title="Me gustó · L" aria-label="Me gustó" disabled>
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><path d="M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40Z"></path></svg>
+      </button>
       <section id="tarjeta" class="tarjeta" aria-label="Canción para practicar"></section>
       <p id="hint" class="hint" aria-live="polite"></p>
   <section class="acciones" aria-label="Acciones de la canción">
-    <!-- Siguen siendo botones y no radios: marcar sortea otra cancion al
-         instante, asi que un estado "elegido" quedaria puesto sobre una tarjeta
-         que ya no existe. El aspecto es el del control segmentado; el
-         comportamiento, el de tres acciones. -->
-    <div class="seg veredictos" role="group" aria-label="Qué hago con esta canción">
-      <button id="aprendida" class="seg-opt" disabled>Ya la aprendí <kbd>A</kbd></button>
-      <button id="descartada" class="seg-opt" disabled>No me tinca <kbd>N</kbd></button>
-      <button id="despues" class="seg-opt" disabled>Después <kbd>D</kbd></button>
-    </div>
-    <button id="like" class="btn btn-secondary btn-icon like" title="Me gustó · L" aria-label="Me gustó" disabled>
-      <svg width="15" height="15" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><path d="M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40Z"></path></svg>
+    <!-- "Otra" es la CTA grande y solida del mock -- es la accion que de
+         verdad se repite en cada tirada. El resto queda abajo, en outline,
+         para que el tamaño diga la verdad sobre cual boton importa. -->
+    <button id="otra" class="btn btn-primary btn-cta">
+      <span class="btn-cta-icono" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M180,72h32a8,8,0,0,1,8,8v32"></path><path d="M220,72,184,108a95.9,95.9,0,0,1-67.9,28.1H40"></path><path d="M180,184h32a8,8,0,0,0,8-8V144"></path><path d="M220,184l-36-36a95.9,95.9,0,0,0-67.9-28.1H40"></path></svg></span>
+      Otra canción <kbd>espacio</kbd>
     </button>
-    <span class="acciones-sorteo">
-      <button id="todo" class="btn btn-ghost" type="button">Sortear de todo</button>
-      <button id="otra" class="btn btn-primary">Otra <kbd>espacio</kbd></button>
-    </span>
+    <!-- Los tres veredictos ocupan el mismo sitio que las tres acciones
+         secundarias del mock (Añadir a lista / Ver en YouTube / Más): misma
+         forma, contenido real. Siguen siendo botones y no radios: marcar
+         sortea otra cancion al instante, asi que un estado "elegido"
+         quedaria puesto sobre una tarjeta que ya no existe. -->
+    <div class="acciones-secundarias" role="group" aria-label="Qué hago con esta canción">
+      <button id="aprendida" class="btn btn-secondary btn-secundaria" disabled>
+        <svg width="15" height="15" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><polyline points="216 72.005 104 184.005 48 128.005"></polyline></svg>
+        Ya la aprendí <kbd>A</kbd>
+      </button>
+      <button id="descartada" class="btn btn-secondary btn-secundaria" disabled>
+        <svg width="15" height="15" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><line x1="200" y1="56" x2="56" y2="200"></line><line x1="200" y1="200" x2="56" y2="56"></line></svg>
+        No me tinca <kbd>N</kbd>
+      </button>
+      <button id="despues" class="btn btn-secondary btn-secundaria" disabled>
+        <svg width="15" height="15" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" aria-hidden="true"><circle cx="128" cy="128" r="96"></circle><polyline points="128 72 128 128 184 128"></polyline></svg>
+        Después <kbd>D</kbd>
+      </button>
+    </div>
   </section>
     </div>
-    <aside id="panel-ampli" class="panel-ampli" aria-label="Ajustes del Mustang LT25"></aside>
+    <!-- Segunda columna: la lista de pistas, su propia ficha. `app.js` la
+         redibuja sola al cambiar de pista, y por eso el reproductor de
+         YouTube (que vive en la primera) sobrevive al cambio sin trucos. -->
+    <section id="col-pistas" class="col-pistas ficha" aria-label="Pistas de la canción"></section>
+    <aside id="panel-ampli" class="panel-ampli ficha" aria-label="Ajustes del Mustang LT25"></aside>
   </div>
+
+  <!-- Pura ganancia respecto del rediseño anterior: navegar pistas sin
+       soltar el mouse y un recordatorio de los atajos que ya existian.
+       Nada de esto inventa una funcion nueva -- reusa el mismo click que
+       ya manejan las filas de #detalle-pistas. "Sortear de todo" vive aca a
+       la derecha -- el mismo sitio que "Ordenar: canción" en el mock, que no
+       tiene equivalente real (un sorteo no tiene un "orden") y no se porta. -->
+  <footer id="pie-sorteo" class="pie-sorteo" hidden>
+    <div id="pista-nav" class="pista-nav"></div>
+    <div class="pie-sorteo-derecha">
+      <button id="todo" class="btn btn-ghost btn-chico" type="button">Sortear de todo</button>
+      <button id="atajos-abrir" type="button" class="btn btn-ghost btn-chico" aria-expanded="false" aria-controls="atajos-panel">Atajos</button>
+    </div>
+  </footer>
+  <section id="atajos-panel" class="atajos-panel" hidden aria-label="Atajos de teclado">
+    <dl>
+      <div><dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Cambiar de pista</dd></div>
+      <div><dt><kbd>A</kbd></dt><dd>Ya la aprendí</dd></div>
+      <div><dt><kbd>N</kbd></dt><dd>No me tinca</dd></div>
+      <div><dt><kbd>D</kbd></dt><dd>Después</dd></div>
+      <div><dt><kbd>L</kbd></dt><dd>Me gustó</dd></div>
+      <div><dt><kbd>espacio</kbd></dt><dd>Otra canción</dd></div>
+      <div><dt><kbd>E</kbd></dt><dd>Enviar al ampli</dd></div>
+      <div><dt><kbd>/</kbd></dt><dd>Buscar canción o banda</dd></div>
+    </dl>
+  </section>
 </main>
 
 <main id="vista-listas" hidden></main>

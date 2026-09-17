@@ -38,7 +38,12 @@
   --radio: var(--radius-md);
 
   /* Ancho maximo del contenido, heredado del ajuste anterior. */
-  --ancho: 94rem;
+  /* 105rem (1680px), no 94 (1504px): a 94 sobraba casi 400px de fondo a cada
+     lado en un monitor de 1900px de ancho -- el mock (~1670px) casi no deja
+     margen. 105 se queda justo bajo los 1700px que exige el test de
+     "en un monitor ancho..." (2560px, columnas ≤ 1700px), asi que sigue sin
+     estirarse sin limite en pantallas ultra anchas. */
+  --ancho: 105rem;
 }
 
 * { box-sizing: border-box; }
@@ -97,14 +102,12 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 .dificultad-filtro button[aria-pressed="true"] { background: var(--acento); color: var(--fondo); }
 .dificultad-filtro span { color: var(--tenue); font-size: var(--t-chico); margin-left: var(--e1); }
 .barra-controles .calzan { margin-left: auto; padding: 0; border: 0; }
-.columnas { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: var(--e4); align-items: start; }
-.columnas .tarjeta { margin-bottom: 0; }
-.panel-ampli { position: sticky; top: var(--e3); background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); padding: var(--e3); }
+/* El bloque de `.columnas` / `.panel-ampli` de la capa vieja se borro: todo
+   lo suyo lo redefine la seccion del rediseño... menos `position: sticky`,
+   que no lo redefinia nadie y seguia colandose. Un panel sticky dentro de un
+   grid de fichas de igual altura no tiene sentido y era parte de por que la
+   tercera columna se veia desalineada. */
 .panel-ampli:empty { display: none; }
-.panel-ampli h2, .panel-ampli h3 { margin: 0 0 var(--e2); font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .08em; color: var(--acento); }
-.panel-ampli h3 { color: var(--tenue); margin-top: var(--e3); }
-.perillas-panel { display: grid; gap: var(--e2); }
-.cadena-panel { margin-top: 0; }
 .controles label {
   display: flex; align-items: center; gap: var(--e3);
   font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .06em;
@@ -155,42 +158,13 @@ nav button.activo { color: var(--acento); font-weight: 600; }
    poder ver por que salio esta cancion y cual pista no fue el motivo. */
 .pistas option.no-califica { opacity: .6; }
 
-/* Lista siempre visible: sus filas son botones para teclado y puntero. */
-.pistas-lista { border: 1px solid var(--borde); border-radius: var(--radio); overflow-y: auto; max-height: 22rem; }
-.pistas-titulo { margin: 0; padding: var(--e2) var(--e3); font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .08em; color: var(--tenue); border-bottom: 1px solid var(--borde); }
-.grupo-pistas h3 { margin: 0; padding: var(--e2) var(--e3); color: var(--acento); font-size: var(--t-micro); letter-spacing: .06em; }
-.grupo-pistas h3 span { color: var(--tenue); }
-.fila-pista { width: 100%; display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) auto; gap: var(--e1) var(--e2); align-items: center; text-align: left; padding: var(--e2) var(--e3); border: 0; border-top: 1px solid var(--borde); background: transparent; color: var(--texto); font: inherit; cursor: pointer; }
-.fila-pista b { color: var(--tenue); font-variant-numeric: tabular-nums; }
-.fila-pista .nombre-pista { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fila-pista small { grid-column: 2; color: var(--tenue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fila-pista em { grid-column: 3; grid-row: 1 / 3; font-style: normal; color: var(--tenue); font-size: var(--t-micro); }
-.fila-pista.elegida { background: color-mix(in srgb, var(--acento) 16%, transparent); }
-.fila-pista.fuera-filtro { opacity: .58; }
-
-/* --- Medidor de dificultad: el dato que decide si intentas la cancion ----- */
-.dificultad { display: flex; align-items: center; gap: var(--e3); }
-.medidor { display: flex; gap: 3px; }
-.medidor i {
-  width: 1rem; height: .375rem; border-radius: 1px;
-  background: var(--relieve);
-}
-.medidor i.on { background: var(--acento); }
-.dificultad .valor {
-  font-size: var(--t-medio); font-weight: 600; font-variant-numeric: tabular-nums;
-}
-.dificultad .valor small { color: var(--tenue); font-weight: 400; font-size: var(--t-chico); }
-.dificultad .instrumento { color: var(--tenue); font-size: var(--t-chico); margin-left: auto; }
-
-/* --- Afinacion: aviso accionable, no un atributo mas --------------------- */
-.aviso-afinacion {
-  display: flex; align-items: center; gap: var(--e2);
-  margin: 0; padding: var(--e2) var(--e3);
-  background: color-mix(in srgb, var(--acento) 12%, transparent);
-  border-left: 3px solid var(--acento); border-radius: 0 var(--radio) var(--radio) 0;
-  color: var(--acento); font-size: var(--t-chico); font-weight: 600;
-}
-.aviso-afinacion svg { flex: none; }
+/* La lista de pistas, su medidor y el aviso de afinacion vivian aqui en la
+   capa PRE-Nocturne. Se borraron enteros: la version viva esta mas abajo, en
+   la seccion del rediseño, y estos se limitaban a pelearle en silencio --
+   `max-height: 22rem` cortaba la lista a la mitad dentro de una ficha que
+   tenia sitio de sobra, igual que `.acciones button` le robaba el color al
+   CTA. El aviso de afinacion y `.dificultad` ademas ya no los dibuja nadie:
+   ningun modulo de public/ emite esas clases. */
 
 /* --- Chips: bajan de jerarquia para no competir con lo anterior ---------- */
 .meta { display: flex; flex-wrap: wrap; gap: var(--e1) var(--e2); }
@@ -211,35 +185,34 @@ nav button.activo { color: var(--acento); font-weight: 600; }
 .tarjeta a:hover { text-decoration-color: var(--acento); }
 .vacio { color: var(--tenue); text-align: center; padding: var(--e5) 0; }
 
-/* --- Acciones ------------------------------------------------------------ */
-.acciones { display: flex; flex-wrap: wrap; gap: var(--e2); }
-.acciones button {
-  background: var(--relieve); border: 1px solid transparent; color: var(--texto);
-  padding: var(--e2) var(--e3); border-radius: var(--radio);
-  font: inherit; font-size: var(--t-chico); cursor: pointer;
-  transition: background .15s var(--curva), border-color .15s var(--curva), opacity .15s var(--curva);
-}
-.acciones button:hover:not(:disabled) { background: var(--borde); }
-.acciones button:disabled { opacity: .35; cursor: default; }
-.acciones .principal {
-  margin-left: auto; background: var(--acento); color: var(--fondo); font-weight: 600;
-}
-.acciones .principal:hover:not(:disabled) { background: color-mix(in srgb, var(--acento) 85%, white); }
-.acciones .like { font-size: var(--t-medio); line-height: 1; padding: var(--e2) var(--e3); }
-.acciones .like.marcado { color: #e2585b; }
+/* --- Acciones --------------------------------------------------------------
+   El `.acciones` de la capa vieja (`.acciones button`, `.acciones .principal`,
+   `.acciones .like`) se borro entero: era para el layout PRE-Nocturne de esta
+   misma seccion, nadie mas usa la clase `.acciones` (es la unica en todo
+   public/), y su `.acciones button` --especificidad (0,1,1)-- le ganaba en
+   silencio a `.btn-primary`/`.btn-cta` --(0,1,0)-- pintando "Otra cancion" con
+   el fondo y el texto de un boton generico en vez del CTA solido. La version
+   Nocturne vive mas abajo, junto al resto de la tarjeta. */
 kbd { border: 1px solid var(--borde); border-radius: var(--e1); padding: 0 var(--e1); color: var(--tenue); font: var(--t-micro) inherit; }
 
 /* --- Listas -------------------------------------------------------------- */
-.lista { margin-bottom: var(--e5); }
+/* Esta vista quedo fuera del rediseño (asi lo dice su spec), pero desde que
+   Sortear son fichas se veia como otra app: filas sueltas de 1680px de ancho
+   sobre el fondo pelado. Recibe la MISMA ficha, sin tocar su estructura. */
+.lista {
+  margin-bottom: 20px; padding: 22px;
+  background: var(--color-surface); border: 1px solid var(--color-borde-ficha); border-radius: 18px;
+}
 .lista h3 {
-  margin: 0 0 var(--e2); font-size: var(--t-micro); font-weight: 600;
-  text-transform: uppercase; letter-spacing: .08em; color: var(--acento);
+  margin: 0 0 12px; font-size: 15px; font-weight: 500;
+  text-transform: none; letter-spacing: -0.01em; color: var(--color-text);
 }
 .lista ol { list-style: none; margin: 0; padding: 0; }
 .lista li {
   display: flex; align-items: center; gap: var(--e3);
-  padding: var(--e2) 0; border-bottom: 1px solid var(--borde); font-size: var(--t-chico);
+  padding: 11px 4px; border-bottom: 1px solid var(--color-borde-ficha); font-size: 13.5px;
 }
+.lista li:last-child { border-bottom: 0; }
 .lista li a { color: var(--texto); text-decoration: none; }
 .lista li a:hover { color: var(--acento); text-decoration: underline; }
 .lista li .dif { color: var(--tenue); font-variant-numeric: tabular-nums; }
@@ -306,14 +279,11 @@ kbd { border: 1px solid var(--borde); border-radius: var(--e1); padding: 0 var(-
 .ampli-conectar.conectado { color: var(--acento); border-color: var(--acento); }
 
 .envio { margin: var(--e2) 0 0; display: flex; align-items: center; gap: var(--e2); }
-.enviar-ampli {
-  background: var(--relieve); border: 0; color: var(--texto);
-  padding: var(--e1) var(--e3); border-radius: var(--radio);
-  font: inherit; font-size: var(--t-chico); cursor: pointer;
-  transition: background .15s var(--curva);
-}
-.enviar-ampli:hover:not(:disabled) { background: var(--borde); }
-.enviar-ampli:disabled { opacity: .5; cursor: default; }
+/* El `.enviar-ampli` de la capa vieja se borro por la misma razon que
+   `.acciones button`: pintaba el boton de enviar con el fondo gris del
+   sistema anterior y le ganaba a `.btn-primary` -- `nocturne.css` se carga
+   ANTES, asi que a igual especificidad ganaba lo de aqui. La version viva
+   esta en la seccion del rediseño. */
 .envio-estado { font-size: var(--t-micro); color: var(--tenue); }
 .envio-estado.ok { color: var(--acento); }
 .envio-estado.mal { color: #e2585b; }
@@ -402,10 +372,6 @@ kbd { border: 1px solid var(--borde); border-radius: var(--e1); padding: 0 var(-
 
 /* --- Filtro por bandas ---------------------------------------------------- */
 
-.bandas { grid-column: 1 / -1; display: grid; gap: var(--e2); }
-.bandas > label { font-size: var(--t-micro); color: var(--tenue);
-  text-transform: uppercase; letter-spacing: .08em; }
-
 /* El desplegable se posiciona contra este contenedor, no contra los controles,
    para que no empuje la tarjeta hacia abajo al aparecer. */
 .banda-buscador, .cancion-caja { position: relative; }
@@ -462,7 +428,13 @@ kbd { border: 1px solid var(--borde); border-radius: var(--e1); padding: 0 var(-
 @media (prefers-reduced-motion: no-preference) {
   .banda-sug { animation: aparece .12s var(--curva); }
 }
-@media (max-width: 60rem) { .columnas { grid-template-columns: minmax(0, 1fr); } .panel-ampli { position: static; } }
+/* 68rem (1088px) y no 60rem: por debajo de eso, identidad+lista de pistas ya
+   no caben lado a lado (el titulo llega a su max-width de 420px igual, y con
+   tags/enlaces reales -- no el fixture corto de los tests -- se APILAN) y la
+   columna se quedaba mas baja de lo que su contenido apilado necesitaba,
+   pintando la lista encima de las acciones. Apilar TODO (esta regla) en vez
+   de dejar una columna angosta a medias es la misma decision que ya regia
+   por debajo de 60rem, adelantada al punto real donde deja de alcanzar. */
 @media (max-width: 38rem) { body { padding: var(--e3); } .barra-controles .calzan { width: 100%; margin-left: 0; } }
 
 /* ===========================================================================
@@ -488,11 +460,31 @@ body {
   background: radial-gradient(120% 70% at 18% -10%, #1d2033 0%, var(--color-bg) 60%);
 }
 body > main { flex: 1; min-height: 0; overflow-y: auto; }
+/* Las otras dos vistas no tenian NADA de esto: cuando la capa vieja dejo de
+   ponerle padding al `body`, "Mis listas" y el editor se quedaron pegados al
+   borde de la ventana y estirados a lo ancho del monitor. Comparten el mismo
+   ancho y sangrado que la cabecera y las columnas. */
+#vista-listas, #vista-editor {
+  width: 100%; margin: 0 auto; padding: 22px 28px 28px;
+}
+/* Mas angosta que Sortear: son listas de una linea, y a 1680px el titulo
+   queda a un lado de la pantalla y el boton al otro. */
+#vista-listas { max-width: 68rem; }
+#vista-editor { max-width: var(--ancho); }
 
 /* El alto se reparte, no se calcula: filtros arriba, acciones abajo, y las dos
    columnas se quedan con lo que sobre. `min-height: 0` es lo que permite que la
-   fila encoja por debajo de su contenido. */
-#vista-sorteo { display: flex; flex-direction: column; overflow: hidden; }
+   fila encoja por debajo de su contenido.
+
+   `overflow-y: auto`, no `hidden`: heredaba `hidden` de esta misma regla
+   antes, asumiendo que las dos columnas (que ya scrollean por su cuenta)
+   siempre alcanzaban a repartirse el alto exacto. Medido contra el catalogo
+   real no es cierto -- un preset "dudoso" o sin ampli conectado agregan una
+   linea al panel que el otro lado no tiene, y esos pocos pixeles de mas
+   quedaban recortados SIN scroll para llegar a ellos (`overflow: hidden` no
+   deja rastro). Con `auto`, la vista entera es el ultimo respaldo: no
+   aparece scrollbar mientras todo quepa, que es el caso comun. */
+#vista-sorteo { display: flex; flex-direction: column; overflow-y: auto; }
 #vista-sorteo .columnas { flex: 1; min-height: 0; }
 /* Si una columna no cabe, scrollea ELLA. Dos regiones lado a lado, no anidadas,
    y la pagina de alrededor sigue quieta. */
@@ -512,7 +504,27 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
      pantalla. */
   align-items: stretch;
 }
-.fila-marca { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+/* Grid de 3 columnas, no flex: asi el buscador (columna central) queda
+   centrado en la fila de verdad, en vez de corrido hacia la marca -- que el
+   mock si centra. */
+.fila-marca { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 20px; }
+/* `flex-wrap` explicito: a un ancho angosto, nav + tema + perfil juntos no
+   caben en una linea al lado del buscador. Envolver dentro de esta MISMA
+   celda del grid (no una fila nueva del header) alcanza porque la celda
+   "auto" se encoge al ancho de su linea mas larga en vez de forzar las tres
+   piezas a compartir una sola. */
+.cabecera-controles { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px 20px; justify-self: end; }
+/* Las pestañas viven en esta misma fila -- al lado del buscador, como en el
+   mock -- y no en una fila propia debajo. */
+.cabecera-controles nav { display: flex; align-items: center; gap: 24px; margin: 0; }
+.cabecera-controles nav button {
+  font: inherit; font-size: 13.5px; color: var(--color-neutral-500);
+  background: transparent; border: 0; padding: 4px 0; cursor: pointer;
+  white-space: nowrap; border-radius: 0;
+}
+.cabecera-controles nav button:hover { color: var(--color-text); background: transparent; }
+/* La pestaña viva se marca con un subrayado, que es la linea del sistema. */
+.cabecera-controles nav button.activo { color: var(--color-text); box-shadow: inset 0 -2px 0 var(--color-accent); }
 .marca {
   font-family: var(--font-heading); font-weight: 600; font-size: 16px;
   letter-spacing: -0.02em; color: var(--color-text); white-space: nowrap;
@@ -521,17 +533,18 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .marca span { color: var(--color-accent); }
 
 .cabecera-app .cancion-buscador {
-  flex: 1 1 240px; min-width: 200px; max-width: 380px;
-  display: flex; align-items: center; gap: 9px; position: relative;
-  padding: 0 13px; min-height: 36px; margin: 0;
-  background: transparent; border: 1px solid var(--color-divider); border-radius: 999px;
+  width: 100%; min-width: 200px; max-width: 520px; justify-self: center;
+  display: flex; align-items: center; gap: 11px; position: relative;
+  padding: 0 16px; min-height: 44px; margin: 0;
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  border: 1px solid var(--color-borde-ficha); border-radius: 12px;
 }
 .cabecera-app .cancion-buscador:hover { border-color: color-mix(in srgb, var(--color-text) 30%, transparent); }
 .cabecera-app .cancion-buscador:focus-within { border-color: var(--color-accent); }
 .buscar-icono { color: var(--color-neutral-500); flex: none; }
 #cancion-q {
   flex: 1; min-width: 0; background: transparent; border: 0; padding: 0;
-  min-height: 34px; font: inherit; font-size: 13.5px; color: var(--color-text);
+  min-height: 42px; font: inherit; font-size: 14.5px; color: var(--color-text);
   caret-color: var(--color-accent);
 }
 #cancion-q::placeholder { color: var(--color-neutral-500); }
@@ -540,85 +553,193 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
   border: 1px solid var(--color-divider); border-radius: 3px; padding: 0 4px;
 }
 
-.fila-marca .calzan {
-  margin: 0 0 0 auto; padding: 0; border: 0;
-  font-size: 12.5px; color: var(--color-text); white-space: nowrap;
+/* Decorativo: no hay tema claro implementado. `aria-disabled`, no `disabled`
+   -- sigue siendo enfocable con teclado, para que su `title` se pueda leer,
+   pero no lleva `addEventListener` en app.js: no finge una funcion que no
+   tiene. */
+.tema-toggle { margin-left: auto; color: var(--color-neutral-500); opacity: .7; cursor: default; }
+.tema-toggle:hover { background: transparent; }
+
+/* El chip de perfil junta lo que antes eran dos controles sueltos (el
+   contador y "Conectar ampli"): un boton con el conteo, y un desplegable
+   con el estado real del equipo. */
+.perfil { position: relative; }
+.perfil-chip {
+  display: flex; align-items: center; gap: 8px; min-height: 36px;
+  padding: 4px 10px 4px 4px; border: 1px solid var(--color-divider); border-radius: 999px;
+  background: transparent; color: var(--color-text); font: inherit; cursor: pointer; white-space: nowrap;
 }
+.perfil-chip:hover { border-color: color-mix(in srgb, var(--color-text) 30%, transparent); }
+.perfil-chip[aria-expanded="true"] { border-color: var(--color-accent); }
+.perfil-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: var(--color-neutral-700); color: var(--color-neutral-300);
+}
+.perfil-chip .calzan { margin: 0; padding: 0; border: 0; font-size: 12.5px; color: var(--color-text); }
+.perfil-chevron { color: var(--color-neutral-500); flex: none; }
+.perfil-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 5; min-width: 200px;
+  padding: 8px; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-md);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.perfil-conectado { margin: 0; padding: 8px 10px; font-size: 12.5px; color: var(--color-accent-300); }
 /* WebHID exige un gesto del usuario, asi que el boton tiene que existir; el
    diseño da el ampli por conectado y no le reserva sitio, de modo que solo
    aparece mientras NO lo esta. */
-.ampli-conectar { display: flex; align-items: center; gap: 7px; font-size: 12.5px; white-space: nowrap; }
+.ampli-conectar { display: flex; align-items: center; gap: 7px; font-size: 12.5px; white-space: nowrap; width: 100%; justify-content: flex-start; }
 .ampli-conectar .punto { width: 6px; height: 6px; border-radius: 50%; background: var(--color-neutral-600); flex: none; }
 .ampli-conectar.conectado { display: none; }
 
-/* --- Pestañas y filtros --------------------------------------------------- */
-.fila-pestanas {
-  display: flex; align-items: center; gap: 24px; margin-top: 12px;
-  flex-wrap: wrap; box-shadow: inset 0 -1px 0 var(--color-divider);
-}
-.fila-pestanas nav { display: flex; align-items: center; gap: 24px; margin: 0; }
-.fila-pestanas nav button {
-  font: inherit; font-size: 13.5px; color: var(--color-neutral-500);
-  background: transparent; border: 0; padding: 0 0 10px; cursor: pointer;
-  white-space: nowrap; border-radius: 0;
-}
-.fila-pestanas nav button:hover { color: var(--color-text); background: transparent; }
-/* La pestaña viva se marca con un subrayado, que es la linea del sistema. */
-.fila-pestanas nav button.activo { color: var(--color-text); box-shadow: inset 0 -2px 0 var(--color-accent); }
+.stats { font-size: 12px; color: var(--color-neutral-500); }
 
-.filtros { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-wrap: wrap; }
-.filtros .pastilla {
-  width: auto; min-height: 28px; padding: 2px 20px 2px 9px; font-size: 12.5px;
-  border-radius: 999px; background-color: transparent; color: var(--color-neutral-300);
+/* --- Fila de bandas: siempre visible, como el mock -------------------------
+   Reemplaza el disparador "Bandas ▾" de la primera pasada: el buscador, las
+   pastillas rapidas y la dificultad viven todos en esta misma fila, sin un
+   clic de mas para verlos. Dos lineas, como en la captura: el rotulo arriba,
+   los controles abajo. */
+.fila-bandas {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 28px 16px; box-shadow: inset 0 -1px 0 var(--color-borde-ficha);
+}
+/* En la MISMA linea que el buscador, a su izquierda -- como el mock. */
+.fila-bandas-rotulo { margin: 0; font-size: 14.5px; color: var(--color-neutral-300); white-space: nowrap; flex: none; }
+.fila-bandas-controles { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* El filete que el mock pone entre el buscador y las pastillas. */
+.fila-bandas-separador { width: 1px; align-self: stretch; min-height: 24px; background: var(--color-divider); flex: none; }
+.modo-select {
+  width: auto; min-height: 38px; padding: 2px 24px 2px 12px; font-size: 13px;
+  border: 1px solid var(--color-borde-ficha); border-radius: 10px; background-color: transparent; color: var(--color-neutral-300);
   cursor: pointer;
 }
-/* Un rango es UN control: los dos extremos comparten pastilla y rotulo. */
-.filtros .rango {
-  display: flex; align-items: center; gap: 4px; padding-left: 10px;
-  border: 1px solid var(--color-divider); border-radius: 999px; white-space: nowrap;
+.banda-buscador {
+  position: relative; flex: 1 1 200px; min-width: 140px; max-width: 300px;
+  display: flex; align-items: center; gap: 9px;
+  min-height: 38px; padding: 0 13px; border: 1px solid var(--color-borde-ficha); border-radius: 10px;
 }
-.filtros .rango-rotulo { font-size: 12px; color: var(--color-neutral-500); }
-.filtros .rango select {
-  width: auto; min-height: 26px; padding: 2px 17px 2px 4px; font-size: 12.5px;
+.banda-buscador:focus-within { border-color: var(--color-accent); }
+.banda-buscador .buscar-icono { color: var(--color-neutral-500); flex: none; }
+.banda-buscador #banda-q {
+  flex: 1; min-width: 0; background: transparent; border: 0; padding: 0;
+  min-height: 28px; font: inherit; font-size: 12.5px; color: var(--color-text);
+  caret-color: var(--color-accent);
+}
+.banda-buscador #banda-q::placeholder { color: var(--color-neutral-500); }
+
+/* Las pastillas rapidas: "Todas" + las bandas con mas canciones. A lo mas UNA
+   se ve marcada -- ver el comentario de `pintarPillsBandas()` en app.js. */
+.banda-pills { display: flex; flex-wrap: wrap; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.pill-banda {
+  min-height: 38px; padding: 6px 20px; font: inherit; font-size: 13.5px;
+  border: 1px solid var(--color-borde-ficha); border-radius: 10px;
+  background: transparent; color: var(--color-neutral-300); cursor: pointer; white-space: nowrap;
+}
+.pill-banda:hover { border-color: color-mix(in srgb, var(--color-text) 24%, transparent); color: var(--color-text); }
+.pill-banda.activa { border-color: var(--color-accent); color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+
+/* Un rango es UN control: los dos extremos comparten pastilla y rotulo, y se
+   leen como un solo desplegable ("Dificultad 1 – 10"), igual que el mock. */
+.rango {
+  display: flex; align-items: center; gap: 5px; padding-left: 14px; margin-left: auto;
+  border: 1px solid var(--color-borde-ficha); border-radius: 10px; white-space: nowrap;
+}
+.rango-rotulo { font-size: 13.5px; color: var(--color-neutral-300); }
+.rango select {
+  width: auto; min-height: 36px; padding: 2px 20px 2px 5px; font-size: 13.5px;
   border: 0; background-color: transparent; color: var(--color-neutral-200); cursor: pointer;
 }
-.filtros .guion { font-size: 12px; color: var(--color-neutral-600); }
+.guion { font-size: 13px; color: var(--color-neutral-500); }
 
-/* --- El cuerpo ------------------------------------------------------------ */
+/* Las fichas de bandas elegidas por el buscador (mas de una a la vez): van
+   debajo de la fila, y solo ocupan sitio cuando hay alguna. */
+#banda-fichas { padding: 0 28px; }
+#banda-fichas:not(:empty) { padding-bottom: 10px; box-shadow: inset 0 -1px 0 var(--color-divider); }
+
+/* --- El cuerpo: tres fichas, una por columna ------------------------------ */
+/* Proporciones del mock: la identidad y las pistas casi parejas, el ampli un
+   poco mas angosto y con tope, para que en un monitor ancho no se estire
+   hasta quedar vacio por dentro. */
 .columnas {
   flex: 1; width: 100%; max-width: var(--ancho); margin: 0 auto;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  gap: 32px; align-items: stretch; padding: 16px 28px 28px;
+  /* 1.14 : 1.06 : 1 -- las proporciones medidas sobre el mock (566 · 525 ·
+     496 px de sus tres fichas). */
+  display: grid; grid-template-columns: minmax(0, 1.14fr) minmax(0, 1.06fr) minmax(340px, 500px);
+  gap: 20px; align-items: stretch; padding: 16px 28px 24px;
 }
-/* La columna de la cancion se estira a todo el alto y scrollea por dentro si
-   hace falta; el panel del ampli no, que es una ficha y estirarla solo alarga
-   el fondo. */
-#panel-ampli { align-self: start; }
-.col-cancion { display: flex; flex-direction: column; gap: 18px; min-width: 0; min-height: 0; }
 
-/* La tarjeta ENVUELVE: identidad y lista de pistas van lado a lado cuando hay
-   sitio, y se apilan cuando no. Es lo que deja la lista ancha sin estrechar el
-   titulo, que a 54px necesita su propio espacio. */
+/* La ficha: el mismo fondo, el mismo borde y el mismo radio en las tres
+   columnas. Es lo que hace que se lean como tres columnas y no como texto
+   suelto al lado de dos cajas. Las tres se estiran a la misma altura
+   (`align-items: stretch` del grid) y cada una scrollea POR DENTRO si su
+   contenido no cabe -- por eso ninguna se desborda por abajo ni empuja al
+   pie de pagina. */
+.ficha {
+  --pad-ficha: 26px;
+  min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--color-surface); border: 1px solid var(--color-borde-ficha);
+  border-radius: 18px; padding: var(--pad-ficha);
+}
+/* Barra de scroll discreta: la ficha ya es oscura y una barra clara de
+   sistema le rompe el borde redondeado. */
+.ficha { scrollbar-width: thin; scrollbar-color: var(--color-neutral-800) transparent; }
+
+/* Sin cancion no hay pistas ni ampli que mostrar: esas dos fichas se quitan
+   en vez de quedar en blanco, y la del mensaje pasa a ocupar el ancho -- tres
+   columnas donde dos estan vacias no dicen nada, solo parecen rotas. */
+#col-pistas:empty { display: none; }
+/* Una sola ficha, centrada y de ancho de lectura -- no estirada a los 1680px
+   de las tres, que para un mensaje de una linea se ve como un error. */
+.columnas:has(#col-pistas:empty) { grid-template-columns: minmax(0, 620px); justify-content: center; }
+.columnas:has(#col-pistas:empty) .vacio { padding: 40px 0 0; }
+
+.col-cancion { position: relative; display: flex; flex-direction: column; gap: 18px; }
+/* Un item de flex se encoge antes de dejar scrollear a su contenedor, y
+   encogido sigue pintando su contenido a tamaño real ENCIMA de lo que venga
+   despues. Con esto se quedan con su alto de contenido y es la ficha la que
+   scrollea. */
+.col-cancion > * { flex-shrink: 0; }
+/* La CTA y los tres veredictos se van al fondo de la ficha, como en el mock:
+   el hueco que sobra queda entre las etiquetas y los botones, no debajo de
+   ellos. */
+.col-cancion .acciones { margin-top: auto; }
+
 .columnas .tarjeta {
-  display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start;
-  gap: 24px 32px; min-width: 0;
+  display: block; min-width: 0;
   background: transparent; border: 0; border-radius: 0; padding: 0; margin: 0;
 }
+.col-pistas { display: flex; flex-direction: column; }
 
 /* --- La cancion ----------------------------------------------------------- */
-/* La identidad y el video son la parte estrecha de la fila. */
+/* Ya no compite por ancho con la lista de pistas: la ficha entera es suya. */
 .cancion-cabecera {
-  flex: 1 1 300px; max-width: 420px; min-width: 0;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 22px;
+  min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
 }
 .cancion-identidad { min-width: 0; width: 100%; }
 .cancion-identidad .artista {
-  font-size: 13px; letter-spacing: 0.02em; color: var(--color-neutral-400); margin: 0 0 2px;
+  font-size: 14px; letter-spacing: 0.01em; color: var(--color-neutral-400); margin: 0 0 6px;
 }
 .cancion-identidad h2 {
-  font-size: 54px; letter-spacing: -0.03em; margin: 0 0 8px; color: var(--color-text);
+  /* Fluido: se adapta al ancho real de la ficha en vez de saltar de golpe en
+     un breakpoint -- asi un titulo corto se ve grande como en el mock y uno
+     largo no obliga a partirlo en tres lineas. */
+  font-size: clamp(30px, 3.4vw, 54px); line-height: 1.04;
+  letter-spacing: -0.03em; margin: 0 0 16px; color: var(--color-text); font-weight: 600;
+  /* El catalogo trae titulos sin un solo espacio donde partir --
+     "DᐳEᐳAᐳTᐳHᐳMᐳEᐳTᐳAᐳL" es real-- y a 54px uno de esos es mas ancho que la
+     ficha entera. `anywhere` los parte por donde sea antes que desbordar. */
+  overflow-wrap: anywhere;
 }
-.cancion-cuenta { font-size: 13px; color: var(--color-neutral-400); margin: 0; }
+.cancion-identidad .artista { overflow-wrap: anywhere; }
+.cancion-cuenta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--color-neutral-400); margin: 0; }
+/* La pastilla de dificultad: de la pista ELEGIDA (vista-sortear.js), no un
+   promedio inventado -- cada pista trae la suya. */
+.badge-dificultad {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent-300); font-size: 13px; font-weight: 500; white-space: nowrap;
+}
+.badge-dificultad svg { color: var(--color-accent); }
 .cancion-identidad .enlaces { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0 0; }
 .cancion-identidad .enlaces a { font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 .cancion-identidad .enlaces a:hover { color: var(--color-accent-300); }
@@ -628,6 +749,12 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
   padding: 3px 10px; border-radius: calc(var(--radius-md) * 0.75); border: 0;
   background: color-mix(in srgb, var(--color-text) 7%, transparent);
   color: var(--color-neutral-300); white-space: nowrap;
+  /* Algunas etiquetas del catalogo son en realidad varias pegadas con ';'
+     ("alternative metal;funk metal;heavy metal;..."), sin espacios donde
+     partir -- el flex-wrap del padre no puede envolver un solo item mas
+     ancho que el. Se trunca con elipsis, igual que ya hacen los nombres de
+     pista largos: se ve, no revienta el layout. */
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* El video es una pastilla, no un cartel: es lo menos funcional de la tarjeta y
@@ -650,108 +777,260 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .preview.reproduciendo iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--radius-lg); }
 
 /* --- La lista de pistas --------------------------------------------------- */
-.pistas-lista {
-  flex: 3 1 460px; min-width: 0;
-  /* `max-height` anula el tope de la capa vieja (22rem), que con el `overflow`
-     de aqui dejaba dos de seis pistas recortadas y SIN barra para llegar a
-     ellas. La lista crece con la cancion; quien scrollea, si no cabe, es la
-     columna. En horizontal se sigue recortando: es lo que redondea las
-     esquinas de las filas. */
-  max-height: none; overflow-x: hidden; overflow-y: auto;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
-  box-shadow: var(--shadow-sm);
-}
+/* Ya no lleva fondo ni borde propios: la ficha de la columna ES la caja, y la
+   que scrollea cuando la cancion trae mas pistas de las que caben. Sin tope
+   de alto: el tope lo pone la ficha. */
+.pistas-lista { min-width: 0; display: flex; flex-direction: column; }
+/* Cabecera del mock: titulo normal a la izquierda, cuenta tenue a la derecha,
+   y una regla debajo que la separa de las filas. */
 .pistas-titulo {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  margin: 0; padding: 13px 16px 11px;
-  font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--color-neutral-400); font-family: var(--font-heading);
+  margin: 0 0 4px; padding: var(--pad-ficha, 0px) 4px 14px;
+  font-size: 17px; letter-spacing: -0.01em; text-transform: none; font-weight: 500;
+  color: var(--color-text); font-family: var(--font-heading);
+  border-bottom: 1px solid var(--color-borde-ficha);
+  /* La lista scrollea (ver `ajustarDensidad()` en app.js: esta columna queda
+     fuera de la densidad a proposito) y la cabecera se queda clavada arriba.
+
+     El relleno de arriba es el de la ficha, y la ficha se lo quita: asi el
+     fondo de la cabecera llega hasta el borde y las filas no asoman por el
+     hueco al pasar por debajo. La version anterior lo hacia con un margen
+     negativo que se anulaba con este relleno, y era un error silencioso --
+     `sticky` no mueve a los hermanos, asi que la cabecera se pintaba 26px mas
+     abajo de donde el flujo la habia dejado y TAPABA la primera fila.
+     Reproducible con "Fight Fire With Fire", que trae 9 pistas. */
+  position: sticky; top: 0; z-index: 1; background: var(--color-surface);
 }
-.pistas-titulo span { font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--color-neutral-600); }
+#col-pistas { padding-top: 0; }
+.pistas-titulo span { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--color-neutral-500); font-weight: 400; }
+/* Los grupos por instrumento se quedan (dicen por que una pista suena
+   distinta a la de al lado) pero en el tono mas callado posible: el mock
+   lista plano y esto no debe competir con los nombres de pista. */
+/* neutral-500 y no 600/700: medido contra la ficha (#171a24) el 600 da 4.03:1
+   y el 700 2.65:1 -- por debajo del 4.5:1 que pide AA para texto chico. El
+   500 da 6.00:1. Discreto no es lo mismo que ilegible. */
 .grupo-pistas h3 {
-  display: flex; align-items: center; gap: 8px; margin: 0;
-  padding: 9px 16px; background: color-mix(in srgb, var(--color-text) 3%, transparent);
-  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--color-neutral-400); font-family: var(--font-body);
+  display: flex; align-items: center; gap: 7px; margin: 0;
+  padding: 14px 4px 6px; background: none;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--color-neutral-500); font-family: var(--font-body); font-weight: 500;
 }
-/* El punto de color dice a que familia pertenece el grupo sin gastar palabras. */
-.grupo-pistas h3::before {
-  content: ''; width: 5px; height: 5px; border-radius: 50%;
-  background: var(--color-neutral-400); flex: none;
-}
-.grupo-pistas[data-familia="DISTORSIÓN"] h3::before { background: var(--color-accent); }
-.grupo-pistas[data-familia="LIMPIA"] h3::before { background: var(--color-accent-2); }
-.grupo-pistas h3 span { font-size: 10.5px; letter-spacing: 0; color: var(--color-neutral-600); }
+.grupo-pistas:first-child h3 { padding-top: 6px; }
+.grupo-pistas h3 span { font-size: 10px; letter-spacing: 0; color: var(--color-neutral-500); }
 
 .fila-pista {
   width: 100%; display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto auto;
-  align-items: center; gap: 0 14px; padding: 11px 16px;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 2px 14px; padding: 14px 18px;
   text-align: left; border: 0; background: transparent; cursor: pointer;
   font: inherit; color: var(--color-text);
   box-shadow: inset 2px 0 0 transparent;
 }
-.fila-pista:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
-.fila-pista b {
-  grid-row: 1 / 3; text-align: right; font-size: 12px; font-weight: 400;
-  color: var(--color-neutral-600); font-variant-numeric: tabular-nums;
+.fila-pista:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.fila-pista + .fila-pista, .grupo-pistas + .grupo-pistas .fila-pista:first-of-type {
+  box-shadow: inset 2px 0 0 transparent, inset 0 1px 0 var(--color-borde-ficha);
 }
-.fila-pista .nombre-pista { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* El numero no es decoracion: es la posicion que prometen los atajos 1-9, asi
+   que tiene que leerse (neutral-500 = 6.00:1, AA). */
+.fila-pista b {
+  grid-row: 1 / 3; text-align: center; font-size: 13px; font-weight: 400;
+  color: var(--color-neutral-500); font-variant-numeric: tabular-nums;
+}
+.fila-pista .nombre-pista { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fila-pista small {
-  grid-column: 2; font-size: 11.5px; color: var(--color-neutral-500);
+  grid-column: 2; font-size: 12.5px; color: var(--color-neutral-500);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .fila-pista em {
   grid-column: 3 / 5; grid-row: 1 / 3; font-style: normal;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 12px;
 }
-/* La elegida se marca con un filo y un tinte, nunca con un relleno macizo. */
-.fila-pista.elegida { background: color-mix(in srgb, var(--color-accent) 10%, transparent); box-shadow: inset 2px 0 0 var(--color-accent); }
-.fila-pista.elegida b { color: var(--color-accent-300); }
-.fila-pista.elegida .nombre-pista { color: var(--color-accent-200); }
+/* La elegida: filo naranja a la izquierda y un tinte que se apaga hacia la
+   derecha, como el mock. Su numero y su medidor tambien pasan a naranja --
+   es la unica fila donde el acento primario manda. */
+.fila-pista.elegida {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 85%);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+  border-radius: 0 10px 10px 0;
+}
+.fila-pista.elegida + .fila-pista { box-shadow: inset 2px 0 0 transparent; }
+.fila-pista.elegida b { color: var(--color-accent); font-weight: 600; }
+.fila-pista.elegida .nombre-pista { color: var(--color-text); }
+.fila-pista.elegida .medidor i.on { background: var(--color-accent); }
 .fila-pista.fuera-filtro { opacity: .58; }
 .fuera-etiqueta {
   font-size: 10px; padding: 2px 7px; border-radius: calc(var(--radius-md) * 0.75);
   border: 1px solid var(--color-divider); color: var(--color-neutral-500); white-space: nowrap;
 }
 
+/* --- Densidad adaptativa --------------------------------------------------
+   El nivel lo pone `ajustarDensidad()` en app.js, midiendo, y solo en la
+   columna que no cabe -- ver su comentario. Aplica a la identidad y al ampli;
+   la lista de pistas queda fuera, esa scrollea.
+
+   Los niveles son ACUMULATIVOS: el 3 conserva lo que apretaron el 1 y el 2.
+   Como en CSS no hay un ">= n" para un atributo, la convencion es esta y se
+   respeta en todo el bloque:
+
+     >= 1   [data-densidad]
+     >= 2   [data-densidad]:not([data-densidad="1"])
+     >= 3   [data-densidad="3"], [data-densidad="4"]
+     == 4   [data-densidad="4"]
+
+   El 4 es el ultimo recurso: en la pantalla de trabajo (1728x960) no se
+   enciende nunca. Ver `ajustarDensidad()` en app.js para las mediciones. */
+
+/* Aqui habia un bloque para `#col-pistas`. Se fue entero: esa columna ya no
+   baja de densidad, scrollea. Apretaba nueve filas hasta los 13px y sin
+   medidor para ahorrar un scroll que en una lista numerada nadie considera
+   un problema. */
+
+/* Columna de la cancion -- 1: se aprietan los espacios y baja el titulo;
+   2: baja mas y quedan 3 etiquetas; 3: se van las etiquetas enteras, que es
+   lo unico aqui que no cambia nada de lo que se toca. */
+.col-cancion[data-densidad] { gap: 12px; }
+.col-cancion[data-densidad] .cancion-cabecera { gap: 14px; }
+/* `.hint` reserva una linea aunque este vacia, para que al aparecer un aviso
+   nada salte. Cuando el alto aprieta, ese hueco reservado es lo primero que
+   sobra: no se pierde nada porque no hay nada escrito. */
+.col-cancion[data-densidad] .hint:empty { display: none; }
+.col-cancion[data-densidad] .cancion-identidad h2 { font-size: clamp(28px, 2.6vw, 42px); margin-bottom: 12px; }
+.col-cancion[data-densidad] .tarjeta .meta,
+.col-cancion[data-densidad] .cancion-identidad .enlaces { margin-top: 11px; }
+.col-cancion[data-densidad]:not([data-densidad="1"]) .cancion-identidad h2 { font-size: clamp(24px, 2.1vw, 34px); }
+.col-cancion[data-densidad="2"] .tarjeta .chip:nth-child(n+4) { display: none; }
+.col-cancion[data-densidad]:not([data-densidad="1"]) .preview { padding-block: 5px; }
+.col-cancion[data-densidad]:not([data-densidad="1"]) .preview .play { width: 28px; height: 28px; }
+.col-cancion[data-densidad="3"] .tarjeta .meta,
+.col-cancion[data-densidad="4"] .tarjeta .meta { display: none; }
+/* Ultimo recurso para los titulos de cuatro lineas: se cortan en dos con
+   elipsis. El titulo completo queda en el `title` del <h2> (lo pone
+   vista-sortear.js), asi que no se pierde -- y debajo estan igual los
+   enlaces a Songsterr y Ultimate Guitar, que lo llevan entero. */
+.col-cancion[data-densidad="3"] .cancion-identidad h2,
+.col-cancion[data-densidad="4"] .cancion-identidad h2 {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.col-cancion[data-densidad="4"] .cancion-identidad h2 { -webkit-line-clamp: 1; }
+
+/* Panel del ampli -- 1 y 2: espacios; 3: la nota del volumen, que tambien
+   esta dentro de "Qué se manda y qué se pisa"; 4: el rotulo "Efectos" y las
+   ranuras en una linea. Ahi no se pierde ningun dato: las cuatro ranuras se
+   siguen viendo con su nombre, solo mas juntas. */
+.panel-ampli[data-densidad] { gap: 10px; }
+.panel-ampli[data-densidad] .perillas-panel { gap: 8px; padding: 11px 12px; }
+.panel-ampli[data-densidad] .panel-envio { padding: 11px; gap: 6px; }
+.panel-ampli[data-densidad] .efectos-bloque h3 { margin-bottom: 6px; }
+.panel-ampli[data-densidad]:not([data-densidad="1"]) .modelo strong { font-size: 21px; }
+.panel-ampli[data-densidad]:not([data-densidad="1"]) .ampli-icono { width: 36px; height: 41px; }
+.panel-ampli[data-densidad]:not([data-densidad="1"]) .cadena-panel li { padding: 8px 10px; }
+.panel-ampli[data-densidad="3"],
+.panel-ampli[data-densidad="4"] { gap: 8px; }
+.panel-ampli[data-densidad="3"] .volumen-nota,
+.panel-ampli[data-densidad="4"] .volumen-nota { display: none; }
+.panel-ampli[data-densidad="3"] .perillas-panel,
+.panel-ampli[data-densidad="4"] .perillas-panel { gap: 6px; padding: 9px 11px; }
+.panel-ampli[data-densidad="3"] .perilla,
+.panel-ampli[data-densidad="4"] .perilla { grid-template-columns: 48px minmax(0, 1fr) 24px; }
+.panel-ampli[data-densidad="3"] .perilla .nombre,
+.panel-ampli[data-densidad="3"] .perilla .num,
+.panel-ampli[data-densidad="4"] .perilla .nombre,
+.panel-ampli[data-densidad="4"] .perilla .num { font-size: 13px; }
+.panel-ampli[data-densidad="3"] .efectos-bloque h3 { font-size: 13.5px; }
+.panel-ampli[data-densidad="3"] .enviar-ampli,
+.panel-ampli[data-densidad="4"] .enviar-ampli { min-height: 36px; }
+.panel-ampli[data-densidad="4"] { gap: 7px; }
+/* El rotulo sobra cuando abajo estan los cuatro nombres de ranura: lo que
+   identifica el bloque son ellos, no la palabra. */
+.panel-ampli[data-densidad="4"] .efectos-bloque h3 { display: none; }
+/* Las cuatro ranuras vuelven a una sola fila: el 2x2 cuesta ~64px de alto y
+   en el ultimo nivel ese alto es justo lo que falta. Los nombres largos se
+   cortan con elipsis, con el entero en el `title` (ver `ranuras()`). */
+.panel-ampli[data-densidad="4"] .cadena-panel { gap: 6px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.panel-ampli[data-densidad="4"] .cadena-panel li { padding: 6px 9px; gap: 2px; }
+.panel-ampli[data-densidad="4"] .cadena-panel li strong { font-size: 12px; }
+.panel-ampli[data-densidad="4"] .perillas-panel { gap: 5px; padding: 8px 10px; }
+.panel-ampli[data-densidad="4"] .panel-envio { padding: 9px; gap: 5px; }
+
 /* El medidor son barras, no un numero repetido: se compara de un vistazo entre
-   filas sin leer. */
-.medidor { display: flex; align-items: center; gap: 2px; }
-.medidor i { width: 3px; height: 11px; border-radius: 1px; background: color-mix(in srgb, var(--color-text) 13%, transparent); }
-.medidor i.on { background: var(--color-accent); }
+   filas sin leer. Suben de alto de a una (como un indicador de señal): es
+   pura decoracion sobre el mismo dato, dificultad/10, que ya manda `.on`. */
+/* Violeta, no naranja: en el mock el naranja senala la pista ELEGIDA y la
+   accion, mientras que los medidores de las demas filas son violetas. Que
+   midan en otro color es lo que deja ver de un golpe cual fila esta
+   seleccionada. */
+.medidor { display: flex; align-items: flex-end; gap: 2px; height: 12px; }
+.medidor i { width: 3px; border-radius: 1px; background: color-mix(in srgb, var(--color-text) 12%, transparent); }
+.medidor i.on { background: var(--color-accent-2); }
+.medidor i:nth-child(1) { height: 40%; } .medidor i:nth-child(2) { height: 48%; }
+.medidor i:nth-child(3) { height: 56%; } .medidor i:nth-child(4) { height: 64%; }
+.medidor i:nth-child(5) { height: 72%; } .medidor i:nth-child(6) { height: 80%; }
+.medidor i:nth-child(7) { height: 86%; } .medidor i:nth-child(8) { height: 92%; }
+.medidor i:nth-child(9) { height: 96%; } .medidor i:nth-child(10) { height: 100%; }
 .fila-pista em > span:last-child { width: 14px; font-size: 12px; color: var(--color-neutral-400); text-align: right; font-variant-numeric: tabular-nums; }
 
-.pista-unica { flex: 3 1 460px; min-width: 0; padding: 13px 16px 16px; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-surface) 55%, transparent); box-shadow: var(--shadow-sm); }
-.pista-unica strong { display: block; font-size: 14.5px; font-weight: 400; margin-bottom: 2px; }
-.pista-unica p:last-child { margin: 0; font-size: 11.5px; color: var(--color-neutral-500); }
+/* Sin caja propia, igual que `.pistas-lista`: la ficha de la columna es la
+   caja. Con una sola pista la columna del medio queda con su cabecera y una
+   linea -- pero sigue siendo una de las tres columnas, no un hueco. */
+.pista-unica { min-width: 0; }
+.pista-unica .pistas-titulo { margin-bottom: 14px; }
+.pista-unica strong { display: block; font-size: 15px; font-weight: 500; margin-bottom: 3px; padding: 0 4px; }
+.pista-unica p:last-child { margin: 0; padding: 0 4px; font-size: 12.5px; color: var(--color-neutral-500); }
 
 /* --- Acciones ------------------------------------------------------------- */
-.acciones {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 4px 0 0; background: transparent; border: 0; min-height: 0;
+/* `flex-wrap: nowrap` explicito: la capa vieja de este mismo selector declara
+   `wrap`, y con `flex-direction: column` eso abre una SEGUNDA columna hacia la
+   derecha en vez de una segunda fila -- la fila secundaria se iba fuera de la
+   pantalla y aparecia una barra de scroll horizontal. */
+.acciones { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 12px; padding: 4px 0 0; background: transparent; border: 0; min-height: 0; }
+/* El corazon flota sobre la esquina superior derecha de la tarjeta, como en
+   el mock -- ver el comentario en index.html sobre por que sigue siendo el
+   mismo boton estatico de siempre y no uno recreado en cada tirada. La
+   posicion vertical lo deja a la altura del titulo, no de la cabecera de la
+   pagina: `top` se mide contra `.col-cancion` (position:relative), y
+   `#tarjeta` empieza justo en el borde de esa columna. */
+/* Arriba a la derecha de SU ficha. Ahora que la columna es una celda de grid
+   con ancho propio, basta `right`: ya no hace falta medir nada en JS. */
+.like-flotante {
+  position: absolute; top: 18px; right: 18px; z-index: 2;
+  border: 1px solid var(--color-divider); border-radius: 50%;
+  color: var(--color-neutral-400);
 }
-/* Los tres veredictos comparten una sola caja: son la misma pregunta -- que
-   hago con esta cancion -- y verlos juntos lo dice sin necesidad de rotulo.
-   Siguen siendo botones y no radios: marcar sortea otra al instante, asi que un
-   estado "elegido" quedaria puesto sobre una tarjeta que ya no existe. */
-.veredictos .seg-opt {
-  font: inherit; font-size: 13px; background: transparent; color: var(--color-text);
-  border: 0; gap: 8px; white-space: nowrap;
+.like-flotante:hover:not(:disabled) { color: var(--color-text); border-color: color-mix(in srgb, var(--color-text) 30%, transparent); }
+.like-flotante.marcado svg { fill: var(--color-accent); stroke: var(--color-accent); }
+/* La CTA grande del mock: ocupa todo el ancho de la columna, como "Practicar
+   esta pista" en la captura. Es la unica accion de esta fila que se repite
+   en cada tirada -- el resto son mas raras, y se ven mas chicas por eso. */
+.btn-cta { width: 100%; min-height: 56px; font-size: 15.5px; gap: 12px; }
+.btn-cta kbd { color: var(--color-bg); border-color: color-mix(in srgb, var(--color-bg) 45%, transparent); padding: 0 5px; }
+/* El circulo oscuro alrededor del icono, como el "play" del mock. */
+.btn-cta-icono {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: color-mix(in srgb, var(--color-bg) 22%, transparent); flex: none;
 }
-.veredictos .seg-opt:disabled { opacity: .45; cursor: not-allowed; }
-.veredictos .seg-opt:not(:disabled):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+/* Los tres veredictos ocupan el mismo sitio que las tres acciones secundarias
+   del mock (Añadir a lista / Ver en YouTube / Más): misma forma -- botones
+   iguales, con separacion entre si, no una sola caja segmentada -- contenido
+   real. Siguen siendo botones y no radios: marcar sortea otra al instante,
+   asi que un estado "elegido" quedaria puesto sobre una tarjeta que ya no
+   existe. */
+/* Los tres botones en UNA fila y del mismo ancho, siempre. En rejilla y no en
+   flex con `wrap`: las tres acciones son hermanas y con `wrap` la tercera se
+   caia sola a una segunda fila en cuanto la columna se estrechaba, que se lee
+   como si fuera de otra categoria. Si no caben los rotulos, lo que cede es el
+   `kbd` (mas abajo, a 84rem), no la formacion. */
+.acciones-secundarias { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: 10px; }
+.btn-secundaria { min-width: 0; justify-content: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+/* El icono no encoge. Era un hijo flexible mas y en la columna estrecha se
+   quedaba en 0px de ancho: los botones perdian el tic y la cruz y quedaban
+   tres rotulos iguales, que es justo lo que el icono esta ahi para evitar. */
+.btn-secundaria svg { flex: none; }
+.btn-secundaria:disabled { opacity: .45; cursor: not-allowed; }
 .acciones kbd {
   font: inherit; font-size: 10px; color: var(--color-neutral-500);
   border: 1px solid var(--color-divider); border-radius: 3px; padding: 0 4px;
 }
-#like { border-color: var(--color-divider); }
-#like.marcado svg { fill: var(--color-accent); stroke: var(--color-accent); }
-.acciones .acciones-sorteo { display: flex; align-items: center; gap: 14px; margin-left: auto; }
-#todo { color: var(--color-neutral-400); font-size: 13px; white-space: nowrap; }
-#otra { gap: 8px; padding: 9px 16px; white-space: nowrap; }
-#otra kbd { color: var(--color-accent-300); border-color: color-mix(in srgb, var(--color-accent) 45%, transparent); padding: 0 5px; }
+.btn-cta kbd, .btn-secundaria:not(:disabled) kbd { color: var(--color-neutral-400); }
 
 /* Por esta misma linea llegan dos cosas muy distintas: el conteo de canciones
    (y el aviso inocuo de un envio abandonado a mitad) y el unico canal que
@@ -762,60 +1041,102 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .hint.mal { color: var(--peligro); }
 
 /* --- El panel del amplificador -------------------------------------------- */
-.panel-ampli {
-  position: sticky; top: 14px;
-  display: flex; flex-direction: column; gap: 18px;
-  padding: 18px; border: 0; border-radius: var(--radius-lg);
-  background: var(--color-surface); box-shadow: var(--shadow-sm);
-}
-.panel-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+/* Ya no es `sticky` ni trae caja propia: es la TERCERA ficha del grid, con el
+   mismo fondo, borde y radio que las otras dos, y de la misma altura. Cuando
+   su contenido no cabe scrollea por dentro -- que es lo que antes se
+   desbordaba por abajo. */
+.panel-ampli { display: flex; flex-direction: column; gap: 14px; }
+.panel-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .panel-ampli h2 {
-  margin: 0; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--color-neutral-400); font-family: var(--font-heading);
+  margin: 0; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-accent-300); font-family: var(--font-heading); font-weight: 600;
 }
-#panel-conexion { font-size: 11px; color: var(--color-neutral-500); }
+#panel-conexion { font-size: 12px; color: var(--color-neutral-500); }
 #panel-conexion.conectado { color: var(--color-accent-300); }
 
-.panel-ampli .modelo { display: block; }
-.panel-ampli .modelo span {
-  display: block; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+/* Cabezal, nombre del modelo y su ficha en UNA fila. */
+.panel-ampli .modelo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.modelo-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.modelo-texto span {
+  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--color-neutral-500);
 }
 .panel-ampli .modelo strong {
-  display: block; margin-top: 2px; font-family: var(--font-heading); font-weight: 500;
-  font-size: 22px; letter-spacing: -0.02em; color: var(--color-accent-200);
+  font-family: var(--font-heading); font-weight: 600;
+  font-size: 25px; letter-spacing: -0.01em; color: var(--color-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.ampli-icono { flex: none; border-radius: 5px; }
+/* No es una medicion: es el tono que la cancion trae asignado, mostrado con
+   confianza solo cuando no esta marcado dudoso (ver panel-ampli.js). */
+.badge-ideal {
+  display: inline-flex; align-items: center; gap: 7px; flex: none;
+  font-size: 11.5px; padding: 5px 11px; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  color: var(--color-accent-300); white-space: nowrap;
+}
+.badge-ideal::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
 
-.perillas-panel { display: flex; flex-direction: column; gap: 11px; }
-.perilla { display: grid; grid-template-columns: 52px minmax(0, 1fr) 24px; align-items: center; gap: 12px; }
-.perilla .nombre { font-size: 12.5px; color: var(--color-neutral-400); }
+/* Las perillas en su propia caja, como el mock: separa lo que se MIDE de lo
+   que se elige. */
+.perillas-panel {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 13px 14px; border: 1px solid var(--color-borde-ficha); border-radius: 14px;
+}
+.perilla { display: grid; grid-template-columns: 54px minmax(0, 1fr) 26px; align-items: center; gap: 14px; }
+.perilla .nombre { font-size: 14px; color: var(--color-neutral-300); }
 .perilla meter {
-  width: 100%; height: 2px; appearance: none; background: color-mix(in srgb, var(--color-text) 13%, transparent);
+  width: 100%; height: 7px; appearance: none; background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  border-radius: 999px; overflow: hidden;
 }
-.perilla meter::-webkit-meter-bar { background: color-mix(in srgb, var(--color-text) 13%, transparent); height: 2px; border: 0; }
-.perilla meter::-webkit-meter-optimum-value { background: var(--color-accent); }
-.perilla meter::-moz-meter-bar { background: var(--color-accent); }
-.perilla .num { font-size: 12.5px; text-align: right; color: var(--color-text); font-variant-numeric: tabular-nums; }
-.volumen-nota { margin: 0; font-size: 11px; color: var(--color-neutral-600); }
+.perilla meter::-webkit-meter-bar { background: color-mix(in srgb, var(--color-text) 10%, transparent); height: 7px; border: 0; border-radius: 999px; }
+.perilla meter::-webkit-meter-optimum-value { background: var(--color-accent); border-radius: 999px; }
+.perilla meter::-moz-meter-bar { background: var(--color-accent); border-radius: 999px; }
+.perilla .num { font-size: 14px; text-align: right; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.volumen-nota { margin: 2px 0 0; font-size: 11px; color: var(--color-neutral-500); }
 
-.panel-ampli h3 {
-  margin: 0 0 8px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--color-neutral-500); font-family: var(--font-body); font-weight: 400;
+.efectos-bloque h3 {
+  margin: 0 0 8px; font-size: 15px; letter-spacing: -0.01em; text-transform: none;
+  color: var(--color-text); font-family: var(--font-heading); font-weight: 500;
 }
-/* La cadena en una sola columna: cinco filas se leen de arriba abajo sin saltar
-   la vista, y los nombres largos no se truncan. */
-.cadena-panel { display: flex; flex-direction: column; gap: 1px; list-style: none; margin: 0; padding: 0; }
+/* Las cuatro ranuras en UNA fila, como el mock -- y si no caben, en dos por
+   dos. Nunca tres y una suelta debajo, que es lo que daba `auto-fit`: cuatro
+   cosas del mismo rango en un 3+1 se leen como si la ultima fuera otra cosa.
+   Por ancho de ventana y no con `container-type: inline-size`, que era lo
+   natural: ese contain rompe la medida de la que vive `ajustarDensidad()` --
+   el panel daba por bueno un alto en el que no cabia y desbordaba 41px sin
+   bajar de densidad. El ancho del panel aqui es funcion del de la ventana,
+   asi que se pregunta por la ventana y se acabo. */
+.cadena-panel {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  list-style: none; margin: 0; padding: 0;
+}
+@media (min-width: 96rem) {
+  .cadena-panel { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .cadena-panel li {
-  display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center;
-  gap: 10px; padding: 7px 9px; border-radius: var(--radius-sm); border: 0;
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  padding: 10px 11px; border-radius: 11px;
+  border: 1px solid var(--color-borde-ficha); background: transparent;
 }
-.cadena-panel li.ocupada { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
-.cadena-panel li span { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); }
+/* Violeta, igual que los medidores: en el mock la ranura ocupada se marca en
+   violeta y el naranja queda para la accion. */
+.cadena-panel li.ocupada {
+  background: color-mix(in srgb, var(--color-accent-2) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent-2) 55%, transparent);
+}
+.cadena-panel li span {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cadena-panel li.ocupada span { color: var(--color-accent-2-300); }
 .cadena-panel li strong {
   font-size: 13px; font-weight: 400; color: var(--color-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cadena-panel li.ranura-vacia strong { color: var(--color-neutral-600); }
+/* "vacía" dice que el envio BORRA esa ranura -- es informacion, no
+   relleno: sube a neutral-500 (6.00:1, AA). */
+.cadena-panel li.ranura-vacia strong { color: var(--color-neutral-500); }
 
 .panel-envio { display: flex; flex-direction: column; gap: var(--space-2); }
 .enviar-ampli { min-height: 42px; font-size: 14.5px; gap: 9px; margin-top: 2px; white-space: nowrap; width: 100%; }
@@ -831,29 +1152,120 @@ body > main { flex: 1; min-height: 0; overflow-y: auto; }
 .panel-detalles summary { cursor: pointer; color: var(--color-neutral-400); font-size: 12px; list-style: none; }
 .panel-detalles summary::-webkit-details-marker { display: none; }
 .panel-detalles p { margin: 8px 0 0; font-size: 12px; line-height: 1.6; }
+/* Ver `queSePisa()` en panel-ampli.js: el desplegable abierto mide mas que la
+   ficha entera y ningun nivel de densidad puede absorber eso.
+
+   Abierto pasa a ser el UNICO hijo flexible del panel, asi que se queda con
+   el hueco que sobra y ni un pixel mas -- no hay que elegir un tope a mano,
+   lo fija cuanto espacio haya. Si el texto no cabe ahi, scrollea esta caja y
+   no la columna: el desplegable lo abriste tu, y las perillas, las ranuras y
+   el boton de enviar se quedan donde estaban. */
+.panel-detalles[open] {
+  display: flex; flex-direction: column; flex: 1 1 auto;
+  /* Nunca por debajo del renglon del `summary`: encogiendo sin piso el propio
+     titulo del desplegable llegaba a cero. Y `overflow: hidden` porque un
+     hijo que no cabe pinta fuera de la caja aunque la caja mida cero. */
+  min-height: 1.6em; overflow: hidden;
+}
+.panel-detalles[open] summary { flex: 0 0 auto; }
+.panel-detalles[open] .panel-detalles-cuerpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .panel-vacio p { margin: 0 0 4px; color: var(--color-text); }
 .panel-vacio span { font-size: 12px; color: var(--color-neutral-500); }
 
-/* --- El panel de bandas --------------------------------------------------- */
-.bandas { margin: 0 28px 14px; padding: 14px; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+
+/* El bloque de envio como la ficha de aviso del mock: un recuadro con icono,
+   el boton dentro, y debajo lo que de verdad se manda. */
+.panel-envio {
+  display: flex; flex-direction: column; gap: 8px; margin-top: auto;
+  padding: 14px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-accent-2) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent-2) 8%, transparent);
+}
+.enviar-ampli { min-height: 40px; }
+.enviar-ampli:disabled {
+  /* Deshabilitado no es un CTA: pierde el relleno naranja y se lee como el
+     aviso que es. */
+  background: none; color: var(--color-accent-2-300);
+  border: 1px solid color-mix(in srgb, var(--color-accent-2) 45%, transparent);
+  opacity: 1;
+}
+
+/* --- El pie: navegar pistas y recordar los atajos ------------------------- */
+.pie-sorteo {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; width: 100%; max-width: var(--ancho); margin: 0 auto;
+  padding: 10px 28px; border-top: 1px solid var(--color-divider); font-size: 12.5px;
+}
+.pista-nav { display: flex; align-items: center; gap: 10px; min-height: 28px; min-width: 0; flex: 1 1 auto; }
+/* El nombre de pista es texto real del catalogo (`etiquetasDePistas`) y
+   puede ser largo -- se trunca en vez de forzar el pie a desbordar en
+   ventanas angostas. */
+.pista-nav-actual {
+  color: var(--color-neutral-400); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.pista-nav-actual b { color: var(--color-text); font-weight: 500; }
+.pie-sorteo-derecha { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.btn-chico { font-size: 12.5px; padding: 6px 10px; }
+
+.atajos-panel {
+  position: fixed; right: 28px; bottom: 56px; z-index: 5; width: 15rem;
+  padding: 12px 14px; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-md);
+}
+.atajos-panel dl { margin: 0; display: grid; gap: 6px; }
+.atajos-panel dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.atajos-panel dt { display: flex; gap: 2px; }
+.atajos-panel dd { margin: 0; font-size: 12px; color: var(--color-neutral-400); text-align: right; }
+.atajos-panel kbd {
+  font: inherit; font-size: 10px; color: var(--color-neutral-500);
+  border: 1px solid var(--color-divider); border-radius: 3px; padding: 0 4px;
+}
 
 /* --- Adaptacion ----------------------------------------------------------- */
-@media (max-width: 75rem) {
+/* OJO: estas reglas tienen que hablar de TRES columnas. Cuando eran dos, un
+   `grid-template-columns` de dos pistas dejaba a la tercera ficha cayendo a
+   una SEGUNDA FILA del grid -- que es exactamente el "la ultima columna se
+   rompe abajo" que se veia: no era un desborde, era el panel del ampli
+   colocado en otra fila y las tres fichas repartiendose la mitad del alto. */
+@media (max-width: 84rem) {
   .cabecera-app .stats, .barra-controles .stats { display: none; }
-  .columnas { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 20px; }
-  .cancion-identidad h2 { font-size: 44px; }
+  .columnas { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(300px, 380px); gap: 16px; }
+  .ficha { padding: 18px; }
+  /* Ahora que los tres botones son celdas de una rejilla no pueden crecer
+     para acomodar el rotulo: si el texto no entra, se sale (a 1136px, "Ya la
+     aprendí" pedia 98px en una celda de 95). Ceden el relleno, el hueco y
+     por ultimo el icono -- que aqui SI se quita, a proposito y entero, en vez
+     de encogerse a un palito: los tres rotulos se explican solos y el que
+     manda es el texto. */
+  .btn-secundaria { padding-inline: 8px; gap: 6px; }
+  .btn-secundaria svg { display: none; }
 }
-@media (max-width: 60rem) {
-  .columnas { grid-template-columns: minmax(0, 1fr); }
-  .panel-ampli { position: static; }
-  /* Apilados ya no caben en una pantalla, asi que la vista deja de recortar y
-     pasa a scrollear: con `overflow: hidden` el panel del ampli quedaba debajo
-     del borde y sin barra para bajar hasta el. */
+/* Sin sitio para los tres veredictos en una fila, la tecla de atajo es lo
+   primero que sobra: sigue funcionando y esta escrita en "Atajos". El corte
+   es mas alto que el de las columnas porque lo que aprieta aqui no es la
+   ventana sino la primera columna, que se lleva ~1/3 de ella: a 1440px de
+   ventana son 425px de columna y "Ya la aprendí" con su icono y su tecla no
+   entra en el tercio que le toca. */
+@media (max-width: 96rem) {
+  .btn-secundaria kbd { display: none; }
+}
+/* Por debajo de 68rem las tres ya no caben de a lo ancho: la cancion y las
+   pistas se quedan lado a lado y el ampli pasa a ocupar una fila entera
+   debajo, a lo ancho de las dos. La pagina scrollea -- apiladas no caben en
+   una pantalla y recortar dejaria el panel sin forma de llegar a el. */
+@media (max-width: 68rem) {
+  .columnas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .panel-ampli { grid-column: 1 / -1; }
   #vista-sorteo { overflow-y: auto; }
   #vista-sorteo .columnas { min-height: min-content; }
-  .cancion-identidad h2 { font-size: 36px; }
+  .ficha { overflow-y: visible; }
+}
+/* Y por debajo de 52rem, una sola columna. */
+@media (max-width: 52rem) {
+  .columnas { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 38rem) {
   .cabecera-app, .barra-controles, .columnas, .acciones { padding-inline: 14px; }
-  .hint, .bandas { margin-inline: 14px; }
+  .hint { margin-inline: 14px; }
+  .fila-bandas, #banda-fichas { padding-inline: 14px; }
 }
