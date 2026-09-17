@@ -18,6 +18,8 @@
    su comentario): cierra un caso hoy inalcanzable con los datos del catálogo,
    ninguna canción real cambia de texto por eso. */
 
+import { esRol } from './track-classifier.js'
+
 export const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
@@ -183,8 +185,11 @@ export function selectorDePistas(pistas, elegida) {
   `
 }
 
-/* Palabras que distinguen el rol de una pista dentro de una cancion. */
-const ROLES = /\b(lead|rhythm|solo|clean|acoustic|electric|harmon|extra|overdub|intro|outro|slide|fingerstyle|nylon|steel|riff|melody|arpegg|chord)/i
+/* Las palabras que distinguen el rol viven en `track-classifier.js`, no aqui:
+   este archivo las usaba para elegir una etiqueta legible y la fase 2 las
+   necesita para decidir un tono, y dos vocabularios en dos archivos se
+   desvian -- la primera vez que lo hicieran, el sintoma seria que la etiqueta
+   dice una cosa y el tono se calcula con otra. */
 const segmentos = nombre => String(nombre ?? '').split('|').map(s => s.trim()).filter(Boolean)
 
 /* Devuelve etiquetas cortas y distintas para todas las pistas de una cancion.
@@ -200,7 +205,7 @@ export function etiquetasDePistas(pistas) {
       : new Set()
     const quedan = lista.filter(x => !comunes.has(x))
     const candidatas = quedan.length ? quedan : lista
-    return candidatas.find(x => ROLES.test(x)) ?? candidatas.at(-1)
+    return candidatas.find(x => esRol(x)) ?? candidatas.at(-1)
   })
 
   base = base.map((etiqueta, i) => {
