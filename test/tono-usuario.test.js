@@ -5,6 +5,7 @@ import { volcarWal } from '../tools/backup.mjs'
 import { mkdtempSync, copyFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { firmaDePista, guardarTono, leerTono, borrarTono } from '../db/tono-usuario.js'
 
 test('el esquema crea las dos tablas del corpus de tono', () => {
   const db = openDb(':memory:')
@@ -51,4 +52,49 @@ test('volcar el WAL deja la base copiable con un cp del archivo principal', () =
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+const PISTA = { songId: 10, trackIndex: 3, instrument: 'Electric Guitar (clean)', name: 'Rhythm Guitar' }
+const CADENA = { amp: { fenderId: 'DUBS_Twin', nombre: 'TWIN CLEAN', valores: { gain: 3 } } }
+
+test('un tono guardado se lee igual que se escribio', () => {
+  const db = openDb(':memory:')
+  guardarTono(db, { ...PISTA, cadena: CADENA, origen: 'leido' })
+  const t = leerTono(db, PISTA)
+  assert.deepEqual(t.cadena, CADENA)
+  assert.equal(t.origen, 'leido')
+  assert.equal(t.desfasada, false)
+})
+
+test('guardar dos veces la misma pista deja UN tono, el ultimo', () => {
+  const db = openDb(':memory:')
+  guardarTono(db, { ...PISTA, cadena: CADENA, origen: 'leido' })
+  guardarTono(db, { ...PISTA, cadena: { amp: { nombre: 'OTRO' } }, origen: 'editado' })
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM user_tone').get().n, 1)
+  assert.equal(leerTono(db, PISTA).cadena.amp.nombre, 'OTRO')
+})
+
+test('si la pista cambio de identidad, el tono no se aplica: se avisa', () => {
+  const db = openDb(':memory:')
+  guardarTono(db, { ...PISTA, cadena: CADENA, origen: 'leido' })
+  // Songsterr reordeno y en ese track_index hay ahora otra pista.
+  const t = leerTono(db, { ...PISTA, name: 'Lead Guitar' })
+  assert.equal(t.desfasada, true, 'una firma que no calza tiene que avisarse')
+  assert.deepEqual(t.cadena, CADENA, 'y no se borra: sigue ahi por si la pista vuelve')
+})
+
+test('borrar un tono devuelve la pista a no tener ninguno', () => {
+  const db = openDb(':memory:')
+  guardarTono(db, { ...PISTA, cadena: CADENA, origen: 'leido' })
+  borrarTono(db, PISTA)
+  assert.equal(leerTono(db, PISTA), null)
+})
+
+test('la firma separa instrumento y nombre con un caracter que no aparece en el catalogo', () => {
+  // Sin separador, {instrument:'ab', name:'c'} y {instrument:'a', name:'bc'}
+  // darian la misma firma.
+  assert.notEqual(
+    firmaDePista({ instrument: 'ab', name: 'c' }),
+    firmaDePista({ instrument: 'a', name: 'bc' }),
+  )
 })
