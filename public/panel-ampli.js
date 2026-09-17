@@ -115,5 +115,9 @@ export function pintarPanelAmpli(pista, estado = {}) {
     </div>
     ${a.incierto ? '<p class="envio-estado mal">La planilla marca este preset como dudoso.</p>' : ''}
     ${queSePisa(a)}
-    <div class="panel-envio"><button type="button" id="enviar-ampli" class="btn btn-primary btn-block enviar-ampli" ${estado.puedeEnviar ? '' : 'disabled'}>Enviar al ampli <kbd>E</kbd></button><p id="envio-estado" class="envio-estado" role="status">Sin enviar todavía</p></div>`
+    <div class="panel-envio">
+      <button type="button" id="enviar-ampli" class="btn btn-primary btn-block enviar-ampli" ${estado.puedeEnviar ? '' : 'disabled'}>Enviar al ampli <kbd>E</kbd></button>
+      <button type="button" id="guardar-tono" class="btn btn-block guardar-tono" ${estado.conectado ? '' : 'disabled'}>Guardar mi tono</button>
+      <p id="envio-estado" class="envio-estado" role="status">Sin enviar todavía</p>
+    </div>`
 }

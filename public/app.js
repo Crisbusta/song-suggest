@@ -531,7 +531,83 @@ let enviando = false
 // en `pintarSelectorPistas()` para que una tarjeta nueva, sorteada mientras
 // otro envio sigue corriendo, no herede su bloqueo -- ver el docblock de ahi.
 let cancionEnviando = null
+
+/* Se guarda lo que el equipo TIENE, no lo que se le mando. El LT25 descarta
+   en silencio lo que no entiende, asi que registrar lo enviado seria anotar
+   un tono que pudo no haberse aceptado -- y el corpus entero se apoya en que
+   lo guardado sea cierto. Por eso se relee con leerPreset(). */
+async function guardarMiTono() {
+  const pista = actual?.pistas?.[pistaElegida]
+  if (!pista) return
+  const estado = $('#envio-estado')
+  estado.className = 'envio-estado'
+  estado.textContent = 'leyendo del ampli...'
+  try {
+    const { preset } = await ampli.leerPreset()
+    const cadena = Object.fromEntries((preset.audioGraph?.nodes ?? [])
+      .map(n => [n.nodeId, { fenderId: n.FenderId, valores: n.dspUnitParameters ?? {} }]))
+    const r = await fetch('/api/tono', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        songId: actual.songId, trackIndex: pista.trackIndex,
+        instrument: pista.instrument, name: pista.name,
+        cadena, origen: 'leido',
+      }),
+    })
+    if (!r.ok) throw new Error(`el servidor respondio ${r.status}`)
+    estado.className = 'envio-estado ok'
+    estado.textContent = 'tono guardado: esta pista ya sale asi'
+  } catch (err) {
+    estado.className = 'envio-estado mal'
+    estado.textContent = `no pude guardar el tono: ${err.message}`
+  }
+}
+
+/* El veredicto se AÑADE al estado del envio, no lo reemplaza: ese texto dice
+   que llego de verdad al equipo y perderlo seria cambiar informacion por una
+   pregunta. Y solo aparece cuando el envio salio bien -- pedir una opinion
+   sobre un tono que no llego a sonar no mide nada. */
+function pintarVeredicto() {
+  const pista = actual?.pistas?.[pistaElegida]
+  if (!pista) return
+  const opciones = [
+    ['modulacion:falta', 'Le falta modulación'], ['modulacion:sobra', 'Sobra modulación'],
+    ['delay:falta', 'Le falta delay'], ['delay:sobra', 'Sobra delay'],
+    ['reverb:falta', 'Le falta reverb'], ['reverb:sobra', 'Sobra reverb'],
+  ].map(([v, t]) => `<option value="${v}">${t}</option>`).join('')
+  $('#envio-estado').insertAdjacentHTML('beforeend', `<span class="veredicto">¿Cómo sonó?
+    <button type="button" class="btn-juicio" data-juicio="global:bien">Bien</button>
+    <button type="button" class="btn-juicio" data-juicio="suciedad:sobra">Muy sucio</button>
+    <button type="button" class="btn-juicio" data-juicio="suciedad:falta">Muy limpio</button>
+    <select class="juicio-efectos" aria-label="Juzgar los efectos"><option value="">Efectos…</option>${opciones}</select></span>`)
+}
+
+/* Se anota la cadena que estaba en pantalla junto al veredicto: sin ella, un
+   "sobra suciedad" es ininterpretable en cuanto el sugeridor cambie. */
+async function anotarJuicio(valor) {
+  const pista = actual?.pistas?.[pistaElegida]
+  if (!pista || !valor) return
+  const [eje, direccion] = valor.split(':')
+  await fetch('/api/juicio', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      songId: actual.songId, trackIndex: pista.trackIndex,
+      instrument: pista.instrument, name: pista.name,
+      eje, direccion,
+      juzgado: pista.ampli?.cadena ?? null,
+      fuente: pista.ampli?.fuente ?? 'ninguna',
+      sugeridor: pista.ampli?.deUsuario ? 'usuario' : 'sugeridor',
+    }),
+  })
+  const estado = $('#envio-estado')
+  estado.className = 'envio-estado ok'
+  estado.textContent = 'anotado, gracias'
+}
+
 $('#vista-sorteo').addEventListener('click', async e => {
+  if (e.target.id === 'guardar-tono') { guardarMiTono(); return }
+  const juicio = e.target.closest?.('.btn-juicio')
+  if (juicio) { anotarJuicio(juicio.dataset.juicio); return }
   if (e.target.id !== 'enviar-ampli') return
   if (!hayQueEnviar(actual)) return
   // Evita un segundo envio mientras el primero sigue vivo. Ya no es lo que
@@ -1037,6 +1113,8 @@ $('#vista-sorteo').addEventListener('click', async e => {
       || (!conUnidad.has('amp') && ampSinMandar.length > 0)
     estado.className = mal ? 'envio-estado mal' : 'envio-estado ok'
     estado.textContent = partes.join(' · ')
+    // Solo si llego: juzgar un tono que no sono no mide nada.
+    if (!mal) pintarVeredicto()
     // pintarBotonEnviar recalcula segun ampli.conectado() y actual, en vez de
     // rehabilitar a ciegas: si el ampli se desconecto a mitad del envio, el
     // boton debe quedar deshabilitado con "Conecta el ampli primero", no
@@ -1372,3 +1450,9 @@ function cambiarVista(cual) {
 }
 
 for (const v of VISTAS) $(`#ver-${v}`).addEventListener('click', () => cambiarVista(v))
+
+/* El desplegable de efectos necesita `change`: un <select> no emite el click
+   que usa el resto de los juicios. */
+$('#vista-sorteo').addEventListener('change', e => {
+  if (e.target.matches?.('.juicio-efectos')) anotarJuicio(e.target.value)
+})
