@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sugerirAjustes, MODELOS_LT25, fenderIdDeModelo, TAGS_CON_REGLA, STOMPS_DE_DRIVE } from '../lib/ampli.js'
 import { PRESETS_BANDA, auditoria } from '../lib/presets-comunidad.js'
+import { rolDe } from '../public/track-classifier.js'
 import { readFileSync } from 'node:fs'
 
 // Los nombres de modelo de estos tests salen del catalogo de unidades DSP del
@@ -542,6 +543,89 @@ test('una pista limpia pierde el pedal de drive pero conserva el resto de la cad
   // Y no se toca el preset compartido: PRESETS_BANDA lo lee todo el proceso.
   const original = PRESETS_BANDA.find(p => /metallica/i.test(p.artista) && !p.cancion)
   assert.equal(original.cadena.stomp?.nombre, 'MYTHIC DRIVE', 'el preset original no se muta')
+})
+
+/* El nombre de la pista manda sobre la etiqueta `jazz`, y NO sobre `clean`.
+
+   Reportado tocando: en "Blackened 2020" los dos tracks de Kirk Hammett se
+   llaman "Guitar Solo" y "Lead Guitar" y salian sin distorsion. Songsterr los
+   etiqueta `Electric Guitar (jazz)`, que estaba en la lista de limpios, asi
+   que la correccion de arriba les quitaba el MYTHIC DRIVE y les bajaba el gain
+   de 10 a 3.
+
+   La asimetria entre las dos etiquetas no es capricho, es lo que dicen los
+   datos. `Electric Guitar (clean)` es una eleccion deliberada del
+   transcriptor: de las 154 pistas asi etiquetadas cuyo nombre dice "lead",
+   casos como The Smiths "This Charming Man", Kings Of Leon "Sex On Fire" o
+   RHCP "Dark Necessities" son leads limpias DE VERDAD. `jazz`, en cambio, es
+   un patch de MIDI de un desplegable y no declara intencion ninguna.
+
+   Medido sobre las 147 pistas `jazz` de rol `lead` con preset: si se les quita
+   la correccion, 113 terminan igual en gain <= 5 -- o sea que no hacia casi
+   nada por ellas -- y solo 6 suben a gain >= 7. Esas 6 son las leads realmente
+   sucias: Slash en "Yesterdays", Kirk Hammett en "Nothing Else Matters" en
+   vivo, y las dos de "Blackened 2020".
+
+   Se probaron antes dos reglas que los datos NO sostuvieron, y por eso no
+   estan: usar el genero para desambiguar (el tag `punk` en Radiohead es ruido
+   del catalogo, y dejaba "Street Spirit" y "Weird Fishes" como sucias) y
+   sacar `jazz` de la lista entera (rompe las 176 pistas jazz cuyo nombre si
+   dice "clean").
+
+   El rol lo decide `rolDe` de track-classifier.js, no una regex de este
+   modulo: el vocabulario de roles vive en un solo archivo a proposito. */
+
+test('una pista jazz que se llama solo o lead conserva el preset sucio', () => {
+  for (const nombre of ['Kirk Hammett | Gibson "Greeny" Les Paul Standard | Guitar Solo',
+                        'Kirk Hammett | Gibson "Greeny" Les Paul Standard | Lead Guitar']) {
+    const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (jazz)',
+      trackName: nombre, tuning: null, artist: 'Metallica', title: 'Blackened 2020' })
+    assert.equal(r.gain, 10, `"${nombre}" no deberia perder la ganancia`)
+    assert.equal(r.cadena.stomp?.nombre, 'MYTHIC DRIVE', 'ni el pedal')
+    assert.ok(!r.motivos.includes('pista limpia'))
+  }
+})
+
+test('una pista jazz sin senal en el nombre sigue tratandose como limpia', () => {
+  // Sin nada que contradiga la etiqueta, la etiqueta decide: son 213 pistas y
+  // no hay razon para dejar de creerle.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (jazz)',
+    trackName: 'James Hetfield | Guitar 2', tuning: null, artist: 'Metallica', title: 'Blackened 2020' })
+  assert.ok(r.gain <= 3)
+  assert.ok(r.motivos.includes('pista limpia'))
+})
+
+test('una pista jazz que dice clean en el nombre se trata como limpia', () => {
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (jazz)',
+    trackName: 'Kurt | Clean', tuning: null, artist: 'Metallica', title: 'Blackened 2020' })
+  assert.ok(r.gain <= 3)
+})
+
+test('una pista CLEAN que se llama lead sigue siendo limpia', () => {
+  // La asimetria. "This Charming Man" de The Smiths es exactamente este caso y
+  // su lead es limpia; el transcriptor eligio `clean` a proposito.
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (clean)',
+    trackName: "Johnny Marr | '54 Fender Telecaster | Lead", tuning: null,
+    artist: 'Metallica', title: 'Blackened 2020' })
+  assert.ok(r.gain <= 3, `una pista declarada limpia no se ensucia por el nombre, dio ${r.gain}`)
+  assert.ok(r.motivos.includes('pista limpia'))
+})
+
+test('el rol lo decide el clasificador compartido, no una regex local', () => {
+  /* `rolDe` mete "harmonies", "melody" y "slide" en la familia `lead`, que una
+     regex escrita a mano aqui no habria incluido. Si alguien vuelve a poner un
+     vocabulario propio en lib/ampli.js, este test lo nota. */
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (jazz)',
+    trackName: 'James Hetfield | Harmonies', tuning: null,
+    artist: 'Metallica', title: 'Blackened' })
+  assert.equal(rolDe('James Hetfield | Harmonies'), 'lead')
+  assert.equal(r.gain, 10, 'una armonia es lead y no debe perder la ganancia')
+})
+
+test('sin trackName decide el instrumento, como antes', () => {
+  const r = sugerirAjustes({ tags: ['thrash metal'], instrument: 'Electric Guitar (jazz)',
+    tuning: null, artist: 'Metallica', title: 'Blackened 2020' })
+  assert.ok(r.gain <= 3)
 })
 
 test('una pista limpia conserva un stomp que no es de drive', () => {
