@@ -196,8 +196,11 @@ function pistasDeLaCancion(db, fila, tags, califican) {
        sugerirAjustes puede buscar un preset de la comunidad. Sin ellos la
        busqueda nunca recibe un artista y todo el camino de los presets queda
        inerte, con la suite en verde. */
+    /* `name` viaja porque para `Electric Guitar (jazz)` el nombre de la pista
+       es mejor dato que la etiqueta: esa etiqueta es un patch de MIDI y el
+       nombre lo escribio alguien. Ver esPistaLimpia en lib/ampli.js. */
     const sugerencia = sugerirAjustes({
-      tags, instrument: p.instrument, tuning,
+      tags, instrument: p.instrument, trackName: p.name, tuning,
       artist: fila.artist, title: fila.title,
     })
     return {
