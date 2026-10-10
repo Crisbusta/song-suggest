@@ -1,171 +1,86 @@
 # song-suggest
 
-Una web local, de un solo usuario, que sortea canciones de guitarra para
-aprender de un catálogo de Songsterr. Nace de un problema simple: con miles
-de tablaturas disponibles, elegir qué aprender es más difícil que aprenderlo.
-`song-suggest` sortea una canción al azar (con filtros de modo, dificultad y
-bandas, que miran las pistas de guitarra de la canción, no sólo la más tocada)
-y lleva la cuenta de lo que ya aprendiste, descartaste, dejaste para después
-o te gustó — para no volver a sortear lo mismo. Y si ya sabes qué quieres
-tocar, la buscas por nombre (ver [Buscar una canción](#buscar-una-canción)). Para la pista que elijas
-practicar sugiere además un punto de partida de perillas para un Fender
-Mustang LT25, y sabe mandárselo al amplificador por USB (ver [Enviar los
-ajustes al amplificador](#enviar-los-ajustes-al-amplificador)). Y trae un
-editor del amplificador entero, con sus cinco ranuras y todas sus perillas
-(ver [El editor del amplificador](#el-editor-del-amplificador)).
+**El tono de la canción, del navegador al ampli en un clic.**
 
-Cero dependencias de npm: usa `node:sqlite`, `node:http` y `node:test`,
-todos incluidos en Node. Requiere **Node ≥ 24**.
+Lo armé para resolver un problema mío. Tenía los tonos de las bandas que me
+gustan en planillas que la comunidad del **Fender Mustang LT25** comparte en
+internet, pero pasar cada uno al amplificador era engorroso y lento: a mano,
+efecto por efecto y perilla por perilla, cada vez que cambiaba de canción.
+Quería elegir la canción y que el ampli quedara listo.
+
+Eso es `song-suggest`: las planillas ya vienen importadas, el tono se ajusta a
+la pista que vas a tocar (rítmica, solo, intro limpia o acústica) y se manda al
+LT25 por USB directo desde el navegador, con las cinco ranuras de efectos de una
+vez.
+
+Las recomendaciones llegaron después, casi de rebote. Teniendo ya el catálogo
+de Songsterr cargado para buscar los tonos, en algún momento dejé de saber muy
+bien qué tocar, así que le sumé un sorteo con filtros simples que no vuelve a
+ofrecerte lo que ya aprendiste o descartaste.
+
+![La pantalla principal con Creeping Death de Metallica: los datos de la canción, sus cuatro pistas de guitarra y el tono sugerido para el LT25](docs/capturas/principal.png)
+
+<sub>*Creeping Death*, abierta desde el buscador. A la derecha, el tono para la
+pista elegida (el preset de Metallica de la planilla) listo para mandar; al
+centro, sus cuatro guitarras, cada una con su propio tono.</sub>
+
+| | Antes | Con `song-suggest` |
+|---|---|---|
+| **Encontrar el tono** | Buscar la banda en una planilla | Viene en la tarjeta, para cada pista |
+| **Pasarlo al ampli** | A mano, efecto por efecto y perilla por perilla | Un botón (o la tecla `E`): las cinco ranuras de una vez |
+| **Elegir qué tocar** | Recorrer tablaturas sin criterio | Un sorteo con filtros, que respeta lo que ya sabes |
+
+```
+npm run etl     # una vez: baja y enriquece el catálogo
+npm start       # http://localhost:3000
+```
+
+> Cero dependencias de npm: `node:sqlite`, `node:http` y `node:test`, todo
+> incluido en Node. Requiere **Node ≥ 24**. Sin paso de build.
+
+## Qué hace
+
+| | Qué | Lo que lo hace distinto |
+|---|---|---|
+| 🔌 | **Lo manda al ampli** | Las cinco ranuras por WebHID. Ninguna escritura se da por buena sin el ACK del equipo. |
+| 🔊 | **Propone el tono** | Presets de la comunidad del LT25 por banda y género, corregidos según la pista: limpia, acústica o con distorsión. |
+| 🎚️ | **Pista por pista** | Una canción trae hasta 11 guitarras. Cada una tiene su dificultad, su afinación y su tono. |
+| 🎛️ | **Edita el ampli entero** | Las cinco ranuras con todas sus perillas, en vivo, y guardado en ranura con doble confirmación. |
+| 🧠 | **Aprende de tu oído** | Guarda el tono que dialaste y anota cómo sonó el propuesto. Con eso se puntúa cualquier cambio al sugeridor. |
+| 🎲 | **Sortea qué aprender** | Filtros de modo, dificultad y bandas que miran **cada pista** de guitarra, no sólo la más tocada. |
+| 🔎 | **Busca por nombre** | `metallica fade` abre la tarjeta directo, sin gastar el sorteo. |
+| 📚 | **Lleva tu historial** | Aprendidas, *no me tinca*, *después* y me gusta. Nada de eso se vuelve a sortear. |
+
+## En cifras
+
+Medido sobre el `songs.db` real el 2026-10-10.
+
+| | |
+|---|---:|
+| Canciones en el catálogo | 20.013 |
+| Ya enriquecidas por el ETL | 12.727 |
+| Sorteables hoy (sin basura, sin descartadas) | 10.772 |
+| …de ellas, con más de una pista de guitarra | 8.617 |
+| Pistas de guitarra con tono propio | 29.988 |
+| Bandas (escrituras agrupadas) | 2.612 |
+| Presets de la comunidad importados (77 de banda + 10 de tono) | 87 |
+| Unidades del LT25 en el catálogo del editor | 48 |
+| Tests en `npm test` | 425 |
 
 ## Puesta en marcha
 
-```
-npm run etl     # una vez, baja y enriquece el catalogo (2-3 horas la primera vez)
-npm start       # levanta el servidor en http://localhost:3000
-```
+| Paso | Comando | Nota |
+|---|---|---|
+| 1. Catálogo | `npm run etl` | 2-3 horas la primera vez. Reanudable: Ctrl-C cuando quieras. |
+| 2. Servidor | `npm start` | Usable tras las primeras ~300 canciones enriquecidas. |
+| 3. Ampli *(opcional)* | — | Chrome o Edge, LT25 por USB, Fender Tone LT Desktop cerrado. |
 
-El ETL se puede cortar con Ctrl-C en cualquier momento — es reanudable, y
-retoma donde quedó la próxima vez que corra. Tras las primeras ~300
-canciones enriquecidas la app ya es usable: `npm start` y `npm run etl`
-pueden convivir sobre el mismo `songs.db` sin pisarse (usa WAL).
+`npm start` y `npm run etl` pueden convivir sobre el mismo `songs.db` sin
+pisarse (usa WAL), así que puedes usar la app mientras el catálogo termina de
+bajar.
 
-## Filtrar por bandas
-
-La barra superior junta modo, fichas de dificultad y el botón **Bandas**. Este
-último abre la caja donde escribes unas letras y eliges bandas del catálogo;
-cada una queda como una ficha removible, y el sorteo se limita a las elegidas.
-Sin ninguna, sortea de todo. Se combina con el modo y la dificultad, y la línea
-de abajo te dice cuántas canciones calzan con la combinación completa.
-
-Tres cosas que conviene saber:
-
-- **Las escrituras se agrupan.** El catálogo escribe 37 artistas de dos formas
-  o más, así que elegir `Кино` trae también las de `КИНО`, y `blink-182` trae
-  las de `Blink-182` y `Blink 182`. Elegir una sola escritura dejaría 55
-  canciones afuera.
-- **No hay transliteración.** Escribir `kino` con teclado latino encuentra
-  `Kino` (3 canciones), no `Кино` (29): son cadenas distintas y probablemente
-  bandas distintas, así que agruparlas sería un error. Con teclado latino los
-  temas en cirílico quedan difíciles de encontrar desde el buscador.
-- **El número al lado de cada banda es sorteable, no total.** Cuenta sobre el
-  mismo universo que el botón: excluye lo que ya descartaste, y se actualiza
-  cuando marcas una canción. Una banda cuya última canción descartas desaparece
-  de la lista.
-
-La elección **no se recuerda** entre recargas, igual que el modo y la
-dificultad.
-
-## Elegir la pista
-
-Casi ninguna canción tiene una sola guitarra. *Fade to Black* tiene seis pistas:
-dos acústicas para el intro y cuatro con distorsión para lo que viene después.
-La tarjeta muestra la lista de pistas siempre visible, agrupada por instrumento,
-para elegir cuál practicar; cambia con ella la dificultad, el
-aviso de afinación y los ajustes que se le mandan al amplificador — elegir la
-acústica de Metallica te da un CHAMPION limpio, no el preset de banda a
-ganancia alta.
-
-Lo mismo vale, en otra dosis, para las pistas eléctricas **limpias**: conservan el
-ampli de la banda, pero con la ganancia acotada a 3 y el pedal de drive fuera. El
-interludio limpio de *Master Of Puppets* salía si no con un 70S UK CLEAN a
-ganancia 10 y un MYTHIC DRIVE encima. Un compresor o un ecualizador sí se
-conservan: no saturan nada. Son 1.400 pistas del catálogo, y la tarjeta dice en
-cada una por qué se le bajó.
-
-Y la contradicción opuesta: 867 pistas de distorsión u overdrive recibían de la
-tabla de géneros un amplificador de voz limpia y ningún pedal — la lead de
-*Comfortably Numb* salía con un 60S UK CLEAN a ganancia 4, prácticamente sin
-distorsión. Ahora llevan un piso de ganancia y un OVERDRIVE, conservando el
-amplificador que eligió el género. No es una opinión nuestra: 14 presets de la
-planilla de la comunidad usan un amplificador limpio con ganancia alta y 11 lo
-acompañan de un pedal — Hendrix es un 60S UK CLEAN a 6,5 con FUZZ.
-
-**Los filtros miran todas las pistas.** Si pides dificultad 1-2, entra cualquier
-canción que tenga *una* pista de guitarra a ese nivel, aunque la más tocada sea
-más difícil. Eso suma 2.143 canciones al filtro fácil, 1.850 al modo Solos y
-1.064 al Acústico, sobre las 9.734 sorteables. Antes *Fade to Black* no salía en
-modo acústico: teniendo dos pistas acústicas, la app sólo miraba la más vista,
-que es la distorsión.
-
-Tres cosas que conviene saber:
-
-- **La pista que viene elegida es la más vista de las que cumplen tu filtro**,
-  no la más vista a secas. Si pides fácil, la tarjeta abre en una pista fácil.
-- **Se listan todas las pistas, también las que no cumplen el filtro**, marcadas
-  como tales. Así se ve por qué salió esta canción y cuál pista no fue el
-  motivo. No hay corte por popularidad: con uno al 10%, *Fade to Black* perdería
-  la guitarra rítmica de Hetfield.
-- **Marcar la canción como aprendida la marca entera**, hayas tocado el intro o
-  el riff. La cuenta es por canción, no por pista.
-
-La elección **no se recuerda** entre sorteos ni entre recargas, igual que el
-modo, la dificultad y las bandas.
-
-## Atajos
-
-Fuera de cajas de texto y selectores: `1`–`9` elige la fila visible de pista;
-`A` marca aprendida; `N`, no me tinca; `D`, después; `L`, me gusta; espacio
-sortea otra; `E` envía al ampli y `/` enfoca Buscar una canción. `Escape`
-cierra el panel de bandas.
-
-## Sortear de todo
-
-El botón **Sortear de todo** ignora el modo, la dificultad y las bandas por una
-vez, **sin tocar los controles**: al volver, tu configuración sigue donde la
-dejaste. El contador de "cuántas calzan" tampoco se mueve — sigue describiendo
-lo que tus controles prometen, no el sorteo que acabas de hacer.
-
-## Buscar una canción
-
-En el encabezado hay una caja donde escribes el tema — o la
-banda y el tema juntos, `metallica fade` — y al elegirlo **se abre su tarjeta
-directo, sin sortear**: sus pistas, su dificultad, su afinación y sus ajustes de
-amplificador, listos para mandar.
-
-Ignora tildes y puntuación, igual que el buscador de bandas: `corazon` encuentra
-*Corazón Espinado*. Y hereda su misma limitación, por la misma razón: no hay
-transliteración, así que con teclado latino los temas en cirílico siguen siendo
-difíciles de alcanzar.
-
-Buscar es una **consulta**, no un sorteo, y de ahí salen sus dos reglas propias:
-
-- **Encuentra también lo que descartaste.** La pediste por nombre; esconderla
-  porque un día decidiste no aprenderla sería el buscador desobedeciendo. El
-  sorteo la sigue excluyendo — son dos preguntas distintas: *qué aprendo hoy* y
-  *con qué tono toco esto*.
-- **No gasta la canción.** No suma a la cuenta de veces mostrada ni la mete en
-  ninguna de tus listas. Mirar el tono de un tema que ya te sabes no es que el
-  sorteo te lo haya ofrecido.
-
-Lo que sí esconde es la basura del catálogo, y las canciones sin ninguna pista
-de guitarra: no habría tarjeta que abrir.
-
-Abrir una canción buscada **no mueve el contador de "cuántas calzan"** ni el
-aviso de abajo: ésos describen lo que tus filtros prometen, y esta canción no
-salió de ellos.
-
-## Ultimate Guitar
-
-El pie de cada tarjeta trae, junto al enlace a Songsterr, uno que **busca la
-canción en Ultimate Guitar** — con la banda y el título juntos, porque el
-catálogo tiene artistas oscuros donde el título solo no alcanza.
-
-Es una búsqueda, no el enlace a la tab exacta, y no puede ser otra cosa:
-
-- **Apuntar a tu tab exacta** exigiría consultar su catálogo con tu sesión de
-  suscriptor, que es justamente lo que esa suscripción paga.
-- **Traer la tab dentro de esta app** tampoco se puede. Su servidor declara
-  `content-security-policy: frame-ancestors 'self' www.911tabs.com`, así que un
-  navegador se niega a renderizar su página dentro de un iframe servido desde
-  `localhost`. No es una limitación de este código: es una decisión de ellos que
-  el navegador aplica. (Comprobado el 2026-09-12.)
-
-El título viaja **tal cual**, sin limpiarle los paréntesis. De los 944 títulos
-del catálogo que los traen, casi todos son paréntesis de verdad — *Welcome Home
-(Sanitarium)*, *Snow (Hey Oh)* — y quitarlos empeoraría la búsqueda. Los que
-repiten el nombre de la banda, que sí serían ruido, son 23 de 10.011.
-
-## Banderas del ETL
+<details>
+<summary><b>Banderas del ETL</b></summary>
 
 `npm run etl -- <banderas>`
 
@@ -173,180 +88,348 @@ repiten el nombre de la banda, que sí serían ruido, son 23 de 10.011.
 |---|---|
 | `--limit N` | Enriquece como máximo N canciones pendientes. Útil para una prueba rápida. |
 | `--concurrency N` | Cuántas descargas de metadata corren en paralelo (por defecto 3). |
-| `--solo-catalogo` | Solo baja el catálogo (fase 1); no enriquece nada. |
-| `--solo-meta` | Salta la fase 1; solo enriquece lo que ya está en la base. |
-| `--re-enriquecer` | Antes de la fase 2, marca todas las canciones para volver a enriquecerse (borra `enriched_at`, no toca `song_state`). Úsala para refrescar tags, vistas y banderas de calidad tras un tiempo — el catálogo (artista, título, tracks) ya se actualiza solo en cada corrida. |
+| `--solo-catalogo` | Sólo baja el catálogo (fase 1); no enriquece nada. |
+| `--solo-meta` | Salta la fase 1; sólo enriquece lo que ya está en la base. |
+| `--re-enriquecer` | Antes de la fase 2, marca todas las canciones para volver a enriquecerse (borra `enriched_at`, no toca `song_state`). Úsala para refrescar tags, vistas y banderas de calidad tras un tiempo. El catálogo (artista, título, tracks) ya se actualiza solo en cada corrida. |
 
 `N` en `--limit` y `--concurrency` tiene que ser un entero mayor que 0: un
 typo (`--limit abc`, `--limit -5`) aborta con un mensaje en vez de disparar
 una corrida completa por accidente.
 
-## Enviar los ajustes al amplificador
+</details>
 
-La tarjeta trae unos ajustes sugeridos para un **Fender Mustang LT25** — los de
-la **pista que tengas elegida**, no los de la canción entera — y un botón que se
-los manda al equipo por USB, sin intermediarios: el navegador le habla directo
-por WebHID.
+> [!IMPORTANT]
+> **Respalda `songs.db`.** Todo se reconstruye con el ETL salvo tres tablas:
+> `song_state` (aprendidas, descartadas, me gusta), `user_tone` (los tonos que
+> dialaste) y `tone_judgment` (tus juicios). Ver [Respaldo](#respaldo).
 
-Para que aparezca el botón:
+---
 
-- **Necesitas Chrome o Edge.** WebHID no existe en Firefox ni en Safari; ahí
-  los ajustes se ven igual, pero hay que poner las perillas a mano.
-- **Cierra Fender Tone LT Desktop** antes de conectar. El amplificador acepta
-  un solo cliente a la vez, y si la aplicación de Fender lo tiene tomado, la
-  conexión falla.
-- Conecta con el botón del encabezado. El permiso queda recordado por origen:
-  la próxima vez reconecta solo, sin volver a mostrarte el selector de Chrome.
+## El amplificador
 
-Qué manda la tarjeta y qué no:
+### De dónde sale el tono
 
-- **El botón sí cambia el modelo de amplificador.** Cada envío reemplaza la
-  unidad de la ranura `amp` por la que la pista elegida sugiere (si la
-  declara). Sigue pudiéndose cambiar a mano en la rueda del equipo o en el
-  editor — pero el botón ya no lo deja quieto.
-- **Y manda la cadena de efectos completa: las cinco ranuras** (`stomp`,
-  `mod`, `amp`, `delay`, `reverb`), no sólo tres perillas. Las que la pista
-  elegida usa cargan su propia unidad con sus valores; las que no usa
-  **quedan vacías** — esto pasa en cada envío, tenga o no esa pista presets
-  de la comunidad.
-- **Contra que hay que asumir:** vaciar las ranuras que la pista elegida no usa
-  **borra lo que hayas dialado a mano ahí**. Si sorteas surf y dejas puesto un
-  slapback a mano, y después sorteas thrash, ese slapback no sobrevive al
-  envío siguiente. Es a propósito: un tono a medias entre dos canciones no es
-  el tono de ninguna.
-- Del amplificador viajan `gain`, `treb`, `bass` y, cuando el preset lo
-  declara, `mid` (los nombres son los del amplificador, para que calcen con
-  lo que ves en el equipo).
-- El **volumen queda fuera de la sugerencia a propósito**: el equipo lo recibe
-  en dB, así que mandarle un 0.4 como si fuera "4 de 10" puede ser un salto
-  brutal de nivel. El botón no lo toca — se lee antes de cambiar de modelo y
-  se devuelve tal cual, así que cambiar de modelo no te mueve el volumen que
-  tenías. Ese lo pones tú, que sabes en qué pieza estás tocando. (El editor sí
-  te lo deja mover — ver más abajo —; lo que no hace nadie es adivinarlo por
-  ti.)
-- **La tarjeta no graba nada.** Todo se escribe sobre el preset activo, en
-  memoria del equipo, y no se guarda en ninguna ranura: reseleccionar el
-  preset en la rueda deja el ampli como estaba.
-- Las perillas cuya curva todavía no se sabe convertir **no se mandan**: la
-  perilla queda en el valor por defecto de la unidad, que es dato real del
-  equipo, no un número inventado. Si esa unidad la acaba de cargar este mismo
-  envío, el estado del envío lo avisa **en rojo** — el default de fábrica no
-  es lo que el tono pedía, y en una perilla de drive se nota.
-
-El amplificador ignora en silencio lo que no entiende, así que la app no da
-por buena ninguna escritura sin confirmación: cada perilla espera el ACK del
-equipo y, si no llega en 2 segundos, se reporta como `sin confirmar` en vez de
-decirte que se aplicó. Si ves eso, vuelve a pulsar el botón.
-
-### De dónde salen los presets por banda y por género
-
-Cuando el catálogo tiene un artista o un género que calza, la sugerencia no
-sale de una tabla propia: sale de una planilla que mantiene la **comunidad de
-usuarios del Fender Mustang LT25** —
-<https://docs.google.com/spreadsheets/d/1KWvjJ6q6Ora2MqmxtUAWjq9Uerp0Ycza5ouuKuol5HQ/edit?gid=1647190216>
-— con los ajustes de amplificador y de las cuatro ranuras de efectos que a
-esas personas les funcionaron para esa banda o ese tono. **Es opinión de esa
-comunidad, no una medición del tono de la grabación**, y la tarjeta lo dice
-explícito junto a cada sugerencia, incluida la incertidumbre que la propia
-planilla marcó en algunas filas. Detalle de qué se citó, cómo y con qué
-límites: `data/PROCEDENCIA.md`. Qué entró de verdad en el import, fila por
-fila: `docs/presets-comunidad-auditoria.md`.
-
-## El editor del amplificador
-
-El botón **Ampli** de la barra abre el editor: lee el preset activo del equipo
-y dibuja sus cinco ranuras — `stomp`, `mod`, `amp`, `delay`, `reverb` — con la
-unidad que tiene cada una y todas sus perillas, incluido el volumen y el
-modelo de amplificador. Todo se escribe en vivo, con la misma regla de
-siempre: el control muestra dónde lo pusiste, pero si el equipo no confirma,
-vuelve al último valor confirmado y lo dice.
-
-Mientras el editor está ocupado — una lectura, un cambio de unidad, un
-guardado — sus controles se deshabilitan. Y si mandas los ajustes de una
-canción con el editor a mitad de una lectura (o al revés), no se pisan: las
-operaciones hacen cola y salen una detrás de otra.
-
-Girar la rueda del equipo sigue siendo tuyo, y sigue siendo el modo de
-deshacer: recarga el preset y descarta lo que hayas escrito encima. El editor
-no se entera solo de eso — usa **Releer del ampli** para volver a sincronizar
-lo que ves con lo que el equipo tiene.
-
-### Guardar en una ranura es lo único que no se deshace
-
-Todo lo anterior se escribe sobre el preset activo, en memoria. **Guardar en
-el ampli** es otra cosa: graba en una ranura del equipo, pisa lo que hubiera
-ahí y no hay forma de recuperarlo desde esta app. Es la única operación
-irreversible del proyecto, y el diálogo está hecho para obligarte a mirar
-antes de pisar:
-
-- La ranura de destino **no viene puesta**: la escribes tú.
-- La app lee esa ranura y te dice qué preset hay ahí ahora mismo.
-- La app lee también el preset activo del equipo y te dice con qué se va a
-  pisar, incluida su ranura y si está editado sin guardar — porque lo que se
-  graba es lo que esté vivo en el amplificador, no lo que el editor dibujó
-  hace un rato.
-- El botón de confirmar no se habilita hasta que las dos lecturas vuelvan, y
-  justo antes de grabar se relee el preset activo: si cambió desde que lo
-  miraste, no se guarda y te lo dice.
-
-Si alguna de esas lecturas falla, no se guarda nada. Sin saber qué se va a
-escribir no hay confirmación posible, y esta es la operación en la que
-equivocarse cuesta caro.
-
-## El invariante: respalda `songs.db`
-
-`songs.db` es dato local — no está en git (ver `.gitignore`) — y se puede
-reconstruir corriendo `npm run etl` de nuevo... excepto por una tabla:
-`song_state`, `user_tone` y `tone_judgment`. Ahí vive todo lo que aprendiste,
-descartaste o te gustó, más los tonos que dialaste y aprobaste y tus juicios
-sobre los propuestos: historial que ninguna corrida del ETL puede recrear. Si
-el archivo se corrompe o se borra sin backup, todo eso se pierde para
-siempre.
-
-Respáldalo de vez en cuando con:
-
-```
-npm run backup
+```mermaid
+flowchart LR
+    T{¿Guardaste<br/>un tono<br/>para esta pista?} -- sí --> U[Tu tono,<br/>tal cual]
+    T -- no --> P{¿Hay preset de<br/>la comunidad?}
+    P -- sí --> C[Preset de banda<br/>o de género]
+    P -- no --> R[Tabla de reglas<br/>por género y época]
+    C --> K[Corrección<br/>según la pista]
+    R --> K
 ```
 
-Esto vuelca el WAL y copia `songs.db` a `songs-<fecha>.db.bak` (ignorado por
-git también). El volcado no es opcional: la base corre en WAL, y un `cp` a
-secas del archivo principal se lleva la base tal como estaba en el último
-checkpoint — medido el 2026-09-17, 5,3 MB de escrituras sin volcar. No hay
-respaldo automático; es responsabilidad de quien usa la app.
+Los presets salen de una planilla que mantiene la **comunidad de usuarios
+del Mustang LT25**
+([enlace](https://docs.google.com/spreadsheets/d/1KWvjJ6q6Ora2MqmxtUAWjq9Uerp0Ycza5ouuKuol5HQ/edit?gid=1647190216)):
+los ajustes que a esas personas les funcionaron para esa banda o ese tono.
+**Es opinión de esa comunidad, no una medición de la grabación**, y la
+tarjeta lo dice junto a cada sugerencia, incluida la incertidumbre que la
+planilla marcó en algunas filas. Qué se citó y con qué límites:
+`data/PROCEDENCIA.md`. Qué entró, fila por fila:
+`docs/presets-comunidad-auditoria.md`.
+
+**El preset es de la banda, pero el tono es de la pista.** Antes de mandarlo
+se corrige según qué toca esa guitarra. Sobre las 29.988 pistas, medido el
+2026-10-10:
+
+| La pista es… | Qué pasa | Ejemplo | Pistas |
+|---|---|---|---:|
+| **Acústica** | Se ignora el preset de banda y decide la tabla de reglas. | La acústica de Metallica: un CHAMPION limpio. | 3.220 |
+| **Eléctrica limpia** | Conserva el ampli de la banda, con ganancia ≤ 3 y sin pedal de drive. Un compresor o un EQ se quedan. | El interludio de *Master Of Puppets* salía con 70S UK CLEAN a 10 y un MYTHIC DRIVE. | 1.346 |
+| **Con distorsión** y la tabla le dio un ampli limpio | Piso de ganancia y un OVERDRIVE en `stomp`. **El modelo no cambia.** | La lead de *Comfortably Numb* salía con 60S UK CLEAN a 4. | 1.081 |
+
+La tarjeta dice en cada pista por qué se le corrigió el tono.
+
+<details>
+<summary><b>Por qué estas correcciones y no otras</b></summary>
+
+- **Limpia:** sigue siendo la misma guitarra, sólo sobra la saturación. El
+  drive se quita por lista (`STOMPS_DE_DRIVE`), no vaciando la ranura: el
+  stomp más usado de la planilla es el COMPRESSOR, y en una pista limpia está
+  bien puesto.
+- **Distorsión:** subir la ganancia sin cambiar el ampli no es opinión nuestra.
+  14 presets de la planilla usan un ampli de voz limpia con ganancia alta y 11
+  lo acompañan de un pedal: Hendrix es un 60S UK CLEAN a 6,5 con FUZZ. Sólo se
+  corrige lo que viene de la tabla de reglas; si la contradicción viene de un
+  preset de la comunidad no se toca, porque ahí alguien eligió esa
+  combinación a propósito.
+- **`Electric Guitar (jazz)`:** Songsterr usa esa etiqueta como patch de MIDI,
+  no como intención. Cuenta como limpia salvo que el nombre de la pista diga
+  que es una lead. Así las leads de Kirk Hammett en *Blackened 2020*
+  conservan su distorsión.
+
+</details>
+
+### Enviarlo por USB
+
+El navegador le habla al LT25 directo por **WebHID**, sin intermediarios.
+
+| Requisito | Por qué |
+|---|---|
+| **Chrome o Edge** | WebHID no existe en Firefox ni en Safari. Ahí los ajustes se ven, pero las perillas van a mano. |
+| **Fender Tone LT Desktop cerrado** | El ampli acepta un solo cliente a la vez. |
+| Conectar con el botón del encabezado | El permiso queda recordado: la próxima vez reconecta solo. |
+
+**Qué viaja en cada envío:**
+
+| | |
+|---|---|
+| ✅ **Las cinco ranuras** | `stomp`, `mod`, `amp`, `delay` y `reverb`. Las que la pista usa cargan su unidad; las que no, **quedan vacías**. |
+| ✅ **El modelo de ampli** | Reemplaza la unidad de `amp` por la que sugiere la pista, si la declara. |
+| ✅ **`gain`, `treb`, `bass`** | Y `mid` cuando el preset lo declara. Con los nombres del equipo. |
+| ❌ **El volumen** | Se lee antes de cambiar de modelo y se devuelve tal cual. El equipo lo recibe en dB: mandar 0.4 como "4 de 10" puede ser un salto brutal. |
+| ❌ **Perillas sin curva conocida** | Quedan en el valor por defecto de la unidad, que es dato real del equipo. Si esa unidad la cargó este envío, se avisa **en rojo**. |
+| ❌ **Nada se graba** | Todo va al preset activo, en memoria. Reseleccionarlo en la rueda deja el ampli como estaba. |
+
+> [!WARNING]
+> Vaciar las ranuras que la pista no usa **borra lo que hayas dialado a mano
+> ahí**. Si dejas puesto un slapback para surf y después sorteas thrash, ese
+> slapback no sobrevive. Es a propósito: un tono a medias entre dos canciones
+> no es el tono de ninguna.
+
+El ampli ignora en silencio lo que no entiende, así que **cada perilla espera
+el ACK del equipo**. Si no llega en 2 segundos se reporta `sin confirmar` en
+vez de darse por aplicada. Si lo ves, vuelve a pulsar el botón.
+
+### Tu tono y tu juicio
+
+Dos cosas aparecen junto al envío, y son las que hacen que el sugeridor
+pueda mejorar con datos y no con opiniones:
+
+| | Qué hace |
+|---|---|
+| **Guardar mi tono** | Relee lo que el ampli **tiene** (no lo que se le mandó) y lo guarda para esa pista. Desde entonces esa pista sale con tu tono, por encima de cualquier sugerencia. |
+| **¿Cómo sonó?** | Después de un envío exitoso: *Bien*, *Muy sucio*, *Muy limpio*, o qué sobra o falta de modulación, delay o reverb. Se anota junto con la cadena que estaba sonando. |
+
+Si el ETL reordena las pistas de una canción, un tono guardado que ya no
+calza con su pista **no se aplica**: se cae a la sugerencia normal.
+
+`npm run tono:evaluar` puntúa el sugeridor contra esos juicios y tonos
+guardados. No demuestra que un tono suene como el disco: demuestra que
+coincide más con lo que tú aprobaste.
+
+### El editor
+
+El botón **Amplis** (visible si el navegador soporta WebHID) lee el preset
+activo y dibuja las cinco ranuras con su unidad y todas sus perillas,
+incluidos el volumen y el modelo. Todo se escribe en vivo: si el equipo no
+confirma, el control vuelve al último valor confirmado y lo dice.
+
+<details>
+<summary><b>Cómo convive con el resto</b></summary>
+
+- Mientras lee, cambia una unidad o guarda, sus controles se deshabilitan.
+- Si mandas los ajustes de una canción con el editor a mitad de una lectura
+  (o al revés), no se pisan: las operaciones hacen cola.
+- Girar la rueda del equipo sigue siendo el modo de deshacer: recarga el
+  preset y descarta lo escrito encima. El editor no se entera solo; usa
+  **Releer del ampli** para sincronizar.
+
+</details>
+
+> [!CAUTION]
+> **Guardar en el ampli** es la única operación irreversible del proyecto:
+> graba en una ranura del equipo y pisa lo que hubiera. Por eso el diálogo te
+> obliga a mirar antes:
+>
+> 1. La ranura de destino **no viene puesta**: la escribes tú.
+> 2. La app lee esa ranura y te dice qué preset hay ahí ahora.
+> 3. Lee también el preset activo y te dice con qué se va a pisar, incluida
+>    su ranura y si está editado sin guardar.
+> 4. Confirmar no se habilita hasta que vuelvan las dos lecturas, y justo antes
+>    de grabar se relee el preset activo: si cambió, no se guarda.
+>
+> Si alguna lectura falla, no se guarda nada.
+
+---
+
+## Sortear
+
+La barra de filtros junta el **modo**, el buscador de **bandas** con sus
+pastillas rápidas y el rango de **dificultad**. Abajo, un contador dice
+cuántas canciones calzan con la combinación completa.
+
+| Modo | Qué exige de una pista | Sorteables (dif. 1-10) |
+|---|---|---:|
+| Sorpréndeme | Nada: cualquier guitarra | 10.772 |
+| Riffs eléctricos | Distorsión u overdrive, sin fingerstyle | 7.988 |
+| Acústica / fingerpicking | Acústica de nylon o acero, o canción fingerstyle | 3.039 |
+| Solos y técnica | El nombre de la pista dice *Lead* o *Solo* | 4.637 |
+
+**Los filtros miran todas las pistas.** Si pides dificultad 1-2, entra
+cualquier canción que tenga *una* guitarra a ese nivel, aunque la más tocada
+sea más difícil. Contra mirar sólo la más vista, eso suma **2.320** canciones
+al filtro fácil, **1.898** a Solos y **1.189** a Acústica. *Fade to Black*
+sale en modo acústico por sus dos pistas de intro, aunque la más vista sea la
+distorsión.
+
+**Sortear de todo** ignora modo, dificultad y bandas por una vez **sin tocar
+los controles**, y el contador no se mueve: sigue describiendo lo que tus
+filtros prometen, no el sorteo que acabas de hacer.
+
+<details>
+<summary><b>Filtrar por bandas: lo que conviene saber</b></summary>
+
+Escribes unas letras y eliges bandas del catálogo; cada una queda como ficha
+removible y el sorteo se limita a las elegidas. Sin ninguna, sortea de todo.
+
+- **Las escrituras se agrupan.** El catálogo escribe 59 artistas de dos formas
+  o más, así que elegir `Кино` trae también las de `КИНО`, y `blink-182` trae
+  las de `Blink-182` y `Blink 182`. Quedarse con una sola escritura (la de más
+  canciones) dejaría 97 canciones afuera.
+- **No hay transliteración.** Escribir `kino` con teclado latino encuentra
+  `Kino` (3 canciones), no `Кино` (30): son cadenas distintas y probablemente
+  bandas distintas, así que agruparlas sería un error. Con teclado latino los
+  temas en cirílico quedan difíciles de encontrar.
+- **El número al lado de cada banda es sorteable, no total.** Excluye lo que
+  ya descartaste y se actualiza cuando marcas una canción. Una banda cuya
+  última canción descartas desaparece de la lista.
+
+</details>
+
+<details>
+<summary><b>Qué se recuerda y qué no</b></summary>
+
+- Modo, dificultad, bandas y pista elegida **no se recuerdan** entre recargas.
+- Tus listas (aprendidas, *no me tinca*, *después*, me gusta) sí: viven en
+  `song_state` y el sorteo excluye las tres primeras.
+- **Marcar aprendida marca la canción entera**, hayas tocado el intro o el
+  riff. La cuenta es por canción, no por pista.
+
+</details>
+
+## Elegir la pista
+
+Casi ninguna canción tiene una sola guitarra. *Fade to Black* tiene seis: dos
+acústicas para el intro y cuatro con distorsión. La tarjeta las lista todas,
+agrupadas por instrumento, y al elegir una cambian con ella la dificultad, el
+aviso de afinación y el tono que se manda al ampli. Elegir la acústica de
+Metallica te da un CHAMPION limpio, no el preset de banda a ganancia alta.
+
+| Regla | Por qué |
+|---|---|
+| Viene elegida la **más vista de las que cumplen tu filtro** | Si pides fácil, la tarjeta abre en una pista fácil. |
+| Se listan **todas**, también las que no cumplen, **marcadas** | Así se ve por qué salió la canción y qué pista no fue el motivo. |
+| **Sin corte por popularidad** | Con un corte al 10%, *Fade to Black* perdería la rítmica de Hetfield. |
+| El sorteo es **uniforme por canción** | Una canción con tres pistas que califican no sale tres veces más seguido. |
+
+## Buscar una canción
+
+La caja del encabezado busca por tema, o por banda y tema juntos
+(`metallica fade`). Al elegir uno **se abre su tarjeta directo, sin
+sortear**. Ignora tildes y puntuación (`corazon` encuentra *Corazón
+Espinado*); tampoco translitera.
+
+Buscar es una **consulta**, no un sorteo:
+
+| | Sorteo | Buscador |
+|---|:---:|:---:|
+| Incluye lo que descartaste | No | **Sí**: la pediste por nombre |
+| Suma a "veces mostrada" | Sí | **No**: no gasta la canción |
+| Mueve el contador "cuántas calzan" | — | **No**: no salió de tus filtros |
+| Esconde basura del catálogo y canciones sin guitarra | Sí | Sí |
+
+Son dos preguntas distintas: *qué aprendo hoy* y *con qué tono toco esto*.
+
+## Atajos
+
+Fuera de cajas de texto y selectores:
+
+| Tecla | Acción | | Tecla | Acción |
+|:---:|---|---|:---:|---|
+| `1`–`9` | Elegir pista | | `L` | Me gusta |
+| `A` | Aprendida | | `espacio` | Otra canción |
+| `N` | No me tinca | | `E` | Enviar al ampli |
+| `D` | Después | | `/` | Buscar |
+| `Esc` | Cerrar paneles | | | |
+
+<details>
+<summary><b>Ultimate Guitar: por qué es una búsqueda y no la tab exacta</b></summary>
+
+El pie de cada tarjeta trae, junto al enlace a Songsterr, uno que **busca la
+canción en Ultimate Guitar**, con banda y título juntos porque el catálogo
+tiene artistas oscuros donde el título solo no alcanza.
+
+- **Apuntar a tu tab exacta** exigiría consultar su catálogo con tu sesión de
+  suscriptor, que es justamente lo que esa suscripción paga.
+- **Traer la tab dentro de esta app** tampoco se puede. Su servidor declara
+  `content-security-policy: frame-ancestors 'self' www.911tabs.com`, así que
+  el navegador se niega a renderizarla en un iframe servido desde
+  `localhost`. Es una decisión de ellos que el navegador aplica. (Comprobado
+  el 2026-09-12.)
+
+El título viaja **tal cual**, con sus paréntesis. De los 1.574 títulos del
+catálogo que los traen, casi todos son paréntesis de verdad, como *Welcome Home
+(Sanitarium)* o *Snow (Hey Oh)*, y quitarlos empeoraría la búsqueda. Los que
+repiten el nombre de la banda, que sí serían ruido, no llegan a 15.
+
+</details>
+
+---
+
+## Respaldo
+
+`songs.db` no está en git y casi todo se reconstruye con `npm run etl`. Lo que
+no:
+
+| Tabla | Qué guarda |
+|---|---|
+| `song_state` | Aprendidas, descartadas, después, me gusta, veces mostrada. |
+| `user_tone` | Los tonos que dialaste y aprobaste, leídos del equipo. |
+| `tone_judgment` | Tus juicios sobre los tonos propuestos. |
+
+```
+npm run backup     # vuelca el WAL y copia a songs-<fecha>.db.bak
+```
+
+El volcado no es opcional: la base corre en WAL, y un `cp` a secas se lleva
+la base tal como estaba en el último checkpoint (medido el 2026-09-17: 5,3 MB
+de escrituras sin volcar). No hay respaldo automático.
 
 ## Tests
 
 ```
-npm test        # la suite: node:test, sin red ni navegador
-npm run test:ui # los de navegador: Playwright sobre una base de prueba
+npm test          # node:test, sin red ni navegador
+npm run test:ui   # Playwright, contra una base en memoria
 ```
 
-`npm run tono:evaluar` no es un test y no entra en la suite — lee `songs.db`,
-que los tests tienen prohibido tocar. Puntúa el sugeridor de tono contra tus
-juicios y tus tonos guardados. No demuestra que un tono suene como el disco:
-demuestra que coincide más con lo que aprobaste.
+<details>
+<summary><b>Qué está cubierto y qué no, y por qué</b></summary>
 
-Corre con `node:test`, ningún test toca la red. El front end (`public/`)
-**casi no tiene tests automatizados**, por decisión de diseño: es vainilla, sin
-build, y se verifica a mano contra el servidor real — el costo de un runner
-de DOM no se justificaba para una interfaz de un solo usuario.
+| Módulo | Cobertura |
+|---|---|
+| `db/`, `lib/`, `etl/`, `server.js` | `npm test`. Ningún test toca la red. |
+| `public/fender-protocolo.js` | Bytes capturados del amplificador real. Un desfase de un byte no lanza: el equipo descarta el mensaje en silencio y se ve idéntico a "no contesta". Los tests son la única forma de saberlo. |
+| `public/despachador.js`, `catalogo-lt25.js`, `artistas.js`, `tarjeta.js`, `track-classifier.js` | Módulos puros que `test/` importa directo desde disco. |
+| Vista Sortear | Por comportamiento, en `npm run test:ui`. Cubre invariantes, no aspecto. Corre contra una base en memoria porque sortear escribe `shown_count`. |
+| `app.js`, `ampli-usb.js`, `editor.js` | **Sin tests.** Tienen efectos a nivel de módulo (tocan `document` al importarse). Se verifican a mano contra el equipo real. |
 
-Las excepciones son los módulos puros de `public/`, que `test/` importa
-directo desde disco: `fender-protocolo.js` (`test/protocolo.test.js`),
-`catalogo-lt25.js` (`test/catalogo.test.js`), `despachador.js`
-(`test/despachador.test.js`) y `tarjeta.js` (`test/tarjeta.test.js`) — la
-lógica de la tarjeta sin DOM (qué perillas nombra la frase de envío, qué se
-manda al ampli, cómo se etiqueta y arma el selector de pistas), extraída de
-`app.js` porque ese archivo sí tiene efectos a
-nivel de módulo y no se puede importar en Node. Ahí la regla no aplica: es
-código sin DOM ni WebHID de por medio. `app.js`, `ampli-usb.js` y
-`editor.js` sí quedan sin tests, por lo mismo de arriba.
+La lógica nueva de la tarjeta se extrae a `tarjeta.js` para poder testearla.
 
-El caso más claro es `fender-protocolo.js`, donde lo que se verifica son bytes
-capturados del amplificador real. Además es justo el código donde equivocarse
-no revienta —
-un desfase de un byte no lanza nada, el equipo descarta el mensaje en silencio
-y el síntoma se ve idéntico a "el amplificador no contesta". Eso no se caza a
-mano; los tests son la única forma de saber que el formato sigue siendo el que
-el equipo acepta.
+`npm run tono:evaluar` no es un test y no entra en la suite: lee `songs.db`,
+que los tests tienen prohibido tocar.
+
+</details>
+
+## Cómo está hecho
+
+```mermaid
+flowchart LR
+    S[(Songsterr)] -->|etl/| DB[(songs.db<br/>SQLite · WAL)]
+    DB -->|db/queries.js| API[server.js<br/>/api/*]
+    API --> UI[public/<br/>módulos ES, sin build]
+    UI -->|WebHID| A[Mustang LT25]
+```
+
+**La unidad es la pista, no la canción.** El predicado del sorteo exige que
+modo y dificultad se cumplan **sobre la misma pista**: escrito como dos
+condiciones sueltas dejaba entrar canciones donde ninguna pista sirve.
+
+| Documento | Qué tiene |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) (= `AGENTS.md`) | Convenciones, zonas protegidas e invariantes. Léelo antes de tocar código. |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | El diseño de cada feature, con sus mediciones y lo que se descartó. |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | Los planes de implementación. |
+| [`docs/diseno/`](docs/diseno/) | Brief visual y mocks. |
+| [`data/PROCEDENCIA.md`](data/PROCEDENCIA.md) | De dónde salen los presets y el volcado del firmware. |
